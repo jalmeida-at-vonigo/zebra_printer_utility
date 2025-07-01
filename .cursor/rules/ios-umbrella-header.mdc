@@ -1,0 +1,126 @@
+---
+description: 
+globs: ios/**/*.*
+alwaysApply: false
+---
+# iOS Umbrella Header Configuration for Flutter Plugins
+
+## Overview
+When creating Flutter plugins with Objective-C code that needs to be accessed from Swift, you need proper umbrella header configuration. This is crucial for making Objective-C classes visible to Swift code in a Flutter plugin context.
+
+## Key Concepts
+
+### What is an Umbrella Header?
+An umbrella header is a header file that imports all the public headers of a framework or module. In Flutter plugins, it's used to expose Objective-C classes to Swift.
+
+### File Naming Convention
+The umbrella header must follow this naming pattern:
+- `{module_name}-umbrella.h`
+- For a plugin named `zebrautil`, the file should be: `zebrautil-umbrella.h`
+
+### Location
+The umbrella header must be placed in:
+- `ios/Classes/` directory
+
+## Implementation Steps
+
+### 1. Create the Umbrella Header
+Create [ios/Classes/zebrautil-umbrella.h](mdc:ios/Classes/zebrautil-umbrella.h) with:
+```objc
+#import <Foundation/Foundation.h>
+
+// Import all public Objective-C headers here
+#import "ZSDKWrapper.h"
+
+// Required exports
+FOUNDATION_EXPORT double zebrautilVersionNumber;
+FOUNDATION_EXPORT const unsigned char zebrautilVersionString[];
+```
+
+### 2. Configure the Podspec
+In [ios/zebrautil.podspec](mdc:ios/zebrautil.podspec), ensure:
+```ruby
+s.source_files = 'Classes/**/*'
+s.public_header_files = 'Classes/**/*.h'
+```
+
+### 3. Module Map (Auto-generated)
+CocoaPods will automatically generate a module map that references the umbrella header. You don't need to create this manually.
+
+## Common Issues and Solutions
+
+### "Cannot find 'ClassName' in scope" in Swift
+**Cause**: The Objective-C class is not properly exposed through the umbrella header.
+**Solution**: 
+1. Ensure the class header is imported in the umbrella header
+2. Run `pod install` in the example/ios directory
+3. Clean and rebuild the project
+
+### "Could not build Objective-C module"
+**Cause**: The umbrella header has syntax errors or missing imports.
+**Solution**: 
+1. Check that all imported headers exist
+2. Ensure proper import syntax (`#import "Header.h"` for local headers)
+3. Verify the umbrella header name matches the module name
+
+### Module Not Found
+**Cause**: The umbrella header is not being picked up by CocoaPods.
+**Solution**:
+1. Ensure the file is named correctly: `{module_name}-umbrella.h`
+2. The file must be in `ios/Classes/`
+3. Run `pod deintegrate && pod install` to reset
+
+## Best Practices
+
+### 1. Import Order
+```objc
+// System frameworks first
+#import <Foundation/Foundation.h>
+
+// Then your public headers
+#import "YourPublicHeader.h"
+
+// Finally, the required exports
+FOUNDATION_EXPORT double...
+```
+
+### 2. Only Public Headers
+Only import headers that need to be accessed from Swift. Internal implementation headers should not be included.
+
+### 3. Forward Declarations
+If possible, use forward declarations in your public headers instead of importing other headers to minimize dependencies.
+
+## Testing the Configuration
+
+### 1. After making changes:
+```bash
+cd example/ios
+pod install
+cd ..
+flutter clean
+flutter build ios
+```
+
+### 2. Verify in Swift:
+In your Swift files, you should be able to use the Objective-C classes without any import statements (they're automatically available through the module).
+
+## Example Usage in Swift
+Once properly configured, you can use Objective-C classes in Swift like:
+```swift
+// No import needed - the module is automatically imported
+class MySwiftClass {
+    func useObjectiveCClass() {
+        ZSDKWrapper.startNetworkDiscovery({ printers in
+            // Handle printers
+        }, error: { error in
+            // Handle error
+        })
+    }
+}
+```
+
+## Important Notes
+- The umbrella header is automatically imported by Swift in the module context
+- You cannot use `@import` or `import` statements for the module in Swift files within the same module
+- Changes to the umbrella header require running `pod install` to take effect
+- Always clean and rebuild after umbrella header changes
