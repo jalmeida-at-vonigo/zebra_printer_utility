@@ -4,6 +4,9 @@
 #import "ZebraPrinterFactory.h"
 #import "TcpPrinterConnection.h"
 #import "MfiBtPrinterConnection.h"
+#import "NetworkDiscoverer.h"
+#import "DiscoveredPrinter.h"
+#import "DiscoveredPrinterNetwork.h"
 #import "SGD.h"
 #import <ExternalAccessory/ExternalAccessory.h>
 
@@ -11,7 +14,50 @@
 
 #pragma mark - Discovery
 
-
++ (void)startNetworkDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error {
+    // Ensure we're already on a background thread to prevent blocking
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        @try {
+            NSError *discoveryError = nil;
+            // Use a shorter timeout to prevent freezing
+            NSArray *printers = [NetworkDiscoverer localBroadcastWithTimeout:2 error:&discoveryError];
+            
+            if (discoveryError) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    error([discoveryError localizedDescription]);
+                });
+            } else {
+                NSMutableArray *printerInfo = [NSMutableArray array];
+                for (id printer in printers) {
+                    NSMutableDictionary *info = [NSMutableDictionary dictionary];
+                    
+                    if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
+                        DiscoveredPrinterNetwork *networkPrinter = (DiscoveredPrinterNetwork *)printer;
+                        info[@"address"] = networkPrinter.address ?: @"";
+                        info[@"port"] = @(networkPrinter.port);
+                        info[@"name"] = networkPrinter.dnsName ?: networkPrinter.address ?: @"Unknown";
+                        info[@"isWifi"] = @YES;
+                    } else if ([printer isKindOfClass:[DiscoveredPrinter class]]) {
+                        DiscoveredPrinter *discoveredPrinter = (DiscoveredPrinter *)printer;
+                        info[@"address"] = discoveredPrinter.address ?: @"";
+                        info[@"name"] = discoveredPrinter.address ?: @"Unknown";
+                        info[@"isWifi"] = @YES;
+                    }
+                    
+                    [printerInfo addObject:info];
+                }
+                
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    success(printerInfo);
+                });
+            }
+        } @catch (NSException *exception) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                error([exception reason]);
+            });
+        }
+    });
+}
 
 + (void)startBluetoothDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{

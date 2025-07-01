@@ -16,15 +16,18 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ZSDKWrapper : NSObject
 
 // Discovery
++ (void)startNetworkDiscovery:(void (^)(NSArray *printers))success
+                        error:(void (^)(NSString *error))error;
+
 + (void)startBluetoothDiscovery:(void (^)(NSArray *printers))success
                           error:(void (^)(NSString *error))error;
 
 + (void)stopDiscovery;
 
 // Connection
-+ (id)connectToPrinter:(NSString *)address isBluetoothConnection:(BOOL)isBluetooth;
++ (nullable id)connectToPrinter:(NSString *)address isBluetoothConnection:(BOOL)isBluetooth;
 + (void)disconnect:(id)connection;
-+ (BOOL)isConnected:(id)connection;
++ (BOOL)isConnected:(nullable id)connection;
 
 // Printing
 + (BOOL)sendData:(NSData *)data toConnection:(id)connection;

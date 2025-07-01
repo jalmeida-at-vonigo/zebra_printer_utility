@@ -44,26 +44,31 @@ class PrinterTemplate extends StatefulWidget {
 class _PrinterTemplateState extends State<PrinterTemplate> {
   late ZebraPrinter zebraPrinter;
   late ZebraController controller;
-  final String dataToPrint = """^XA
-        ^FX Top section with logo, name and address.
-        ^CF0,60
-        ^FO50,50^GB100,100,100^FS
-        ^FO75,75^FR^GB100,100,100^FS
-        ^FO93,93^GB40,40,40^FS
-        ^FO220,50^FDIntershipping, Inc.^FS
-        ^CF0,30
-        ^FO220,115^FD1000 Shipping Lane^FS
-        ^FO220,155^FDShelbyville TN 38102^FS
-        ^FO220,195^FDUnited States (USA)^FS
-        ^FO50,250^GB700,3,3^FS
-        ^XZ""";
+  late TextEditingController zplController;
+  String? connectionError;
+  bool isConnecting = false;
+
+  final String defaultZPL = """^XA
+^FO50,50^A0N,50,50^FDZebra Test Print^FS
+^FO50,150^A0N,30,30^FDConnection Successful!^FS
+^FO50,200^A0N,25,25^FDPrinter Connected^FS
+^FO50,250^A0N,25,25^FDTime: ${DateTime.now()}^FS
+^FO50,350^BY3^BCN,100,Y,N,N^FD123456789^FS
+^XZ""";
 
   @override
   void initState() {
     zebraPrinter = widget.printer;
     controller = zebraPrinter.controller;
+    zplController = TextEditingController(text: defaultZPL);
     zebraPrinter.startScanning();
     super.initState();
+  }
+  
+  @override
+  void dispose() {
+    zplController.dispose();
+    super.dispose();
   }
 
   @override
@@ -75,7 +80,7 @@ class _PrinterTemplateState extends State<PrinterTemplate> {
               const Text("My Printers"),
               if (zebraPrinter.isScanning)
                 const Text(
-                  "Seaching for printers...",
+                  "Searching for printers...",
                   style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
             ],
@@ -93,41 +98,179 @@ class _PrinterTemplateState extends State<PrinterTemplate> {
           child: Icon(
               zebraPrinter.isScanning ? Icons.stop_circle : Icons.play_circle),
         ),
-        body: ListenableBuilder(
-          listenable: controller,
-          builder: (context, child) {
-            final printers = controller.printers;
-            if (printers.isEmpty) {
-              return _getNotAvailablePage();
-            }
-            return _getListDevices(printers);
-          },
+        body: Column(
+          children: [
+            // Connection status
+            if (controller.selectedAddress != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: controller.printers.any((p) =>
+                        p.address == controller.selectedAddress &&
+                        p.isConnected)
+                    ? Colors.green.shade100
+                    : Colors.orange.shade100,
+                child: Row(
+                  children: [
+                    Icon(
+                      controller.printers.any((p) =>
+                              p.address == controller.selectedAddress &&
+                              p.isConnected)
+                          ? Icons.check_circle
+                          : Icons.warning,
+                      color: controller.printers.any((p) =>
+                              p.address == controller.selectedAddress &&
+                              p.isConnected)
+                          ? Colors.green
+                          : Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        controller.printers.any((p) =>
+                                p.address == controller.selectedAddress &&
+                                p.isConnected)
+                            ? 'Connected to: ${controller.selectedAddress}'
+                            : isConnecting
+                                ? 'Connecting to: ${controller.selectedAddress}...'
+                                : 'Disconnected from: ${controller.selectedAddress}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ZPL Editor
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('ZPL Template:',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () {
+                          zplController.text = defaultZPL;
+                        },
+                        child: const Text('Reset to Default'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: TextField(
+                      controller: zplController,
+                      maxLines: null,
+                      expands: true,
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 12),
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.all(8),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: controller.printers.any((p) =>
+                              p.address == controller.selectedAddress &&
+                              p.isConnected)
+                          ? () {
+                              zebraPrinter.print(data: zplController.text);
+                            }
+                          : null,
+                      icon: const Icon(Icons.print),
+                      label: const Text('Print Label'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.all(16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(),
+
+            // Printer list
+            Expanded(
+              child: ListenableBuilder(
+                listenable: controller,
+                builder: (context, child) {
+                  final printers = controller.printers;
+                  if (printers.isEmpty) {
+                    return _getNotAvailablePage();
+                  }
+                  return _getListDevices(printers);
+                },
+              ),
+            ),
+          ],
         ));
   }
 
   Widget _getListDevices(List<ZebraDevice> printers) {
     return ListView.builder(
         itemBuilder: (BuildContext context, int index) {
+          final printer = printers[index];
+          final isSelected = controller.selectedAddress == printer.address;
+          final isConnected = printer.isConnected;
+          
           return ListTile(
-            title: Text(printers[index].name),
-            subtitle: Text(printers[index].status,
-                style: TextStyle(color: printers[index].color)),
-            leading: IconButton(
-              icon: Icon(Icons.print, color: printers[index].color),
-              onPressed: () {
-                zebraPrinter.print(data: dataToPrint);
-              },
+            title: Text(printer.name),
+            subtitle: Text(
+              printer.status,
+              style: TextStyle(color: printer.color),
+            ),
+            leading: Icon(
+              printer.isWifi ? Icons.wifi : Icons.bluetooth,
+              color: printer.color,
             ),
             trailing: IconButton(
-              icon: Icon(Icons.bluetooth_connected_rounded,
-                  color: printers[index].color),
+              icon: Icon(
+                isConnected ? Icons.link_off : Icons.link,
+                color: printer.color,
+              ),
               onPressed: () async {
-                await zebraPrinter.connectToPrinter(printers[index].address);
                 setState(() {
-                  if(zebraPrinter.isScanning) zebraPrinter.stopScanning();
+                  isConnecting = true;
+                  connectionError = null;
                 });
+
+                try {
+                  if (isConnected) {
+                    await zebraPrinter.disconnect();
+                  } else {
+                    await zebraPrinter.connectToPrinter(printer.address);
+                  }
+
+                  if (zebraPrinter.isScanning) {
+                    zebraPrinter.stopScanning();
+                  }
+                } catch (e) {
+                  setState(() {
+                    connectionError = e.toString();
+                  });
+                } finally {
+                  setState(() {
+                    isConnecting = false;
+                  });
+                }
               },
             ),
+            selected: isSelected,
+            selectedTileColor: Colors.blue.shade50,
           );
         },
         itemCount: printers.length);

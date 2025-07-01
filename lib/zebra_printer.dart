@@ -103,7 +103,7 @@ class ZebraPrinter {
   Future<void> connectToPrinter(String address) async {
     if (controller.selectedAddress != null) {
       await disconnect();
-      await Future.delayed(Durations.medium1);
+      await Future.delayed(const Duration(milliseconds: 300));
     }
     if (controller.selectedAddress == address) {
       await disconnect();
@@ -111,13 +111,20 @@ class ZebraPrinter {
       return;
     }
     controller.selectedAddress = address;
-    channel.invokeMethod("connectToPrinter", {"Address": address});
+    await channel.invokeMethod("connectToPrinter", {"Address": address});
+
+    // Check connection status after a short delay
+    await Future.delayed(const Duration(milliseconds: 500));
+    final isConnected = await isPrinterConnected();
+    if (isConnected) {
+      controller.updatePrinterStatus("Connected", "G");
+    }
   }
 
   Future<void> connectToGenericPrinter(String address) async {
     if (controller.selectedAddress != null) {
       await disconnect();
-      await Future.delayed(Durations.medium1);
+      await Future.delayed(const Duration(milliseconds: 300));
     }
     if (controller.selectedAddress == address) {
       await disconnect();
@@ -139,14 +146,18 @@ class ZebraPrinter {
 
   Future<void> disconnect() async {
     await channel.invokeMethod("disconnect", null);
+    if (controller.selectedAddress != null) {
+      controller.updatePrinterStatus("Disconnected", "R");
+    }
   }
 
   void calibratePrinter() {
     _setSettings(Command.calibrate, null);
   }
 
-  void isPrinterConnected() {
-    channel.invokeMethod("isPrinterConnected");
+  Future<bool> isPrinterConnected() async {
+    final result = await channel.invokeMethod<bool>("isPrinterConnected");
+    return result ?? false;
   }
 
   void rotate() {
@@ -231,7 +242,7 @@ class ZebraController extends ChangeNotifier {
       _printers[index] = _printers[index].copyWith(
           status: status,
           color: newColor,
-          isConnected: printers[index].address == selectedAddress);
+          isConnected: color == 'G');
       notifyListeners();
     }
   }

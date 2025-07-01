@@ -35,7 +35,7 @@ class ZebraPrinterInstance: NSObject {
         case "checkPermission":
             checkPermission(result: result)
             
-        case "startScan":
+        case "startScan", "discoverPrinters":
             startScan(call: call, result: result)
             
         case "stopScan":
@@ -60,7 +60,7 @@ class ZebraPrinterInstance: NSObject {
         case "print":
             if let args = call.arguments as? [String: Any],
                let data = args["Data"] as? String {
-                print(data: data, result: result)
+                printData(data: data, result: result)
             } else {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "Data is required", details: nil))
             }
@@ -112,18 +112,23 @@ class ZebraPrinterInstance: NSObject {
         isScanning = true
         discoveredPrinters.removeAll()
         
-        // Start Bluetooth discovery (matching shashwatxx approach)
+        LogUtil.info("Starting printer discovery")
+        
+        // Use dispatch group to coordinate parallel discovery
+        let discoveryGroup = DispatchGroup()
+        var bluetoothCompleted = false
+        var networkCompleted = false
+        
+        // Start Bluetooth discovery
+        discoveryGroup.enter()
         ZSDKWrapper.startBluetoothDiscovery({ [weak self] btPrinters in
-            guard let self = self else { return }
+            guard let self = self else { 
+                discoveryGroup.leave()
+                return 
+            }
             
             for printerInfo in btPrinters {
                 if let info = printerInfo as? [String: Any] {
-                    let device: [String: Any] = [
-                        "address": info["address"] ?? "",
-                        "name": info["name"] ?? "Unknown Printer",
-                        "isBluetoothDevice": info["isBluetooth"] as? Bool ?? true
-                    ]
-                    self.discoveredPrinters.append(device)
                     self.channel.invokeMethod("printerFound", arguments: [
                         "Address": info["address"] ?? "",
                         "Name": info["name"] ?? "Unknown Printer",
@@ -133,17 +138,71 @@ class ZebraPrinterInstance: NSObject {
                 }
             }
             
-            self.channel.invokeMethod("onDiscoveryDone", arguments: nil)
+            LogUtil.info("Bluetooth discovery completed with \(btPrinters.count) printers")
+            bluetoothCompleted = true
+            discoveryGroup.leave()
+        }, error: { [weak self] error in
+            // Log error but don't stop the discovery process
+            LogUtil.error("Bluetooth discovery error: \(error)")
+            bluetoothCompleted = true
+            discoveryGroup.leave()
+        })
+        
+        // Start Network discovery in parallel
+        discoveryGroup.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Dummy connection to trigger network permission dialog
+            if let dummyConnection = ZSDKWrapper.connect(toPrinter: "0.0.0.0", isBluetoothConnection: false) {
+                ZSDKWrapper.disconnect(dummyConnection)
+            }
+            
+            // Small delay to ensure permission dialog is handled
+            Thread.sleep(forTimeInterval: 0.1)
+            
+            ZSDKWrapper.startNetworkDiscovery({ [weak self] networkPrinters in
+                guard let self = self else { 
+                    discoveryGroup.leave()
+                    return 
+                }
+                
+                for printerInfo in networkPrinters {
+                    if let info = printerInfo as? [String: Any] {
+                        self.channel.invokeMethod("printerFound", arguments: [
+                            "Address": info["address"] ?? "",
+                            "Name": info["name"] ?? "Unknown Printer",
+                            "Status": "Found",
+                            "IsWifi": "true"
+                        ])
+                    }
+                }
+                
+                LogUtil.info("Network discovery completed with \(networkPrinters.count) printers")
+                networkCompleted = true
+                discoveryGroup.leave()
+            }, error: { error in
+                // Log error but don't stop the discovery process
+                LogUtil.error("Network discovery error: \(error)")
+                networkCompleted = true
+                discoveryGroup.leave()
+            })
+        }
+        
+        // Wait for both discoveries to complete
+        discoveryGroup.notify(queue: .main) { [weak self] in
+            guard let self = self else { return }
+            
+            // Send completion event
+            LogUtil.info("Discovery completed - Bluetooth: \(bluetoothCompleted), Network: \(networkCompleted)")
+            
+            if call.method == "discoverPrinters" {
+                self.channel.invokeMethod("onPrinterDiscoveryDone", arguments: nil)
+            } else {
+                self.channel.invokeMethod("onDiscoveryDone", arguments: nil)
+            }
+            
             self.isScanning = false
             result(nil)
-        }, error: { [weak self] error in
-            self?.channel.invokeMethod("onDiscoveryError", arguments: [
-                "ErrorCode": "BLUETOOTH_ERROR",
-                "ErrorText": error
-            ])
-            self?.isScanning = false
-            result(FlutterError(code: "DISCOVERY_ERROR", message: error, details: nil))
-        })
+        }
     }
     
     private func stopScan(result: @escaping FlutterResult) {
@@ -165,6 +224,7 @@ class ZebraPrinterInstance: NSObject {
             // Determine if it's Bluetooth based on address format (matching shashwatxx logic)
             let isBluetoothDevice = !address.contains(".")
             
+            LogUtil.info("Connecting to printer: \(address), isBluetooth: \(isBluetoothDevice)")
             let connection = ZSDKWrapper.connect(toPrinter: address, isBluetoothConnection: isBluetoothDevice)
             if connection != nil {
                 self.connection = connection
@@ -211,26 +271,58 @@ class ZebraPrinterInstance: NSObject {
     
     // MARK: - Printing Operations
     
-    private func print(data: String, result: @escaping FlutterResult) {
+    private func printData(data: String, result: @escaping FlutterResult) {
         printQueue.async { [weak self] in
             guard let self = self, let connection = self.connection else {
                 DispatchQueue.main.async {
+                    self?.channel.invokeMethod("onPrintError", arguments: [
+                        "ErrorText": "Not connected to printer"
+                    ])
                     result(FlutterError(code: "PRINT_ERROR", message: "Not connected to printer", details: nil))
                 }
                 return
             }
             
+            // Update status to sending
+            DispatchQueue.main.async {
+                self.channel.invokeMethod("changePrinterStatus", arguments: [
+                    "Status": "Sending Data",
+                    "Color": "Y"
+                ])
+            }
+            
             if let dataBytes = data.data(using: .utf8) {
                 let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
+                
+                // Sleep for 1 second to match shashwatxx behavior
+                Thread.sleep(forTimeInterval: 1)
+                
                 DispatchQueue.main.async {
                     if success {
+                        // Send success callback
+                        self.channel.invokeMethod("onPrintComplete", arguments: nil)
+                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                            "Status": "Done",
+                            "Color": "G"
+                        ])
                         result(nil)
                     } else {
+                        // Send error callback
+                        self.channel.invokeMethod("onPrintError", arguments: [
+                            "ErrorText": "Failed to send data to printer"
+                        ])
+                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                            "Status": "Print Error: Failed to send data to printer",
+                            "Color": "R"
+                        ])
                         result(FlutterError(code: "PRINT_ERROR", message: "Failed to print data", details: nil))
                     }
                 }
             } else {
                 DispatchQueue.main.async {
+                    self.channel.invokeMethod("onPrintError", arguments: [
+                        "ErrorText": "Invalid data encoding"
+                    ])
                     result(FlutterError(code: "PRINT_ERROR", message: "Invalid data encoding", details: nil))
                 }
             }
