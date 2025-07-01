@@ -1,3 +1,182 @@
+# iOS ZSDK Integration Requirements
+
+This document outlines the technical requirements and implementation details for integrating the Zebra Link-OS SDK (ZSDK) on iOS.
+
+## Quick Navigation
+
+- [Main Project README](../../README.md)
+- [iOS Implementation](README.md)
+- [Example App Documentation](../example/README.md)
+- [Library Documentation](../lib/README.md)
+- [Development Documentation](../development/README.md)
+
+## Overview
+
+The iOS implementation requires careful integration with the Zebra Link-OS SDK due to Swift module limitations and framework compatibility requirements.
+
+## Architecture Requirements
+
+### Objective-C Wrapper Necessity
+**Critical**: Swift cannot directly import the ZSDK framework due to module limitations. This requires:
+- Objective-C wrapper classes to bridge ZSDK APIs
+- Minimal wrapper implementation focusing only on API exposure
+- All business logic implemented in Swift
+- Proper memory management with ARC
+
+### Key Components
+1. **ZSDKWrapper.h/m**: Objective-C wrapper for ZSDK APIs
+2. **ZebraPrinterInstance.swift**: Swift implementation of printer operations
+3. **ZebrautilPlugin.swift**: Main plugin registration and method channel handling
+4. **zebrautil.podspec**: CocoaPods configuration for ZSDK framework
+
+## Framework Integration
+
+### ZSDK Framework Location
+```
+ios/ZSDK_API.xcframework/
+├── ios-arm64/
+│   ├── Headers/
+│   └── ZSDK_API.a
+└── ios-arm64_x86_64-simulator/
+    ├── Headers/
+    └── ZSDK_API.a
+```
+
+### Podspec Configuration
+```ruby
+s.vendored_frameworks = 'ZSDK_API.xcframework'
+s.frameworks = 'ExternalAccessory', 'CoreBluetooth'
+s.libraries = 'z'
+```
+
+## Implementation Requirements
+
+### Threading
+- All ZSDK operations must run on background threads
+- Use `DispatchQueue.global()` for async operations
+- Dispatch UI updates to main thread
+- Handle thread safety for concurrent operations
+
+### Memory Management
+- Use ARC (Automatic Reference Counting)
+- Proper cleanup of ZSDK objects
+- Handle retain cycles in closures
+- Release resources on disconnect
+
+### Error Handling
+- Provide meaningful error messages
+- Handle ZSDK-specific error codes
+- Implement proper exception handling
+- Log errors for debugging
+
+## Method Channel Protocol
+
+### Main Channel: `zebrautil`
+- `getInstance` - Creates new printer instance, returns instance ID
+
+### Instance Channel: `ZebraPrinterObject{instanceId}`
+Methods:
+- `checkPermission` - Check Bluetooth/network permissions
+- `startScan` - Start discovering printers
+- `stopScan` - Stop discovery
+- `connectToPrinter` - Connect to printer by address
+- `print` - Send data to printer
+- `disconnect` - Disconnect from printer
+- `isPrinterConnected` - Check connection status
+- `setSettings` - Configure printer settings
+- `getLocateValue` - Get localized strings
+
+Events sent from native to Flutter:
+- `printerFound` - New printer discovered
+- `onDiscoveryError` - Discovery error occurred
+- `onDiscoveryDone` - Discovery completed
+
+## Language Detection Requirements
+
+### Automatic Detection
+- Detect printer language (ZPL vs CPCL) before printing
+- Query printer capabilities using ZSDK
+- Switch printer language mode automatically
+- Handle language switching errors
+
+### Manual Override
+- Allow manual language mode selection
+- Provide language detection status
+- Handle unsupported languages gracefully
+
+## Build Requirements
+
+### Xcode Configuration
+- Minimum iOS deployment target: 12.0
+- Enable bitcode: No (ZSDK compatibility)
+- Swift version: 5.0+
+- Objective-C bridging header required
+
+### Dependencies
+- Zebra Link-OS SDK (included)
+- ExternalAccessory framework
+- CoreBluetooth framework
+- libz library
+
+## Common Build Issues
+
+### "No such module 'ZSDK_API'"
+**Solution**: Use Objective-C wrapper, never import ZSDK directly in Swift
+
+### "Could not build Objective-C module"
+**Solution**: Check wrapper imports and framework paths
+
+### "Framework not found"
+**Solution**: Verify podspec vendored_frameworks path
+
+### "Undefined symbols"
+**Solution**: Ensure libz library is linked
+
+## Testing Requirements
+
+### Device Testing
+- Test on physical iOS devices
+- Verify MFi Bluetooth functionality
+- Test network printer connections
+- Validate language detection
+
+### Simulator Testing
+- Basic functionality testing
+- UI testing without printers
+- Error handling validation
+
+## Performance Considerations
+
+### Discovery Performance
+- Optimize discovery timeouts
+- Handle large numbers of printers
+- Implement discovery cancellation
+
+### Print Performance
+- Optimize data transmission
+- Handle large print jobs
+- Implement print queuing
+
+## Security Requirements
+
+### Permissions
+- Bluetooth usage description
+- Local network usage description
+- External accessory protocols
+
+### Data Handling
+- Secure printer communication
+- Handle sensitive print data
+- Implement proper cleanup
+
+## Documentation Links
+
+- [Main Project README](../../README.md)
+- [iOS Implementation](README.md)
+- [Example App Documentation](../example/README.md)
+- [Library Documentation](../lib/README.md)
+- [Development Documentation](../development/README.md)
+
 # iOS Implementation Plan for Zebra Printer Plugin
 
 ## Executive Summary

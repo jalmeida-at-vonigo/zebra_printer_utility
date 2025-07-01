@@ -1,140 +1,106 @@
-# Flutter ZebraUtil
+# Zebra Printer Utility Flutter Plugin
 
+A Flutter plugin for integrating Zebra printers on iOS and Android platforms using the Zebra Link-OS SDK (ZSDK).
 
+## Overview
 
-Zebra utility is a plugin for working easily with zebra printers in your flutter project.
+This plugin provides a unified API for discovering, connecting to, and printing to Zebra printers across iOS and Android platforms. It supports both ZPL (Zebra Programming Language) and CPCL (Common Printer Command Language) printing formats.
 
-  - Discovery bluetooth and wifi printers in android and bluetooth printers in iOS.
-  - Connect and disconnect to printers
-  - Set mediatype, darkness, calibrate command without writing any ZPL code for ZPL printers.
-  - Rotate ZPL without changing your zpl.
+## Features
 
+- **Cross-platform support**: iOS and Android
+- **Multiple connection types**: Bluetooth (MFi), Network (TCP/IP)
+- **Printing formats**: ZPL, CPCL, and raw text
+- **Automatic language detection**: Detects and switches printer language automatically
+- **Printer discovery**: Scan for available printers
+- **Connection management**: Connect, disconnect, and monitor connection status
 
-# Installation
+## Quick Start
 
-## Android
+### Installation
 
-Add this code to android block in `build.gradle` (Module level).
+Add to your `pubspec.yaml`:
 
-```sh
-android {
-    packagingOptions {
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/DEPENDENCIES'
-    }
-}
+```yaml
+dependencies:
+  zebra_util: ^0.0.1
 ```
 
-Include the necessary permission in the Android Manifest.
-```sh
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+### Basic Usage
+
+```dart
+import 'package:zebra_util/zebra_util.dart';
+
+// Get a printer instance
+final printer = ZebraUtil.getInstance();
+
+// Start discovery
+printer.startScan();
+
+// Connect to a printer
+await printer.connectToPrinter('192.168.1.100');
+
+// Print ZPL
+await printer.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+
+// Print CPCL
+await printer.print('! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n');
 ```
 
-## iOS
-Add `Supported external accessory protocols` in your `info.plist` and then add `com.zebra.rawport`to its.
-Add `Privacy - Local Network Usage Description` in your `info.plist`.
+## Documentation
 
-# Example
-## Getting Started
-There is a static class that allows you to create different instances of ZebraPrinter.
-```sh
-     FutureBuilder(
-        future: ZebraUtil.getPrinterInstance(), //required async 
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-          final zebraPrinter = snapshot.data as ZebraPrinter;
-          return PrinterTemplate(zebraPrinter);
-        },
-      ),
-```
+### 📚 [Example App](.readme/example/README.md)
+Complete working example with multiple screens demonstrating all features.
 
-You can then pass callbacks for either `onDiscoveryError`, `onPermissionDenied`, or neither.
+### 🧪 [Testing Guide](.readme/example/testing-guide.md)
+Comprehensive guide for testing the plugin on real devices and simulators.
 
-```sh
-     zebraPrinter.onDiscoveryError =  ( errorCode, errorText) {
-      print("Error: $errorCode, $errorText");
-    };
-    zebraPrinter.onPermissionDenied = () {
-      print("Permission denied");
-    }
-```
+### 📱 [iOS Implementation](.readme/ios/README.md)
+Details about iOS-specific implementation and requirements.
 
-## Methods
-After configuring the instance, use the following method to start searching for available devices:
+### 🔧 [iOS ZSDK Integration Requirements](.readme/ios/zsdk-integration-requirements.md)
+Technical details about iOS ZSDK integration and build requirements.
 
-```sh
-  zebraPrinter.startScanning();
-```
-It won't stop automatically, if you wish to stop the scan you must call:
+### 📦 [Library Documentation](.readme/lib/README.md)
+Complete API reference and usage examples.
 
- ```sh
-  zebraPrinter.stopScanning();
-```
+### 🖨️ [CPCL Printing Solution](.readme/lib/cpcl-printing-solution.md)
+Guide for CPCL printing implementation and examples.
 
-To listen for and display any devices (`ZebraDevice`), you can use the Zebra printer `ZebraController`
-```sh
-ListenableBuilder(
-    listenable: zebraPrinter.controller,
-    builder: (context, child) {
-      final printers = zebraPrinter.controller.printers;
-      if (printers.isEmpty) {
-        return _getNotAvailablePage();
-      }
-      return _getListDevices(printers);
-    },
-  )
-```
+### 📋 [Future Improvements](.readme/development/TODO.md)
+Planned features and improvements for the plugin.
 
-For connecting to printer, pass ipAddreess for wifi printer or macAddress for bluetooth printer to `connectToPrinter` method.
-```sh
- zebraPrinter.connectToPrinter("192.168.47.50");
-```
+## Platform Support
 
-You can set media type between `Lable`, `Journal` and `BlackMark`. You can choose media type by `EnumMediaType`.
-```sh
-  zebraPrinter.setMediaType(EnumMediaType.BlackMark);
-```
-You may callibrate printer after set media type. You can use this method.
-```sh
-zebraPrinter.calibratePrinter();
-```
-You can set darkness. the valid darkness value are -99,-75,-50,-25,0,25,50,75,100,125,150,175,200.
-```sh
-  zebraPrinter.setDarkness(25);
-```
-For print ZPL, you pass ZPL to `print` method.
-```sh
-  zebraPrinter.print("Your ZPL");
-```
-For rotate your ZPL without changing your ZPL, you can use this method. You can call this again for normal printing.
-```sh
-  zebraPrinter.rotate();
-```
-For disconnect from printer, use `disconnect` method. For battery saver, disconnect from printer when you not need printer.
-```sh
-  zebraPrinter.disconnect();
-```
+| Platform | Status | Features |
+|----------|--------|----------|
+| iOS | ✅ Supported | Bluetooth (MFi), Network, ZPL, CPCL |
+| Android | ⚠️ Limited | Network only, basic ZPL support |
 
-# P.S
-You need to be aware that once you are connected to a printer, it may not be detected by the scan. I recommend stopping the scan after successfully connecting to a printer until the issue is resolved.
+## Requirements
 
-# Acknowledgements
-I would like to express my gratitude to Deltec for fostering a friendly and supportive environment.
+### iOS
+- iOS 12.0+
+- Xcode 12.0+
+- Zebra Link-OS SDK (included)
+- Bluetooth permissions for MFi devices
+- Network permissions for TCP/IP printers
 
-Special thanks to [`MythiCode`](https://github.com/MythiCode/zebra_utlity) for providing the foundational code for this library. Specifically, I appreciate the following contributions:
+### Android
+- Android API 21+
+- Zebra Link-OS SDK (included)
+- Network permissions for TCP/IP printers
 
-* Base implementation for core functionalities
-* Initial setup and structure
-* Key algorithms and methods
+## Getting Help
 
-Thank you to everyone who made this project possible!
+- Check the [Testing Guide](.readme/example/testing-guide.md) for troubleshooting
+- Review [iOS Implementation](.readme/ios/README.md) for iOS-specific issues
+- See [CPCL Printing Solution](.readme/lib/cpcl-printing-solution.md) for printing format help
+
+## Contributing
+
+See [Future Improvements](.readme/development/TODO.md) for planned features and areas for contribution.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

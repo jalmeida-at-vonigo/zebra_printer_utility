@@ -213,4 +213,135 @@ Zebra.status.listen((message) {
     showError(message);
   }
 });
-``` 
+```
+
+# Library Documentation
+
+This section contains the complete API reference and usage examples for the Zebra Printer Utility plugin.
+
+## Overview
+
+The Zebra Printer Utility plugin provides a unified API for working with Zebra printers across iOS and Android platforms. It supports both ZPL (Zebra Programming Language) and CPCL (Common Printer Command Language) printing formats.
+
+## Core Classes
+
+### ZebraUtil
+Main entry point for creating printer instances.
+
+```dart
+// Get a printer instance
+final printer = ZebraUtil.getInstance();
+```
+
+### ZebraPrinter
+Represents a printer instance with methods for discovery, connection, and printing.
+
+```dart
+// Start discovery
+printer.startScan();
+
+// Connect to printer
+await printer.connectToPrinter('192.168.1.100');
+
+// Print ZPL
+await printer.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+```
+
+### ZebraDevice
+Represents a discovered printer device.
+
+```dart
+class ZebraDevice {
+  final String address;
+  final String name;
+  final String connectionType; // 'bluetooth' or 'network'
+}
+```
+
+## API Reference
+
+### Discovery Methods
+- `startScan()` - Start discovering printers
+- `stopScan()` - Stop discovery process
+- `onPrinterFound` - Callback for discovered printers
+
+### Connection Methods
+- `connectToPrinter(String address)` - Connect to printer by address
+- `disconnect()` - Disconnect from current printer
+- `isPrinterConnected()` - Check connection status
+
+### Printing Methods
+- `print(String data)` - Send data to printer (ZPL, CPCL, or raw text)
+- `setSettings(Map<String, dynamic> settings)` - Configure printer settings
+
+### Event Callbacks
+- `onPrinterFound` - Called when a new printer is discovered
+- `onDiscoveryError` - Called when discovery encounters an error
+- `onDiscoveryDone` - Called when discovery completes
+
+## Printing Formats
+
+### ZPL (Zebra Programming Language)
+```dart
+// Basic ZPL label
+String zpl = '''
+^XA
+^FO50,50^A0N,50,50^FDHello World^FS
+^XZ
+''';
+await printer.print(zpl);
+```
+
+### CPCL (Common Printer Command Language)
+```dart
+// Basic CPCL label
+String cpcl = '''
+! 0 200 200 210 1
+TEXT 4 0 0 0 Hello World
+FORM
+PRINT
+''';
+await printer.print(cpcl);
+```
+
+For detailed CPCL examples, see [CPCL Printing Solution](cpcl-printing-solution.md).
+
+## Error Handling
+
+The plugin uses `PlatformException` for error handling:
+
+```dart
+try {
+  await printer.connectToPrinter('192.168.1.100');
+} catch (e) {
+  if (e is PlatformException) {
+    print('Error: ${e.code} - ${e.message}');
+  }
+}
+```
+
+## Platform Support
+
+| Feature | iOS | Android |
+|---------|-----|---------|
+| Bluetooth Discovery | ✅ | ❌ |
+| Network Discovery | ✅ | ✅ |
+| ZPL Printing | ✅ | ✅ |
+| CPCL Printing | ✅ | ❌ |
+| Automatic Language Detection | ✅ | ❌ |
+
+## Best Practices
+
+1. **Always disconnect** when done printing to save battery
+2. **Handle errors gracefully** with try-catch blocks
+3. **Check connection status** before printing
+4. **Use appropriate language** (ZPL vs CPCL) for your printer
+5. **Test on real devices** for production use
+
+## Documentation Links
+
+- [Main Project README](../../README.md)
+- [Example App Documentation](../example/README.md)
+- [iOS Implementation](../ios/README.md)
+- [Development Documentation](../development/README.md)
+- [CPCL Printing Solution](cpcl-printing-solution.md) 
