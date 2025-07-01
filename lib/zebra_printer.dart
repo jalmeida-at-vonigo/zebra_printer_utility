@@ -6,6 +6,8 @@ enum EnumMediaType { Label, BlackMark, Journal }
 
 enum Command { calibrate, mediaType, darkness }
 
+enum PrintFormat { ZPL, CPCL }
+
 class ZebraPrinter {
   late MethodChannel channel;
 
@@ -135,13 +137,19 @@ class ZebraPrinter {
     channel.invokeMethod("connectToGenericPrinter", {"Address": address});
   }
 
-  void print({required String data}) {
-    if (!data.contains("^PON")) data = data.replaceAll("^XA", "^XA^PON");
+  Future<void> print({required String data}) async {
+    // Only modify ZPL data, not CPCL
+    if (data.trim().startsWith("^XA")) {
+      // This is ZPL - apply modifications
+      if (!data.contains("^PON")) data = data.replaceAll("^XA", "^XA^PON");
 
-    if (isRotated) {
-      data = data.replaceAll("^PON", "^POI");
+      if (isRotated) {
+        data = data.replaceAll("^PON", "^POI");
+      }
     }
-    channel.invokeMethod("print", {"Data": data});
+    // For CPCL (starts with "!") or other formats, send as-is
+
+    await channel.invokeMethod("print", {"Data": data});
   }
 
   Future<void> disconnect() async {

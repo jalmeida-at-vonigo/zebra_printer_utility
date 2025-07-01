@@ -1,6 +1,5 @@
 import 'dart:convert';
-
-import 'package:flutter/services.dart';
+import 'dart:ui' show Color;
 
 List<ZebraDevice> zebraDevicesModelFromJson(String str) =>
     List<ZebraDevice>.from(
