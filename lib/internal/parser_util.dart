@@ -146,16 +146,16 @@ class ParserUtil {
 
     final lower = status.toLowerCase();
 
+    // Check for open status first (more specific)
+    if (lower.contains('open') || lower.contains('unlocked')) {
+      return false;
+    }
+
     // Check for closed/ok status
     if (lower.contains('closed') ||
         lower.contains('ok') ||
         lower.contains('locked')) {
       return true;
-    }
-
-    // Check for open status
-    if (lower.contains('open') || lower.contains('unlocked')) {
-      return false;
     }
 
     // Default to false for safety

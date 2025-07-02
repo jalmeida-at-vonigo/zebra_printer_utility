@@ -750,7 +750,7 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Calibrating printer...');
       _printer!.calibratePrinter();
-      
+
       // Calibration is fire-and-forget, no callback available
       _statusStreamController?.add('Calibration command sent');
       return Result.success();

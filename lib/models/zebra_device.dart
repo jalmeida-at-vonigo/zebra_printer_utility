@@ -32,12 +32,22 @@ class ZebraDevice {
       ZebraDevice(address: "", name: "", isWifi: false, status: '');
 
   factory ZebraDevice.fromJson(Map<String, dynamic> json) => ZebraDevice(
-      address: json["ipAddress"] ?? json["macAddress"],
-      name: json["name"],
-      isWifi: json["isWifi"].toString() == "true",
-      isConnected: json["isConnected"],
-      status: json["status"] ,
-      color: json["color"]);
+      address: json["ipAddress"] ?? json["macAddress"] ?? "",
+      name: json["name"] ?? "",
+      isWifi: json["isWifi"] == null 
+          ? false 
+          : (json["isWifi"] is bool 
+              ? json["isWifi"] 
+              : json["isWifi"].toString() == "true"),
+      isConnected: json["isConnected"] == null 
+          ? false 
+          : (json["isConnected"] is bool 
+              ? json["isConnected"] 
+              : json["isConnected"].toString() == "true"),
+      status: json["status"] ?? "",
+      color: json["color"] != null
+          ? Color(json["color"] as int)
+          : const Color.fromARGB(255, 255, 0, 0));
 
   Map<String, dynamic> toJson() => {
         "ipAddress": address,
@@ -45,7 +55,7 @@ class ZebraDevice {
         "isWifi": isWifi,
         "status": status,
         "isConnected": isConnected,
-        "color": color
+        "color": color.value
       };
 
   @override
@@ -57,6 +67,9 @@ class ZebraDevice {
 
   @override
   int get hashCode => address.hashCode;
+
+  @override
+  String toString() => 'ZebraDevice($address, $name)';
 
   ZebraDevice copyWith({
     String? address,

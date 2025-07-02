@@ -149,9 +149,9 @@ class AutoCorrector {
       }
 
       // Check if we need to switch
-      final needsZPL = detectedLanguage == 'ZPL' &&
+      final needsZPL = detectedLanguage == 'zpl' &&
           !currentLang.toLowerCase().contains('zpl');
-      final needsCPCL = detectedLanguage == 'CPCL' &&
+      final needsCPCL = detectedLanguage == 'cpcl' &&
           !currentLang.toLowerCase().contains('line_print');
 
       if (!needsZPL && !needsCPCL) {

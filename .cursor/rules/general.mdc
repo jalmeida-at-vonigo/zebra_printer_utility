@@ -17,6 +17,7 @@ alwaysApply: true
     - There is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
 * There is no duplicate exports on [zebrautil.dart](mdc:lib/zebrautil.dart)
 * All the tests were updated and are passing with the proper implementation.
+* There should be no TODO, either by comment or by knowing, at the end of the task. If you are not able to complete, ask for help.
 
 # ZEBRAUTIL
 
