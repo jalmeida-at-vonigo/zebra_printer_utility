@@ -8,7 +8,6 @@ import 'internal/auto_corrector.dart';
 class ZebraPrinterService {
   ZebraPrinter? _printer;
   ZebraController? _controller;
-  ZebraOperationQueue? _operationQueue;
 
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<ZebraDevice?>? _connectionStreamController;
@@ -65,53 +64,11 @@ class ZebraPrinterService {
       },
     );
     
-    // Initialize operation queue
-    _operationQueue = ZebraOperationQueue(
-      onExecuteOperation: _executeOperation,
-      onError: (error) =>
-          _statusStreamController?.add('Operation error: $error'),
-    );
   }
 
   void _onControllerChanged() {
     _devicesStreamController?.add(_controller!.printers);
     _connectionStreamController?.add(connectedPrinter);
-  }
-  
-  /// Execute an operation from the queue
-  Future<dynamic> _executeOperation(ZebraOperation operation) async {
-    switch (operation.type) {
-      case OperationType.connect:
-        final address = operation.parameters['address'] as String;
-        return await _doConnect(address);
-
-      case OperationType.disconnect:
-        return await _doDisconnect();
-
-      case OperationType.print:
-        final data = operation.parameters['data'] as String;
-        final ensureMode = operation.parameters['ensureMode'] as bool? ?? true;
-        return await _doPrint(data, ensureMode: ensureMode);
-
-      case OperationType.setSetting:
-        final setting = operation.parameters['setting'] as String;
-        final value = operation.parameters['value'] as String;
-        return await _doSetSetting(setting, value);
-
-      case OperationType.getSetting:
-        final setting = operation.parameters['setting'] as String;
-        return await _doGetSetting(setting);
-
-      case OperationType.setPrinterMode:
-        final mode = operation.parameters['mode'] as String;
-        return await _doSetPrinterMode(mode);
-
-      case OperationType.checkStatus:
-        return await _doCheckStatus();
-
-      default:
-        throw Exception('Unknown operation type: ${operation.type}');
-    }
   }
 
   /// Discover available printers (both Bluetooth and Network)
@@ -169,11 +126,8 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Connecting to $address...');
 
-      final result = await _operationQueue!.enqueue<Result<void>>(
-        OperationType.connect,
-        {'address': address},
-        timeout: const Duration(seconds: 10),
-      );
+      // Call printer directly - callback-based completion ensures sequencing
+      final result = await _printer!.connectToPrinter(address);
 
       if (result.success) {
         _statusStreamController?.add('Connected to $address');
@@ -206,13 +160,10 @@ class ZebraPrinterService {
     if (connectedPrinter != null) {
       try {
         _statusStreamController?.add('Disconnecting...');
-        await _operationQueue!.enqueue<void>(
-          OperationType.disconnect,
-          {},
-          timeout: const Duration(seconds: 5),
-        );
+        // Call printer directly - callback-based completion ensures sequencing
+        final result = await _printer!.disconnect();
         _statusStreamController?.add('Disconnected');
-        return Result.success();
+        return result;
       } catch (e, stack) {
         _statusStreamController?.add('Disconnect error: $e');
         return Result.error(
@@ -241,18 +192,12 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Printing...');
       
-      final success = await _operationQueue!.enqueue<bool>(
-        OperationType.print,
-        {
-          'data': data,
-          'ensureMode': true, // Enable automatic mode switching
-        },
-        timeout: const Duration(seconds: 30),
-      );
+      // Call printer directly - callback-based completion ensures sequencing
+      final result = await _printer!.print(data: data);
       
-      if (success) {
+      if (result.success) {
         _statusStreamController?.add('Print sent successfully');
-        return Result.success();
+        return result;
       } else {
         return Result.error(
           'Print failed',
@@ -376,11 +321,20 @@ class ZebraPrinterService {
         }
       }
 
-      // Disconnect from current printer if needed
-      if (connectedPrinter != null) {
+      // If we have a connected printer but it's not the right one, disconnect first
+      if (connectedPrinter != null &&
+          address != null &&
+          connectedPrinter!.address != address) {
+        _statusStreamController?.add('Disconnecting from different printer...');
+        await disconnect();
+      }
+
+      // Disconnect from current printer if needed (but only if we need to connect to a different one)
+      if (connectedPrinter != null &&
+          address != null &&
+          connectedPrinter!.address != address) {
         _statusStreamController?.add('Disconnecting from current printer...');
         await disconnect();
-        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       // If no address provided, look for paired printers only
@@ -405,7 +359,8 @@ class ZebraPrinterService {
 
             // Start discovery but only wait briefly for Bluetooth
             _printer!.startScanning();
-            await Future.delayed(const Duration(seconds: 2));
+            await Future.delayed(const Duration(
+                seconds: 2)); // NECESSARY: Hardware needs time to discover
             _printer!.stopScanning();
 
             // Get only Bluetooth (paired) printers
@@ -457,7 +412,8 @@ class ZebraPrinterService {
         if (i < maxRetries) {
           _statusStreamController
               ?.add('Connection failed, retrying... (${i + 1}/$maxRetries)');
-          await Future.delayed(const Duration(seconds: 2));
+          await Future.delayed(
+              const Duration(seconds: 2)); // NECESSARY: Retry delay
         }
       }
 
@@ -543,15 +499,19 @@ class ZebraPrinterService {
       final printed =
           await _printWithRetry(data, format: format, maxRetries: maxRetries);
 
-      // Disconnect after printing if requested
-      if (shouldDisconnect && disconnectAfter) {
-        _statusStreamController?.add('Disconnecting...');
-        await disconnect();
-      }
-
       if (printed) {
+        // Print completed successfully (callback-based, no delay needed)
+        if (shouldDisconnect && disconnectAfter) {
+          _statusStreamController?.add('Print completed, disconnecting...');
+          await disconnect();
+        }
         return Result.success();
       } else {
+        // Disconnect on failure
+        if (shouldDisconnect && disconnectAfter) {
+          _statusStreamController?.add('Disconnecting after print failure...');
+          await disconnect();
+        }
         return Result.error(
           'Print failed after retries',
           code: ErrorCodes.printError,
@@ -580,6 +540,29 @@ class ZebraPrinterService {
       {PrintFormat? format, int maxRetries = 3}) async {
     for (int i = 0; i <= maxRetries; i++) {
       try {
+        // Check connection before each attempt
+        final isConnected = await _verifyConnection();
+        if (!isConnected) {
+          _statusStreamController
+              ?.add('Connection lost, attempting to reconnect...');
+
+          // Try to reconnect if we have a connected printer address
+          if (connectedPrinter != null) {
+            final reconnectResult = await connect(connectedPrinter!.address);
+            if (!reconnectResult.success) {
+              _statusStreamController?.add(
+                  'Failed to reconnect: ${reconnectResult.error?.message}');
+              if (i == maxRetries) return false;
+              await Future.delayed(const Duration(seconds: 2));
+              continue;
+            }
+            _statusStreamController?.add('Reconnected successfully');
+          } else {
+            _statusStreamController?.add('No printer to reconnect to');
+            return false;
+          }
+        }
+
         final result = await print(data, format: format);
 
         if (result.success) {
@@ -589,23 +572,19 @@ class ZebraPrinterService {
         if (i < maxRetries) {
           _statusStreamController
               ?.add('Print failed, retrying... (${i + 1}/$maxRetries)');
-
-          // Check if still connected
-          final isConnected = await _verifyConnection();
-          if (!isConnected) {
-            _statusStreamController?.add('Connection lost during print');
-            return false;
-          }
-
           await Future.delayed(const Duration(seconds: 1));
         }
       } catch (e) {
+        _statusStreamController?.add('Print error: $e');
+        
         if (i < maxRetries) {
           _statusStreamController
-              ?.add('Print error: $e, retrying... (${i + 1}/$maxRetries)');
-          await Future.delayed(const Duration(seconds: 1));
+              ?.add('Retrying... (${i + 1}/$maxRetries)');
+          await Future.delayed(const Duration(seconds: 2));
         } else {
-          rethrow;
+          _statusStreamController
+              ?.add('Print failed after $maxRetries attempts');
+          return false;
         }
       }
     }
@@ -618,13 +597,21 @@ class ZebraPrinterService {
   Future<bool> _verifyConnection() async {
     try {
       // First check if we think we're connected
-      if (connectedPrinter == null) return false;
+      if (connectedPrinter == null) {
+        _statusStreamController?.add('No printer in connectedPrinter');
+        return false;
+      }
 
       // Then verify with the printer
       final isConnected = await _printer!.isPrinterConnected();
 
       if (!isConnected) {
-        _statusStreamController?.add('Connection verification failed');
+        _statusStreamController?.add(
+            'Connection verification failed - printer reports disconnected');
+        // Update our internal state
+        _controller?.updatePrinterStatus("Disconnected", "R");
+      } else {
+        _statusStreamController?.add('Connection verification successful');
       }
 
       return isConnected;
@@ -762,10 +749,9 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Calibrating printer...');
       _printer!.calibratePrinter();
-
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      _statusStreamController?.add('Calibration complete');
+      
+      // Calibration is fire-and-forget, no callback available
+      _statusStreamController?.add('Calibration command sent');
       return Result.success();
     } catch (e, stack) {
       _statusStreamController?.add('Calibration error: $e');
@@ -843,6 +829,45 @@ class ZebraPrinterService {
     return await _printer!.isPrinterConnected();
   }
 
+  /// Force reconnect to the current printer
+  Future<Result<void>> forceReconnect() async {
+    await _ensureInitialized();
+
+    if (connectedPrinter == null) {
+      return Result.error(
+        'No printer to reconnect to',
+        code: ErrorCodes.notConnected,
+      );
+    }
+
+    try {
+      _statusStreamController
+          ?.add('Force reconnecting to ${connectedPrinter!.name}...');
+
+      // Disconnect first
+      await disconnect();
+
+      // Then reconnect
+      final result = await connect(connectedPrinter!.address);
+
+      if (result.success) {
+        _statusStreamController?.add('Force reconnect successful');
+      } else {
+        _statusStreamController
+            ?.add('Force reconnect failed: ${result.error?.message}');
+      }
+
+      return result;
+    } catch (e, stack) {
+      _statusStreamController?.add('Force reconnect error: $e');
+      return Result.error(
+        'Force reconnect error: $e',
+        code: ErrorCodes.connectionError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
   /// Rotate print orientation
   void rotate() {
     _printer?.rotate();
@@ -858,7 +883,7 @@ class ZebraPrinterService {
   /// Dispose of resources
   void dispose() {
     _discoveryTimer?.cancel();
-    _operationQueue?.dispose();
+    _printer?.dispose();
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     _devicesStreamController?.close();
@@ -866,88 +891,66 @@ class ZebraPrinterService {
     _statusStreamController?.close();
   }
   
-  // ===== Internal operation implementations =====
+  /// Test method - Direct print without operation queue
+  Future<Result<void>> directPrint(String data) async {
+    await _ensureInitialized();
 
-  Future<Result<void>> _doConnect(String address) async {
-    final result = await _printer!.connectToPrinter(address);
-    return result;
-  }
-
-  Future<Result<void>> _doDisconnect() async {
-    return await _printer!.disconnect();
-  }
-
-  Future<bool> _doPrint(String data, {bool ensureMode = true}) async {
-    if (ensureMode) {
-      // Detect data format and ensure printer is in correct mode
-      final language = ZebraSGDCommands.detectDataLanguage(data);
-      if (language != null) {
-        // Check current printer mode
-        final currentMode = await _doGetSetting('device.languages');
-        if (currentMode != null &&
-            !ZebraSGDCommands.isLanguageMatch(currentMode, language)) {
-          // Switch printer mode
-          await _doSetPrinterMode(language);
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-      }
+    if (connectedPrinter == null) {
+      return Result.error(
+        'No printer connected',
+        code: ErrorCodes.notConnected,
+      );
     }
 
-    // Send the print data
-    final result = await _printer!.print(data: data);
-    return result.success;
-  }
+    try {
+      _statusStreamController?.add('Direct printing...');
+      final result = await _printer!.print(data: data);
 
-  Future<bool> _doSetSetting(String setting, String value) async {
-    final command = ZebraSGDCommands.setCommand(setting, value);
-    await _printer!.print(data: command);
-    await Future.delayed(const Duration(milliseconds: 100));
-    return true;
+      if (result.success) {
+        _statusStreamController?.add('Direct print successful');
+        return Result.success();
+      } else {
+        _statusStreamController
+            ?.add('Direct print failed: ${result.error?.message}');
+        return result;
+      }
+    } catch (e, stack) {
+      _statusStreamController?.add('Direct print error: $e');
+      return Result.error(
+        'Direct print error: $e',
+        code: ErrorCodes.printError,
+        dartStackTrace: stack,
+      );
+    }
   }
+  
+  // ===== Internal helper methods =====
 
   Future<String?> _doGetSetting(String setting) async {
     try {
-      // Use the new getSetting method that reads responses
-      final response = await _printer!.channel.invokeMethod<String>(
-        'getSetting',
-        {'setting': setting},
-      );
-
-      if (response != null && response.isNotEmpty) {
-        // Parse the response using our SGD parser
-        return ZebraSGDCommands.parseResponse(response);
-      }
-      
+      // For now, skip getSetting calls as they might be causing issues
+      // This is a temporary workaround to test if printing works
+      _statusStreamController
+          ?.add('Skipping getSetting for $setting (temporary workaround)');
       return null;
+
+      // TODO: Re-enable once we verify getSetting is working
+      // Use the new getSetting method that reads responses
+      // final response = await _printer!.channel.invokeMethod<String>(
+      //   'getSetting',
+      //   {'setting': setting},
+      // );
+
+      // if (response != null && response.isNotEmpty) {
+      //   // Parse the response using our SGD parser
+      //   return ZebraSGDCommands.parseResponse(response);
+      // }
+      
+      // return null;
     } catch (e) {
       _statusStreamController?.add('Failed to get setting $setting: $e');
       return null;
     }
-  }
-
-  Future<bool> _doSetPrinterMode(String mode) async {
-    final command = mode.toLowerCase() == 'zpl'
-        ? ZebraSGDCommands.setZPLMode()
-        : ZebraSGDCommands.setCPCLMode();
-
-    await _printer!.print(data: command);
-    await Future.delayed(const Duration(milliseconds: 500));
-    return true;
-  }
-
-  Future<Map<String, dynamic>> _doCheckStatus() async {
-    // Send status command
-    await _printer!.print(data: ZebraSGDCommands.getPrinterStatus);
-
-    // TODO: Implement status response parsing
-    // For now, return simulated status
-    return {
-      'status': 'ready',
-      'media_present': true,
-      'head_closed': true,
-      'paused': false,
-      'errors': [],
-    };
   }
 
   /// Create a new printer instance

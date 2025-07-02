@@ -9,7 +9,6 @@ library zebrautil;
 export 'models/zebra_device.dart';
 export 'models/result.dart';
 export 'models/printer_readiness.dart';
-export 'models/zebra_operation.dart';
 export 'models/print_enums.dart';
 export 'models/auto_correction_options.dart';
 
@@ -18,4 +17,9 @@ export 'zebra.dart';
 export 'zebra_printer.dart';
 export 'zebra_printer_service.dart';
 export 'zebra_sgd_commands.dart';
-export 'zebra_operation_queue.dart';
+
+// Internal framework exports (not for public use)
+// These are exported for internal plugin use only
+export 'internal/native_operation.dart' hide NativeOperation;
+export 'internal/operation_manager.dart' hide OperationManager;
+export 'internal/operation_callback_handler.dart' hide OperationCallbackHandler;

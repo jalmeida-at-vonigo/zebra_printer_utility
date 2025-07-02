@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/models/print_enums.dart';
+import 'package:zebrautil/internal/operation_manager.dart';
+import 'package:zebrautil/internal/operation_callback_handler.dart';
 
 class ZebraPrinter {
   late MethodChannel channel;
+  late OperationManager _operationManager;
+  late OperationCallbackHandler _callbackHandler;
 
   Function(String, String?)? onDiscoveryError;
   Function? onPermissionDenied;
@@ -19,27 +24,98 @@ class ZebraPrinter {
       this.onPermissionDenied,
       ZebraController? controller}) {
     channel = MethodChannel('ZebraPrinterObject$id');
-    channel.setMethodCallHandler(nativeMethodCallHandler);
     this.controller = controller ?? ZebraController();
+
+    // Initialize operation management
+    _operationManager = OperationManager(
+      channel: channel,
+      onLog: (message) => debugPrint('ZebraPrinter: $message'),
+    );
+    _callbackHandler = OperationCallbackHandler(manager: _operationManager);
+
+    // Register event handlers for non-operation callbacks
+    _registerEventHandlers();
+
+    // Set method call handler
+    channel.setMethodCallHandler(nativeMethodCallHandler);
   }
 
-  void startScanning() {
-    isScanning = true;
-    controller.cleanAll();
-    channel.invokeMethod("checkPermission").then((isGrantPermission) {
-      if (isGrantPermission) {
-        channel.invokeMethod("startScan");
-      } else {
-        isScanning = false;
-        if (onPermissionDenied != null) onPermissionDenied!();
+  /// Register event handlers for non-operation callbacks
+  void _registerEventHandlers() {
+    _callbackHandler.registerEventHandler('printerFound', (call) {
+      final newPrinter = ZebraDevice(
+        address: call.arguments["Address"],
+        status: call.arguments["Status"],
+        name: call.arguments["Name"],
+        isWifi: call.arguments["IsWifi"] == "true",
+      );
+      controller.addPrinter(newPrinter);
+    });
+
+    _callbackHandler.registerEventHandler('printerRemoved', (call) {
+      final String address = call.arguments["Address"];
+      controller.removePrinter(address);
+    });
+
+    _callbackHandler.registerEventHandler('changePrinterStatus', (call) {
+      final String status = call.arguments["Status"];
+      final String color = call.arguments["Color"];
+      controller.updatePrinterStatus(status, color);
+    });
+
+    _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
+      if (onDiscoveryError != null) {
+        onDiscoveryError!(
+            call.arguments["ErrorCode"], call.arguments["ErrorText"]);
       }
     });
   }
 
-  void stopScanning() {
+  void startScanning() async {
+    isScanning = true;
+    controller.cleanAll();
+    
+    try {
+      // Check permission using operation manager
+      final isGrantPermission = await _operationManager.execute<bool>(
+        method: 'checkPermission',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      
+      if (isGrantPermission) {
+        // Start scan using operation manager
+        await _operationManager.execute<bool>(
+          method: 'startScan',
+          arguments: {},
+          timeout: const Duration(seconds: 30),
+        );
+      } else {
+        isScanning = false;
+        if (onPermissionDenied != null) onPermissionDenied!();
+      }
+    } catch (e) {
+      isScanning = false;
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('SCAN_ERROR', e.toString());
+      }
+    }
+  }
+
+  void stopScanning() async {
     isScanning = false;
     shouldSync = true;
-    channel.invokeMethod("stopScan");
+    
+    try {
+      await _operationManager.execute<bool>(
+        method: 'stopScan',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      // Log error but don't fail
+      debugPrint('Error stopping scan: $e');
+    }
   }
 
   void _setSettings(Command setting, dynamic values) {
@@ -76,9 +152,15 @@ class ZebraPrinter {
     }
 
     try {
-      channel.invokeMethod("setSettings", {"SettingCommand": command});
-    } on PlatformException catch (e) {
-      if (onDiscoveryError != null) onDiscoveryError!(e.code, e.message);
+      _operationManager.execute<bool>(
+        method: 'setSettings',
+        arguments: {'SettingCommand': command},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('SETTINGS_ERROR', e.toString());
+      }
     }
   }
 
@@ -100,9 +182,15 @@ class ZebraPrinter {
 
   void sendCommand(String command) {
     try {
-      channel.invokeMethod("setSettings", {"SettingCommand": command});
-    } on PlatformException catch (e) {
-      if (onDiscoveryError != null) onDiscoveryError!(e.code, e.message);
+      _operationManager.execute<bool>(
+        method: 'setSettings',
+        arguments: {'SettingCommand': command},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('SETTINGS_ERROR', e.toString());
+      }
     }
   }
 
@@ -110,7 +198,6 @@ class ZebraPrinter {
     try {
       if (controller.selectedAddress != null) {
         await disconnect();
-        await Future.delayed(const Duration(milliseconds: 300));
       }
       if (controller.selectedAddress == address) {
         await disconnect();
@@ -118,12 +205,15 @@ class ZebraPrinter {
         return Result.success();
       }
       controller.selectedAddress = address;
-      await channel.invokeMethod("connectToPrinter", {"Address": address});
+      
+      // Use operation manager for tracked connection
+      final success = await _operationManager.execute<bool>(
+        method: 'connectToPrinter',
+        arguments: {'Address': address},
+        timeout: const Duration(seconds: 10),
+      );
 
-      // Check connection status after a short delay
-      await Future.delayed(const Duration(milliseconds: 500));
-      final isConnected = await isPrinterConnected();
-      if (isConnected) {
+      if (success) {
         controller.updatePrinterStatus("Connected", "G");
         return Result.success();
       } else {
@@ -133,6 +223,12 @@ class ZebraPrinter {
           code: ErrorCodes.connectionError,
         );
       }
+    } on TimeoutException {
+      controller.selectedAddress = null;
+      return Result.error(
+        'Connection timed out',
+        code: ErrorCodes.connectionTimeout,
+      );
     } on PlatformException catch (e) {
       controller.selectedAddress = null;
       return Result.error(
@@ -155,7 +251,6 @@ class ZebraPrinter {
     try {
       if (controller.selectedAddress != null) {
         await disconnect();
-        await Future.delayed(const Duration(milliseconds: 300));
       }
       if (controller.selectedAddress == address) {
         await disconnect();
@@ -163,13 +258,15 @@ class ZebraPrinter {
         return Result.success();
       }
       controller.selectedAddress = address;
-      await channel
-          .invokeMethod("connectToGenericPrinter", {"Address": address});
+      
+      // Use operation manager for tracked connection
+      final success = await _operationManager.execute<bool>(
+        method: 'connectToGenericPrinter',
+        arguments: {'Address': address},
+        timeout: const Duration(seconds: 10),
+      );
 
-      // Check connection status after a short delay
-      await Future.delayed(const Duration(milliseconds: 500));
-      final isConnected = await isPrinterConnected();
-      if (isConnected) {
+      if (success) {
         controller.updatePrinterStatus("Connected", "G");
         return Result.success();
       } else {
@@ -179,6 +276,12 @@ class ZebraPrinter {
           code: ErrorCodes.connectionError,
         );
       }
+    } on TimeoutException {
+      controller.selectedAddress = null;
+      return Result.error(
+        'Connection timed out',
+        code: ErrorCodes.connectionTimeout,
+      );
     } on PlatformException catch (e) {
       controller.selectedAddress = null;
       return Result.error(
@@ -210,7 +313,9 @@ class ZebraPrinter {
       // Only modify ZPL data, not CPCL
       if (data.trim().startsWith("^XA")) {
         // This is ZPL - apply modifications
-        if (!data.contains("^PON")) data = data.replaceAll("^XA", "^XA^PON");
+        if (!data.contains("^PON")) {
+          data = data.replaceAll("^XA", "^XA^PON");
+        }
 
         if (isRotated) {
           data = data.replaceAll("^PON", "^POI");
@@ -218,8 +323,85 @@ class ZebraPrinter {
       }
       // For CPCL (starts with "!") or other formats, send as-is
 
-      await channel.invokeMethod("print", {"Data": data});
-      return Result.success();
+      // Use operation manager for tracked printing
+      final success = await _operationManager.execute<bool>(
+        method: 'print',
+        arguments: {'Data': data},
+        timeout: const Duration(seconds: 30),
+      );
+
+      return success
+          ? Result.success()
+          : Result.error(
+              'Print failed',
+              code: ErrorCodes.printError,
+            );
+    } on TimeoutException {
+      return Result.error(
+        'Print operation timed out',
+        code: ErrorCodes.operationTimeout,
+      );
+    } on PlatformException catch (e) {
+      return Result.error(
+        e.message ?? 'Print failed',
+        code: ErrorCodes.printError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      return Result.error(
+        'Print error: $e',
+        code: ErrorCodes.printError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+  /// Print with completion callback using operation manager
+  Future<Result<void>> printWithCallback({
+    required String data,
+    String? operationId,
+  }) async {
+    try {
+      // Validate input
+      if (data.isEmpty) {
+        return Result.error(
+          'Print data cannot be empty',
+          code: ErrorCodes.invalidData,
+        );
+      }
+
+      // Only modify ZPL data, not CPCL
+      if (data.trim().startsWith("^XA")) {
+        // This is ZPL - apply modifications
+        if (!data.contains("^PON")) {
+          data = data.replaceAll("^XA", "^XA^PON");
+        }
+
+        if (isRotated) {
+          data = data.replaceAll("^PON", "^POI");
+        }
+      }
+      // For CPCL (starts with "!") or other formats, send as-is
+
+      // Use operation manager for tracked execution
+      final success = await _operationManager.execute<bool>(
+        method: 'print',
+        arguments: {'Data': data},
+        timeout: const Duration(seconds: 30),
+      );
+
+      return success
+          ? Result.success()
+          : Result.error(
+              'Print operation failed',
+              code: ErrorCodes.printError,
+            );
+    } on TimeoutException {
+      return Result.error(
+        'Print operation timed out',
+        code: ErrorCodes.operationTimeout,
+      );
     } on PlatformException catch (e) {
       return Result.error(
         e.message ?? 'Print failed',
@@ -238,11 +420,28 @@ class ZebraPrinter {
 
   Future<Result<void>> disconnect() async {
     try {
-      await channel.invokeMethod("disconnect", null);
+      // Use operation manager for tracked disconnection
+      final success = await _operationManager.execute<bool>(
+        method: 'disconnect',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      
       if (controller.selectedAddress != null) {
         controller.updatePrinterStatus("Disconnected", "R");
       }
-      return Result.success();
+      
+      return success
+          ? Result.success()
+          : Result.error(
+              'Disconnect failed',
+              code: ErrorCodes.connectionError,
+            );
+    } on TimeoutException {
+      return Result.error(
+        'Disconnect timed out',
+        code: ErrorCodes.connectionTimeout,
+      );
     } on PlatformException catch (e) {
       return Result.error(
         e.message ?? 'Disconnect failed',
@@ -264,8 +463,16 @@ class ZebraPrinter {
   }
 
   Future<bool> isPrinterConnected() async {
-    final result = await channel.invokeMethod<bool>("isPrinterConnected");
-    return result ?? false;
+    try {
+      final result = await _operationManager.execute<bool>(
+        method: 'isPrinterConnected',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      return result;
+    } catch (e) {
+      return false;
+    }
   }
 
   void rotate() {
@@ -273,32 +480,24 @@ class ZebraPrinter {
   }
 
   Future<String> _getLocateValue({required String key}) async {
-    final String? value = await channel
-        .invokeMethod<String?>("getLocateValue", {"ResourceKey": key});
-    return value ?? "";
+    try {
+      final value = await _operationManager.execute<String>(
+        method: 'getLocateValue',
+        arguments: {'ResourceKey': key},
+        timeout: const Duration(seconds: 5),
+      );
+      return value;
+    } catch (e) {
+      return "";
+    }
   }
 
   Future<void> nativeMethodCallHandler(MethodCall methodCall) async {
-    if (methodCall.method == "printerFound") {
-      final newPrinter = ZebraDevice(
-        address: methodCall.arguments["Address"],
-        status: methodCall.arguments["Status"],
-        name: methodCall.arguments["Name"],
-        isWifi: methodCall.arguments["IsWifi"] == "true",
-      );
-      controller.addPrinter(newPrinter);
-    } else if (methodCall.method == "printerRemoved") {
-      final String address = methodCall.arguments["Address"];
-      controller.removePrinter(address);
-    } else if (methodCall.method == "changePrinterStatus") {
-      final String status = methodCall.arguments["Status"];
-      final String color = methodCall.arguments["Color"];
-      controller.updatePrinterStatus(status, color);
-    } else if (methodCall.method == "onDiscoveryError" &&
-        onDiscoveryError != null) {
-      onDiscoveryError!(
-          methodCall.arguments["ErrorCode"], methodCall.arguments["ErrorText"]);
-    } else if (methodCall.method == "onDiscoveryDone") {
+    // First try to handle through the callback handler
+    await _callbackHandler.handleMethodCall(methodCall);
+
+    // Handle special cases that need additional processing
+    if (methodCall.method == "onDiscoveryDone") {
       if (shouldSync) {
         _getLocateValue(key: "connected").then((connectedString) {
           controller.synchronizePrinter(connectedString);
@@ -306,6 +505,11 @@ class ZebraPrinter {
         });
       }
     }
+  }
+
+  /// Dispose the printer instance and clean up resources
+  void dispose() {
+    _operationManager.dispose();
   }
 }
 

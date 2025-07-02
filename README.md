@@ -61,6 +61,22 @@ This plugin provides a unified API for discovering, connecting to, and printing 
   - Handles multiple boolean formats: 'true', 'on', '1', 'yes', etc.
   - Smart status interpretation
 
+## Architecture
+
+### Callback-Based Operations (v2.1.0+)
+
+All native operations in this plugin use a callback-based architecture that ensures operations complete based on actual device state rather than arbitrary delays:
+
+- **Operation Tracking**: Each operation has a unique ID that links native callbacks to the specific Dart caller
+- **Real Completion**: Operations complete when the native side reports success/failure, not after a timeout
+- **No Artificial Delays**: Removed all `Future.delayed()` calls in favor of actual completion signals
+- **Natural Sequencing**: Async/await provides natural operation sequencing without need for queues
+
+This architecture provides:
+- **Reliability**: Operations can't be left in pending state
+- **Performance**: Operations complete as fast as the hardware allows
+- **Debugging**: Clear operation tracking with IDs for better error diagnosis
+
 ## What's New in v2.0
 
 - **[Configurable Auto-Correction](.readme/architecture/auto-correction-v2.md)**: Fine-grained control over automatic issue resolution

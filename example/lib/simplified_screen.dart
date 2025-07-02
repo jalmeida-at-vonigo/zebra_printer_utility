@@ -13,7 +13,6 @@ class SimplifiedScreen extends StatefulWidget {
 }
 
 class _SimplifiedScreenState extends State<SimplifiedScreen> {
-  final ZebraPrinterService _printerService = ZebraPrinterService();
   ZebraDevice? _selectedDevice;
   bool _isConnected = false;
   String _status = 'Ready to print';
@@ -22,6 +21,7 @@ class _SimplifiedScreenState extends State<SimplifiedScreen> {
   late TextEditingController _labelController;
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
+  bool _isLoading = false;
 
   final String defaultZPL = """^XA
 ^LL250
@@ -40,7 +40,7 @@ PRINT
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: defaultZPL);
-    _statusSubscription = _printerService.status.listen((status) {
+    _statusSubscription = Zebra.status.listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
@@ -51,16 +51,12 @@ PRINT
             device != null && device.address == _selectedDevice?.address);
       }
     });
-    
-    // Initialize the printer service
-    _printerService.initialize();
   }
 
   @override
   void dispose() {
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
-    _printerService.dispose();
     _labelController.dispose();
     super.dispose();
   }
@@ -124,14 +120,16 @@ PRINT
 
     if (_isConnected && _selectedDevice != null) {
       // Use autoPrint with the connected printer
-      result = await _printerService.autoPrint(
+      result = await Zebra.autoPrint(
         _labelController.text,
-        printer: _selectedDevice,
+        address: _selectedDevice!.address,
         format: format,
+        disconnectAfter: false,
+
       );
     } else {
       // Use autoPrint to discover and use any available printer
-      result = await _printerService.autoPrint(
+      result = await Zebra.autoPrint(
         _labelController.text,
         format: format,
       );
@@ -145,6 +143,15 @@ PRINT
         }
       });
     }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
   }
 
   @override
@@ -220,6 +227,57 @@ PRINT
                 foregroundColor: Colors.white,
               ),
             ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      setState(() => _isLoading = true);
+
+                      // Get the CPCL content
+                      const cpclContent = '''! 0 200 200 210 1
+TEXT 4 0 30 40 Hello World
+FORM
+PRINT
+''';
+
+                      Result<void> result;
+                      try {
+                        result = await Zebra.print(cpclContent);
+                      } catch (e, stack) {
+                        print('=== PRINT EXCEPTION ===');
+                        print('Exception: $e');
+                        print('Stack Trace:');
+                        print(stack);
+                        print('=====================');
+                        _showMessage('Print exception: $e', isError: true);
+                        setState(() => _isLoading = false);
+                        return;
+                      }
+
+                      if (result.success) {
+                        _showMessage('Print sent successfully');
+                      } else {
+                        final errorMsg =
+                            'Print failed: ${result.error?.message}';
+                        print('=== PRINT ERROR ===');
+                        print('Error: $errorMsg');
+                        print('Error Code: ${result.error?.code}');
+                        print('Error Number: ${result.error?.errorNumber}');
+                        if (result.error?.dartStackTrace != null) {
+                          print('Stack Trace:');
+                          print(result.error!.dartStackTrace);
+                        }
+                        print('==================');
+                        _showMessage(errorMsg, isError: true);
+                      }
+
+                      setState(() => _isLoading = false);
+                    },
+              child: const Text('Manual Print'),
+            ),
+
+
           ],
         ),
       ),

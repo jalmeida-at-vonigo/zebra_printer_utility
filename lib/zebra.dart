@@ -138,13 +138,21 @@ class Zebra {
   ///
   /// Returns Result indicating success or failure.
   static Future<Result<void>> autoPrint(String data,
-      {String? address,
+      {ZebraDevice? printer,
+      String? address,
       PrintFormat? format,
+      int maxRetries = 3,
+      bool verifyConnection = true,
+      bool disconnectAfter = true,
       AutoCorrectionOptions? autoCorrectionOptions}) async {
     await _ensureInitialized();
     return await _service.autoPrint(data,
+        printer: printer,
         address: address,
         format: format,
+        maxRetries: maxRetries,
+        verifyConnection: verifyConnection,
+        disconnectAfter: disconnectAfter,
         autoCorrectionOptions: autoCorrectionOptions);
   }
 
