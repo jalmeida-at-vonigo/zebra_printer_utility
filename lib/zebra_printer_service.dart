@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:zebrautil/zebra_printer.dart';
 import 'package:zebrautil/zebra_util.dart';
+import 'package:zebrautil/zebra_operation_queue.dart';
+import 'package:zebrautil/zebra_sgd_commands.dart';
 
 /// A simplified service for Zebra printer operations.
 /// Provides a clean async/await API with proper error handling.
 class ZebraPrinterService {
   ZebraPrinter? _printer;
   ZebraController? _controller;
+  ZebraOperationQueue? _operationQueue;
 
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<ZebraDevice?>? _connectionStreamController;
@@ -62,11 +65,54 @@ class ZebraPrinterService {
         _statusStreamController?.add('Permission denied');
       },
     );
+    
+    // Initialize operation queue
+    _operationQueue = ZebraOperationQueue(
+      onExecuteOperation: _executeOperation,
+      onError: (error) =>
+          _statusStreamController?.add('Operation error: $error'),
+    );
   }
 
   void _onControllerChanged() {
     _devicesStreamController?.add(_controller!.printers);
     _connectionStreamController?.add(connectedPrinter);
+  }
+  
+  /// Execute an operation from the queue
+  Future<dynamic> _executeOperation(ZebraOperation operation) async {
+    switch (operation.type) {
+      case OperationType.connect:
+        final address = operation.parameters['address'] as String;
+        return await _doConnect(address);
+
+      case OperationType.disconnect:
+        return await _doDisconnect();
+
+      case OperationType.print:
+        final data = operation.parameters['data'] as String;
+        final ensureMode = operation.parameters['ensureMode'] as bool? ?? true;
+        return await _doPrint(data, ensureMode: ensureMode);
+
+      case OperationType.setSetting:
+        final setting = operation.parameters['setting'] as String;
+        final value = operation.parameters['value'] as String;
+        return await _doSetSetting(setting, value);
+
+      case OperationType.getSetting:
+        final setting = operation.parameters['setting'] as String;
+        return await _doGetSetting(setting);
+
+      case OperationType.setPrinterMode:
+        final mode = operation.parameters['mode'] as String;
+        return await _doSetPrinterMode(mode);
+
+      case OperationType.checkStatus:
+        return await _doCheckStatus();
+
+      default:
+        throw Exception('Unknown operation type: ${operation.type}');
+    }
   }
 
   /// Discover available printers (both Bluetooth and Network)
@@ -114,12 +160,11 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Connecting to $address...');
 
-      await _printer!.connectToPrinter(address);
-
-      // Wait a bit for connection to establish
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      final isConnected = await _printer!.isPrinterConnected();
+      final isConnected = await _operationQueue!.enqueue<bool>(
+        OperationType.connect,
+        {'address': address},
+        timeout: const Duration(seconds: 10),
+      );
 
       if (isConnected) {
         _statusStreamController?.add('Connected to $address');
@@ -140,7 +185,11 @@ class ZebraPrinterService {
 
     if (connectedPrinter != null) {
       _statusStreamController?.add('Disconnecting...');
-      await _printer!.disconnect();
+      await _operationQueue!.enqueue<void>(
+        OperationType.disconnect,
+        {},
+        timeout: const Duration(seconds: 5),
+      );
       _statusStreamController?.add('Disconnected');
     }
   }
@@ -158,27 +207,19 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Printing...');
       
-      // Auto-detect format if not specified
-      if (format == null) {
-        if (data.trim().startsWith("^XA")) {
-          format = PrintFormat.ZPL;
-        } else if (data.trim().startsWith("!")) {
-          format = PrintFormat.CPCL;
-        } else {
-          format = PrintFormat.ZPL; // Default to ZPL
-        }
+      final success = await _operationQueue!.enqueue<bool>(
+        OperationType.print,
+        {
+          'data': data,
+          'ensureMode': true, // Enable automatic mode switching
+        },
+        timeout: const Duration(seconds: 30),
+      );
+      
+      if (success) {
+        _statusStreamController?.add('Print sent successfully');
       }
-
-      // The native layer will handle printer mode switching to avoid
-      // the "!U1 getvar appl.name" being printed as data
-
-      await _printer!.print(data: data);
-      
-      // Give printer time to process
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      _statusStreamController?.add('Print sent successfully');
-      return true;
+      return success;
     } catch (e) {
       _statusStreamController?.add('Print error: $e');
       return false;
@@ -197,13 +238,43 @@ class ZebraPrinterService {
   }
   
   /// Auto-print workflow: discover, connect, print, disconnect
+  /// If printer is provided, uses that printer
   /// If address is provided, connects to that printer
-  /// If not, uses the first discovered printer (or prompts if multiple)
+  /// If neither is provided, discovers and uses the first available printer
   Future<bool> autoPrint(String data,
-      {String? address, PrintFormat? format}) async {
+      {ZebraDevice? printer, String? address, PrintFormat? format}) async {
     await _ensureInitialized();
 
     try {
+      // If printer is provided, use it directly
+      if (printer != null) {
+        // If already connected to this printer, just print
+        if (connectedPrinter != null &&
+            connectedPrinter!.address == printer.address) {
+          _statusStreamController
+              ?.add('Using existing connection to ${printer.name}');
+          return await print(data, format: format);
+        }
+
+        // Connect to the specified printer
+        _statusStreamController?.add('Connecting to ${printer.name}...');
+        final connected = await connect(printer.address);
+
+        if (!connected) {
+          _statusStreamController?.add('Failed to connect to ${printer.name}');
+          return false;
+        }
+
+        // Print the data
+        final printed = await print(data, format: format);
+
+        // Disconnect after printing
+        _statusStreamController?.add('Disconnecting...');
+        await disconnect();
+
+        return printed;
+      }
+
       // If already connected to the right printer, just print
       if (connectedPrinter != null &&
           (address == null || connectedPrinter!.address == address)) {
@@ -366,10 +437,84 @@ class ZebraPrinterService {
   /// Dispose of resources
   void dispose() {
     _discoveryTimer?.cancel();
+    _operationQueue?.dispose();
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     _devicesStreamController?.close();
     _connectionStreamController?.close();
     _statusStreamController?.close();
+  }
+  
+  // ===== Internal operation implementations =====
+
+  Future<bool> _doConnect(String address) async {
+    try {
+      await _printer!.connectToPrinter(address);
+      await Future.delayed(const Duration(milliseconds: 500));
+      return await _printer!.isPrinterConnected();
+    } catch (e) {
+      throw Exception('Connection failed: $e');
+    }
+  }
+
+  Future<void> _doDisconnect() async {
+    await _printer!.disconnect();
+  }
+
+  Future<bool> _doPrint(String data, {bool ensureMode = true}) async {
+    if (ensureMode) {
+      // Detect data format and ensure printer is in correct mode
+      final language = ZebraSGDCommands.detectDataLanguage(data);
+      if (language != null) {
+        // Check current printer mode
+        final currentMode = await _doGetSetting('device.languages');
+        if (currentMode != null &&
+            !ZebraSGDCommands.isLanguageMatch(currentMode, language)) {
+          // Switch printer mode
+          await _doSetPrinterMode(language);
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+    }
+
+    // Send the print data
+    await _printer!.print(data: data);
+    return true;
+  }
+
+  Future<bool> _doSetSetting(String setting, String value) async {
+    final command = ZebraSGDCommands.setCommand(setting, value);
+    await _printer!.print(data: command);
+    await Future.delayed(const Duration(milliseconds: 100));
+    return true;
+  }
+
+  Future<String?> _doGetSetting(String setting) async {
+    // For now, we'll use the direct command approach
+    // In a full implementation, we'd need a way to read responses
+    final command = ZebraSGDCommands.getCommand(setting);
+    await _printer!.print(data: command);
+
+    // TODO: Implement response reading from native layer
+    // For now, return null
+    return null;
+  }
+
+  Future<bool> _doSetPrinterMode(String mode) async {
+    final command = mode.toLowerCase() == 'zpl'
+        ? ZebraSGDCommands.setZPLMode()
+        : ZebraSGDCommands.setCPCLMode();
+
+    await _printer!.print(data: command);
+    await Future.delayed(const Duration(milliseconds: 500));
+    return true;
+  }
+
+  Future<Map<String, dynamic>> _doCheckStatus() async {
+    // Send status command
+    await _printer!.print(data: ZebraSGDCommands.getPrinterStatus);
+
+    // TODO: Implement status response parsing
+    return {'status': 'unknown'};
   }
 }

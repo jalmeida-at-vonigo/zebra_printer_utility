@@ -283,21 +283,6 @@ class ZebraPrinterInstance: NSObject {
                 return
             }
             
-            // Update status to preparing
-            DispatchQueue.main.async {
-                self.channel.invokeMethod("changePrinterStatus", arguments: [
-                    "Status": "Preparing printer...",
-                    "Color": "Y"
-                ])
-            }
-            
-            // Ensure printer is in the correct mode for the data
-            let modeSet = ZSDKWrapper.ensurePrinterMode(connection, forData: data)
-            if !modeSet {
-                LogUtil.error("Failed to ensure printer mode")
-                // Continue anyway, as the printer might still work
-            }
-            
             // Update status
             DispatchQueue.main.async {
                 self.channel.invokeMethod("changePrinterStatus", arguments: [
@@ -307,42 +292,29 @@ class ZebraPrinterInstance: NSObject {
             }
             
             if let dataBytes = data.data(using: .utf8) {
-                do {
-                    let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
-                    
-                    // Sleep for 1 second to match shashwatxx behavior
-                    Thread.sleep(forTimeInterval: 1)
-                    
-                    if success {
-                        // Send success callback
-                        DispatchQueue.main.async {
-                            self.channel.invokeMethod("onPrintComplete", arguments: nil)
-                            self.channel.invokeMethod("changePrinterStatus", arguments: [
-                                "Status": "Done",
-                                "Color": "G"
-                            ])
-                            result(nil)
-                        }
-                    } else {
-                        let errorMsg = "Failed to send data to printer"
-                        DispatchQueue.main.async {
-                            self.channel.invokeMethod("onPrintError", arguments: [
-                                "ErrorText": errorMsg
-                            ])
-                            self.channel.invokeMethod("changePrinterStatus", arguments: [
-                                "Status": "Print Error: \(errorMsg)",
-                                "Color": "R"
-                            ])
-                            result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
-                        }
+                let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
+                
+                if success {
+                    // Send success callback immediately - no artificial delay
+                    DispatchQueue.main.async {
+                        self.channel.invokeMethod("onPrintComplete", arguments: nil)
+                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                            "Status": "Done",
+                            "Color": "G"
+                        ])
+                        result(nil)
                     }
-                } catch {
-                    let errorMsg = "Exception during print: \(error.localizedDescription)"
+                } else {
+                    let errorMsg = "Failed to send data to printer"
                     DispatchQueue.main.async {
                         self.channel.invokeMethod("onPrintError", arguments: [
                             "ErrorText": errorMsg
                         ])
-                        result(FlutterError(code: "PRINT_EXCEPTION", message: errorMsg, details: nil))
+                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                            "Status": "Print Error: \(errorMsg)",
+                            "Color": "R"
+                        ])
+                        result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
                     }
                 }
             } else {

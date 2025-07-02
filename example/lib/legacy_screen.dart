@@ -21,6 +21,7 @@ class _LegacyScreenState extends State<LegacyScreen> {
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
 
   final String defaultZPL = """^XA
+^LL500
 ^FO50,50^A0N,50,50^FDZebra Test Print^FS
 ^FO50,150^A0N,30,30^FDConnection Successful!^FS
 ^FO50,200^A0N,25,25^FDPrinter Connected^FS
@@ -28,12 +29,12 @@ class _LegacyScreenState extends State<LegacyScreen> {
 ^FO50,350^BY3^BCN,100,Y,N,N^FD123456789^FS
 ^XZ""";
 
-  final String defaultCPCL = """! 0 200 200 600 1
+  final String defaultCPCL = """! 0 200 200 400 1
 TEXT 4 0 30 40 Hello World
 TEXT 4 0 30 100 CPCL Test Print
 TEXT 4 0 30 160 Connection Successful!
 TEXT 4 0 30 220 Time: ${DateTime.now().toString()}
-BARCODE 128 1 1 50 30 350 123456789
+BARCODE 128 1 1 50 30 280 123456789
 FORM
 PRINT
 """;

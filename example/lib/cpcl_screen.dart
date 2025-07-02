@@ -20,14 +20,7 @@ class _CPCLScreenState extends State<CPCLScreen> {
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
   bool _useSimpleExample = false;
 
-  final String defaultCPCL = """! 0 200 200 400 1
-ON-FEED IGNORE
-LABEL
-CONTRAST 0
-TONE 0
-SPEED 5
-PAGE-WIDTH 576
-BAR-SENSE
+  final String defaultCPCL = """! 0 200 200 300 1
 TEXT 7 1 420 91 Bedroom 2 test value
 TEXT 7 1 90 190 Equalizer
 TEXT 7 1 420 42 6/27/2025
@@ -41,10 +34,17 @@ FORM
 PRINT
 """;
 
-  final String simpleCPCL = """! 0 200 200 400 1
+  final String simpleCPCL = """! 0 200 200 210 1
 TEXT 4 0 30 40 Hello from Flutter!
 TEXT 4 0 30 100 Test Label
 TEXT 4 0 30 160 CPCL Mode
+FORM
+PRINT
+""";
+
+  final String compactCPCL = """! 0 200 200 100 1
+TEXT 4 0 10 10 Test Print
+TEXT 4 0 10 40 ${DateTime.now().toString().substring(0, 16)}
 FORM
 PRINT
 """;

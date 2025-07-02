@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebra_util.dart';
+import 'package:zebrautil/zebra_printer_service.dart';
 import 'bt_printer_selector.dart';
 
 enum PrintMode { cpcl, zpl, auto }
@@ -13,9 +14,10 @@ class SimplifiedScreen extends StatefulWidget {
 }
 
 class _SimplifiedScreenState extends State<SimplifiedScreen> {
+  final ZebraPrinterService _printerService = ZebraPrinterService();
   ZebraDevice? _selectedDevice;
   bool _isConnected = false;
-  String _status = 'Not connected';
+  String _status = 'Ready to print';
   bool _isPrinting = false;
   PrintMode _printMode = PrintMode.zpl;
   late TextEditingController _labelController;
@@ -23,11 +25,12 @@ class _SimplifiedScreenState extends State<SimplifiedScreen> {
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
 
   final String defaultZPL = """^XA
+^LL250
 ^FO50,50^A0N,50,50^FDHello from Flutter!^FS
 ^FO50,100^BY2^BCN,100,Y,N,N^FD123456789^FS
 ^XZ""";
 
-  final String defaultCPCL = """! 0 200 200 400 1
+  final String defaultCPCL = """! 0 200 200 200 1
 TEXT 4 0 30 40 Hello from Flutter!
 BARCODE 128 1 1 50 30 100 123456789
 FORM
@@ -38,7 +41,7 @@ PRINT
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: defaultZPL);
-    _statusSubscription = Zebra.status.listen((status) {
+    _statusSubscription = _printerService.status.listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
@@ -49,12 +52,16 @@ PRINT
             device != null && device.address == _selectedDevice?.address);
       }
     });
+    
+    // Initialize the printer service
+    _printerService.initialize();
   }
 
   @override
   void dispose() {
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
+    _printerService.dispose();
     _labelController.dispose();
     super.dispose();
   }
@@ -81,7 +88,7 @@ PRINT
     if (mounted) {
       setState(() {
         _isConnected = false;
-        _status = 'Disconnected';
+        _status = 'Ready to print';
       });
     }
   }
@@ -101,7 +108,6 @@ PRINT
   }
 
   Future<void> _print() async {
-    if (!_isConnected || _selectedDevice == null) return;
     if (mounted) {
       setState(() => _isPrinting = true);
     }
@@ -114,7 +120,23 @@ PRINT
     }
     // For Auto mode, format is null (auto-detected)
 
-    final success = await Zebra.print(_labelController.text, format: format);
+    bool success;
+
+    if (_isConnected && _selectedDevice != null) {
+      // Use autoPrint with the connected printer
+      success = await _printerService.autoPrint(
+        _labelController.text,
+        printer: _selectedDevice,
+        format: format,
+      );
+    } else {
+      // Use autoPrint to discover and use any available printer
+      success = await _printerService.autoPrint(
+        _labelController.text,
+        format: format,
+      );
+    }
+    
     if (mounted) {
       setState(() {
         _isPrinting = false;
@@ -182,7 +204,7 @@ PRINT
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: _isConnected && !_isPrinting ? _print : null,
+              onPressed: !_isPrinting ? _print : null,
               icon: _isPrinting
                   ? const SizedBox(
                       width: 16,
