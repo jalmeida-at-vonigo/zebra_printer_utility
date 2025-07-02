@@ -87,6 +87,23 @@ class ZebraPrinterInstance: NSObject {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "ResourceKey is required", details: nil))
             }
             
+        case "getSetting":
+            if let args = call.arguments as? [String: Any],
+               let setting = args["setting"] as? String {
+                getSetting(setting: setting, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT", message: "setting is required", details: nil))
+            }
+            
+        case "sendDataWithResponse":
+            if let args = call.arguments as? [String: Any],
+               let data = args["data"] as? String,
+               let timeout = args["timeout"] as? Int {
+                sendDataWithResponse(data: data, timeout: timeout, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT", message: "data and timeout are required", details: nil))
+            }
+            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -385,6 +402,48 @@ class ZebraPrinterInstance: NSObject {
             let value = ZSDKWrapper.getSetting(key, fromConnection: connection)
             DispatchQueue.main.async {
                 result(value ?? "")
+            }
+        }
+    }
+    
+    // MARK: - New bi-directional communication methods
+    
+    private func getSetting(setting: String, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self, let connection = self.connection else {
+                DispatchQueue.main.async {
+                    result(FlutterError(code: "NOT_CONNECTED", message: "Not connected to printer", details: nil))
+                }
+                return
+            }
+            
+            let value = ZSDKWrapper.getSetting(setting, fromConnection: connection)
+            DispatchQueue.main.async {
+                result(value ?? "")
+            }
+        }
+    }
+    
+    private func sendDataWithResponse(data: String, timeout: Int, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self, let connection = self.connection else {
+                DispatchQueue.main.async {
+                    result(FlutterError(code: "NOT_CONNECTED", message: "Not connected to printer", details: nil))
+                }
+                return
+            }
+            
+            // Send data and read response
+            let response = ZSDKWrapper.sendAndReadResponse(data, 
+                                                          toConnection: connection, 
+                                                          withTimeout: timeout)
+            
+            DispatchQueue.main.async {
+                if let response = response {
+                    result(response)
+                } else {
+                    result(FlutterError(code: "NO_RESPONSE", message: "No response from printer", details: nil))
+                }
             }
         }
     }

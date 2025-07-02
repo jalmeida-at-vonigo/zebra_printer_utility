@@ -36,6 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)getSetting:(NSString *)setting fromConnection:(id)connection;
 + (BOOL)setSetting:(NSString *)setting value:(NSString *)value onConnection:(id)connection;
 
+// Bi-directional communication
++ (NSString *)sendAndReadResponse:(NSString *)data toConnection:(id)connection withTimeout:(NSInteger)timeout;
+
 // Add printer language detection
 + (NSString *)getPrinterLanguage:(id)connection;
 + (id)getPrinterInstance:(id)connection;

@@ -8,6 +8,7 @@ export 'zebra.dart';
 // Export supporting classes
 export 'zebra_device.dart';
 export 'zebra_printer.dart' show EnumMediaType, PrintFormat;
+export 'zebra_printer_service.dart';
 
 // Keep the legacy API for backwards compatibility
 class ZebraUtil {

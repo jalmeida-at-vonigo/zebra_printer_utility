@@ -68,7 +68,7 @@ class ZebraOperationQueue {
   }
 
   /// Process the queue
-  void _processQueue() {
+  Future<void> _processQueue() async {
     if (_isProcessing || _queue.isEmpty) return;
 
     _isProcessing = true;
@@ -81,12 +81,20 @@ class ZebraOperationQueue {
       _handleTimeout();
     });
 
-    // Execute the operation
-    onExecuteOperation(_currentOperation!).then((result) {
-      _completeCurrentOperation(result);
-    }).catchError((error) {
-      _failCurrentOperation(error.toString());
-    });
+    try {
+      // Execute the operation and wait for completion
+      final result = await onExecuteOperation(_currentOperation!);
+
+      // Operation completed successfully
+      if (!_currentOperation!.completer.isCompleted) {
+        _completeCurrentOperation(result);
+      }
+    } catch (error) {
+      // Operation failed
+      if (!_currentOperation!.completer.isCompleted) {
+        _failCurrentOperation(error.toString());
+      }
+    }
   }
 
   /// Complete the current operation successfully

@@ -202,6 +202,63 @@
     }
 }
 
++ (NSString *)sendAndReadResponse:(NSString *)data toConnection:(id)connection withTimeout:(NSInteger)timeout {
+    if (!connection || !data) return nil;
+    
+    @try {
+        // Send the data
+        NSData *dataBytes = [data dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *sendError = nil;
+        BOOL sent = [connection write:dataBytes error:&sendError];
+        
+        if (!sent || sendError) {
+            NSLog(@"Failed to send data: %@", sendError);
+            return nil;
+        }
+        
+        // Read the response
+        NSMutableData *responseData = [NSMutableData data];
+        NSInteger maxTimeout = timeout > 0 ? timeout : 5000; // Default 5 seconds
+        NSInteger timeToWait = 100; // Wait 100ms between reads
+        
+        // Set connection timeouts
+        if ([connection respondsToSelector:@selector(setMaxTimeoutForRead:)]) {
+            [connection setMaxTimeoutForRead:maxTimeout];
+        }
+        if ([connection respondsToSelector:@selector(setTimeToWaitForMoreData:)]) {
+            [connection setTimeToWaitForMoreData:timeToWait];
+        }
+        
+        // Read response
+        NSError *readError = nil;
+        NSData *readData = [connection read:&readError];
+        
+        if (readData && !readError) {
+            [responseData appendData:readData];
+            
+            // Continue reading while data is available
+            while (readData && readData.length > 0) {
+                readData = [connection read:&readError];
+                if (readData && !readError) {
+                    [responseData appendData:readData];
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        if (responseData.length > 0) {
+            NSString *response = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
+            return [response autorelease];
+        }
+        
+    } @catch (NSException *exception) {
+        NSLog(@"Failed to send and read response: %@", exception);
+    }
+    
+    return nil;
+}
+
 + (NSString *)getPrinterLanguage:(id)connection {
     if (!connection) return @"UNKNOWN";
     

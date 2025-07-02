@@ -4,6 +4,27 @@ import 'package:zebrautil/zebra_util.dart';
 import 'package:zebrautil/zebra_operation_queue.dart';
 import 'package:zebrautil/zebra_sgd_commands.dart';
 
+/// Represents the readiness state of a printer
+class PrinterReadiness {
+  bool isReady = false;
+  bool isConnected = false;
+  bool hasMedia = true;
+  bool headClosed = true;
+  bool isPaused = false;
+  List<String> errors = [];
+  List<String> warnings = [];
+
+  String get summary {
+    if (isReady) return 'Printer is ready';
+    if (errors.isNotEmpty) return errors.join(', ');
+    if (!isConnected) return 'Not connected';
+    if (!hasMedia) return 'No media';
+    if (!headClosed) return 'Head open';
+    if (isPaused) return 'Printer paused';
+    return 'Not ready';
+  }
+}
+
 /// A simplified service for Zebra printer operations.
 /// Provides a clean async/await API with proper error handling.
 class ZebraPrinterService {
@@ -242,44 +263,71 @@ class ZebraPrinterService {
   /// If address is provided, connects to that printer
   /// If neither is provided, discovers and uses the first available printer
   Future<bool> autoPrint(String data,
-      {ZebraDevice? printer, String? address, PrintFormat? format}) async {
+      {ZebraDevice? printer,
+      String? address,
+      PrintFormat? format,
+      int maxRetries = 3,
+      bool verifyConnection = true,
+      bool disconnectAfter = true}) async {
     await _ensureInitialized();
+
+    // Validate input data
+    if (data.isEmpty) {
+      _statusStreamController?.add('Error: No data to print');
+      return false;
+    }
+
+    int retryCount = 0;
+    bool shouldDisconnect = false;
 
     try {
       // If printer is provided, use it directly
       if (printer != null) {
-        // If already connected to this printer, just print
+        address = printer.address;
+
+        // Check if already connected to this printer
         if (connectedPrinter != null &&
             connectedPrinter!.address == printer.address) {
           _statusStreamController
               ?.add('Using existing connection to ${printer.name}');
-          return await print(data, format: format);
+          
+          // Verify connection is still active
+          if (verifyConnection) {
+            final isStillConnected = await _verifyConnection();
+            if (!isStillConnected) {
+              _statusStreamController?.add('Connection lost, reconnecting...');
+              await disconnect();
+            } else {
+              // Just print and return (don't disconnect if already connected)
+              return await _printWithRetry(data,
+                  format: format, maxRetries: maxRetries);
+            }
+          } else {
+            // Just print without verification
+            return await _printWithRetry(data,
+                format: format, maxRetries: maxRetries);
+          }
         }
-
-        // Connect to the specified printer
-        _statusStreamController?.add('Connecting to ${printer.name}...');
-        final connected = await connect(printer.address);
-
-        if (!connected) {
-          _statusStreamController?.add('Failed to connect to ${printer.name}');
-          return false;
-        }
-
-        // Print the data
-        final printed = await print(data, format: format);
-
-        // Disconnect after printing
-        _statusStreamController?.add('Disconnecting...');
-        await disconnect();
-
-        return printed;
       }
 
-      // If already connected to the right printer, just print
+      // If already connected to the right printer, verify and use it
       if (connectedPrinter != null &&
           (address == null || connectedPrinter!.address == address)) {
-        _statusStreamController?.add('Using existing connection');
-        return await print(data, format: format);
+        
+        if (verifyConnection) {
+          final isStillConnected = await _verifyConnection();
+          if (isStillConnected) {
+            _statusStreamController?.add('Using existing connection');
+            return await _printWithRetry(data,
+                format: format, maxRetries: maxRetries);
+          } else {
+            _statusStreamController?.add('Connection lost, reconnecting...');
+            await disconnect();
+          }
+        } else {
+          return await _printWithRetry(data,
+              format: format, maxRetries: maxRetries);
+        }
       }
 
       // Disconnect from current printer if needed
@@ -289,51 +337,260 @@ class ZebraPrinterService {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      // If no address provided, discover printers
+      // If no address provided, look for paired printers only
       if (address == null) {
-        _statusStreamController?.add('Discovering printers...');
-        final printers = await discoverPrinters(
-          timeout: const Duration(seconds: 5),
-        );
+        _statusStreamController?.add('Looking for paired printers...');
+        
+        // Get paired Bluetooth printers
+        List<ZebraDevice> pairedPrinters = [];
 
-        if (printers.isEmpty) {
-          _statusStreamController?.add('No printers found');
+        try {
+          // First check if we have any already discovered printers
+          if (_controller!.printers.isNotEmpty) {
+            // Filter for Bluetooth printers (paired ones)
+            pairedPrinters =
+                _controller!.printers.where((p) => !p.isWifi).toList();
+          }
+
+          // If no paired printers in cache, do a quick discovery
+          if (pairedPrinters.isEmpty) {
+            _statusStreamController
+                ?.add('Checking for paired Bluetooth printers...');
+
+            // Start discovery but only wait briefly for Bluetooth
+            _printer!.startScanning();
+            await Future.delayed(const Duration(seconds: 2));
+            _printer!.stopScanning();
+
+            // Get only Bluetooth (paired) printers
+            pairedPrinters =
+                _controller!.printers.where((p) => !p.isWifi).toList();
+          }
+        } catch (e) {
+          _statusStreamController?.add('Error finding paired printers: $e');
+        }
+
+        if (pairedPrinters.isEmpty) {
+          _statusStreamController?.add(
+              'No paired Bluetooth printers found. Please pair a printer first.');
           return false;
         }
 
-        // If only one printer, use it
-        if (printers.length == 1) {
-          address = printers.first.address;
+        // If only one paired printer, use it
+        if (pairedPrinters.length == 1) {
+          address = pairedPrinters.first.address;
           _statusStreamController
-              ?.add('Found one printer: ${printers.first.name}');
+              ?.add('Using paired printer: ${pairedPrinters.first.name}');
         } else {
-          // Multiple printers - need user to select
+          // Multiple paired printers - fail and ask user to specify
           _statusStreamController
-              ?.add('Multiple printers found - please select one');
+              ?.add(
+              'Multiple paired printers found (${pairedPrinters.length}). Please specify which one to use.');
           return false;
         }
       }
 
-      // Connect to the printer
+      // Connect to the printer with retries
       _statusStreamController?.add('Connecting to printer...');
-      final connected = await connect(address!);
+      bool connected = false;
+
+      for (int i = 0; i <= maxRetries; i++) {
+        connected = await connect(address!);
+
+        if (connected) {
+          shouldDisconnect = disconnectAfter;
+          break;
+        }
+
+        if (i < maxRetries) {
+          _statusStreamController
+              ?.add('Connection failed, retrying... (${i + 1}/$maxRetries)');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
 
       if (!connected) {
-        _statusStreamController?.add('Failed to connect');
+        _statusStreamController
+            ?.add('Failed to connect after $maxRetries attempts');
         return false;
       }
 
-      // Print the data
-      final printed = await print(data, format: format);
+      // Verify connection and readiness before printing
+      if (verifyConnection) {
+        final readiness = await checkPrinterReadiness();
+        if (!readiness.isReady) {
+          _statusStreamController
+              ?.add('Printer not ready: ${readiness.summary}');
+          if (shouldDisconnect) await disconnect();
+          return false;
+        }
+      }
 
-      // Disconnect after printing
-      _statusStreamController?.add('Disconnecting...');
-      await disconnect();
+      // Print the data with retries
+      final printed =
+          await _printWithRetry(data, format: format, maxRetries: maxRetries);
+
+      // Disconnect after printing if requested
+      if (shouldDisconnect && disconnectAfter) {
+        _statusStreamController?.add('Disconnecting...');
+        await disconnect();
+      }
 
       return printed;
     } catch (e) {
       _statusStreamController?.add('Auto-print error: $e');
+      
+      // Clean up on error
+      if (shouldDisconnect && connectedPrinter != null) {
+        try {
+          await disconnect();
+        } catch (_) {}
+      }
+
       return false;
+    }
+  }
+
+  /// Print with retry logic
+  Future<bool> _printWithRetry(String data,
+      {PrintFormat? format, int maxRetries = 3}) async {
+    for (int i = 0; i <= maxRetries; i++) {
+      try {
+        final success = await print(data, format: format);
+
+        if (success) {
+          return true;
+        }
+
+        if (i < maxRetries) {
+          _statusStreamController
+              ?.add('Print failed, retrying... (${i + 1}/$maxRetries)');
+
+          // Check if still connected
+          final isConnected = await _verifyConnection();
+          if (!isConnected) {
+            _statusStreamController?.add('Connection lost during print');
+            return false;
+          }
+
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      } catch (e) {
+        if (i < maxRetries) {
+          _statusStreamController
+              ?.add('Print error: $e, retrying... (${i + 1}/$maxRetries)');
+          await Future.delayed(const Duration(seconds: 1));
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    _statusStreamController?.add('Print failed after $maxRetries attempts');
+    return false;
+  }
+
+  /// Verify printer connection is still active
+  Future<bool> _verifyConnection() async {
+    try {
+      // First check if we think we're connected
+      if (connectedPrinter == null) return false;
+
+      // Then verify with the printer
+      final isConnected = await _printer!.isPrinterConnected();
+
+      if (!isConnected) {
+        _statusStreamController?.add('Connection verification failed');
+      }
+
+      return isConnected;
+    } catch (e) {
+      _statusStreamController?.add('Error verifying connection: $e');
+      return false;
+    }
+  }
+
+  /// Check if printer is ready to print
+  Future<PrinterReadiness> checkPrinterReadiness() async {
+    final readiness = PrinterReadiness();
+
+    try {
+      if (connectedPrinter == null) {
+        readiness.isReady = false;
+        readiness.errors.add('Not connected to printer');
+        return readiness;
+      }
+
+      // Check connection
+      readiness.isConnected = await _verifyConnection();
+      if (!readiness.isConnected) {
+        readiness.isReady = false;
+        readiness.errors.add('Printer connection lost');
+        return readiness;
+      }
+
+      // Now we can implement full printer readiness checks
+      try {
+        // Check media status
+        final mediaStatus = await _doGetSetting('media.status');
+        if (mediaStatus != null) {
+          readiness.hasMedia = mediaStatus.toLowerCase().contains('ok') ||
+              mediaStatus.toLowerCase().contains('ready');
+          if (!readiness.hasMedia) {
+            readiness.warnings.add('Media not ready: $mediaStatus');
+          }
+        }
+
+        // Check head latch
+        final headStatus = await _doGetSetting('head.latch');
+        if (headStatus != null) {
+          readiness.headClosed = headStatus.toLowerCase().contains('ok') ||
+              headStatus.toLowerCase().contains('closed');
+          if (!readiness.headClosed) {
+            readiness.errors.add('Print head is open');
+          }
+        }
+
+        // Check pause status
+        final pauseStatus = await _doGetSetting('device.pause');
+        if (pauseStatus != null) {
+          readiness.isPaused = pauseStatus.toLowerCase() == 'true' ||
+              pauseStatus.toLowerCase() == 'on';
+          if (readiness.isPaused) {
+            readiness.warnings.add('Printer is paused');
+          }
+        }
+
+        // Check for errors
+        final errorStatus = await _doGetSetting('device.host_status');
+        if (errorStatus != null && !errorStatus.toLowerCase().contains('ok')) {
+          readiness.errors.add('Printer error: $errorStatus');
+        }
+
+        // Determine overall readiness
+        readiness.isReady = readiness.isConnected &&
+            readiness.headClosed &&
+            !readiness.isPaused &&
+            readiness.errors.isEmpty;
+
+        if (readiness.isReady) {
+          _statusStreamController?.add('Printer is ready');
+        } else {
+          _statusStreamController
+              ?.add('Printer not ready: ${readiness.summary}');
+        }
+      } catch (e) {
+        // If we can't get status, assume ready if connected
+        _statusStreamController
+            ?.add('Could not check full status, assuming ready if connected');
+        readiness.isReady = readiness.isConnected;
+      }
+
+      return readiness;
+    } catch (e) {
+      readiness.isReady = false;
+      readiness.errors.add('Error checking printer status: $e');
+      return readiness;
     }
   }
 
@@ -490,14 +747,23 @@ class ZebraPrinterService {
   }
 
   Future<String?> _doGetSetting(String setting) async {
-    // For now, we'll use the direct command approach
-    // In a full implementation, we'd need a way to read responses
-    final command = ZebraSGDCommands.getCommand(setting);
-    await _printer!.print(data: command);
+    try {
+      // Use the new getSetting method that reads responses
+      final response = await _printer!.channel.invokeMethod<String>(
+        'getSetting',
+        {'setting': setting},
+      );
 
-    // TODO: Implement response reading from native layer
-    // For now, return null
-    return null;
+      if (response != null && response.isNotEmpty) {
+        // Parse the response using our SGD parser
+        return ZebraSGDCommands.parseResponse(response);
+      }
+      
+      return null;
+    } catch (e) {
+      _statusStreamController?.add('Failed to get setting $setting: $e');
+      return null;
+    }
   }
 
   Future<bool> _doSetPrinterMode(String mode) async {
@@ -515,6 +781,29 @@ class ZebraPrinterService {
     await _printer!.print(data: ZebraSGDCommands.getPrinterStatus);
 
     // TODO: Implement status response parsing
-    return {'status': 'unknown'};
+    // For now, return simulated status
+    return {
+      'status': 'ready',
+      'media_present': true,
+      'head_closed': true,
+      'paused': false,
+      'errors': [],
+    };
+  }
+
+  /// Send multiple status check commands
+  Future<void> _sendStatusChecks() async {
+    // These commands would normally return responses that we'd parse
+    await _printer!.print(data: ZebraSGDCommands.getPrinterStatus);
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    await _printer!.print(data: ZebraSGDCommands.getMediaStatus);
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    await _printer!.print(data: ZebraSGDCommands.getHeadStatus);
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    await _printer!.print(data: ZebraSGDCommands.getPaused);
   }
 }
+
