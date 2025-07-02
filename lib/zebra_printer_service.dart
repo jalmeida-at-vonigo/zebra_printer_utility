@@ -169,20 +169,8 @@ class ZebraPrinterService {
         }
       }
 
-      // Send printer configuration based on format
-      if (format == PrintFormat.ZPL) {
-        // Ensure printer is in ZPL mode
-        _statusStreamController?.add('Setting ZPL mode...');
-        // Send ZPL mode command
-        await _sendCommand("! U1 setvar \"device.languages\" \"zpl\"");
-        await Future.delayed(const Duration(milliseconds: 200));
-      } else if (format == PrintFormat.CPCL) {
-        // Ensure printer is in CPCL/Line Print mode
-        _statusStreamController?.add('Setting CPCL mode...');
-        // Some printers use "line_print", others use "cpcl"
-        await _sendCommand("! U1 setvar \"device.languages\" \"line_print\"");
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
+      // The native layer will handle printer mode switching to avoid
+      // the "!U1 getvar appl.name" being printed as data
 
       await _printer!.print(data: data);
       

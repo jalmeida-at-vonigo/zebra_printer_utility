@@ -39,7 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Add printer language detection
 + (NSString *)getPrinterLanguage:(id)connection;
 + (id)getPrinterInstance:(id)connection;
++ (id)getPrinterInstanceWithLanguage:(id)connection language:(NSString *)language;
 + (BOOL)setPrinterLanguage:(NSString *)language onConnection:(id)connection;
++ (BOOL)ensurePrinterMode:(id)connection forData:(NSString *)data;
 
 @end
 

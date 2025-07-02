@@ -4,7 +4,8 @@ import 'package:zebrautil/zebra_util.dart';
 
 class BTPrinterSelector extends StatefulWidget {
   final Function(ZebraDevice) onDeviceSelected;
-  final Function(ZebraDevice) onConnect;
+  final Future<void> Function(ZebraDevice) onConnect;
+  final VoidCallback? onDisconnect;
   final ZebraDevice? selectedDevice;
   final bool isConnected;
   final String status;
@@ -13,6 +14,7 @@ class BTPrinterSelector extends StatefulWidget {
     super.key,
     required this.onDeviceSelected,
     required this.onConnect,
+    this.onDisconnect,
     this.selectedDevice,
     this.isConnected = false,
     this.status = '',
@@ -27,6 +29,8 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
   bool _isScanning = false;
   String _status = '';
   StreamSubscription<String>? _statusSubscription;
+  bool _isDisconnecting = false;
+  String? _connectingAddress;
 
   @override
   void initState() {
@@ -82,17 +86,52 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
           children: [
             Expanded(
               child: Text(
-                isConnected && selected != null
-                    ? 'Connected: ${selected.name}'
-                    : _status.isNotEmpty
-                        ? _status
-                        : 'Not connected',
+                _connectingAddress != null
+                    ? 'Connecting...'
+                    : isConnected && selected != null
+                        ? 'Connected: ${selected.name}'
+                        : _status.isNotEmpty
+                            ? _status
+                            : 'Not connected',
                 style: TextStyle(
-                  color: isConnected ? Colors.green : Colors.orange,
+                  color: _connectingAddress != null
+                      ? Colors.blue
+                      : isConnected
+                          ? Colors.green
+                          : Colors.orange,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
+            if (isConnected && selected != null) ...[
+              IconButton(
+                icon: _isDisconnecting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.link_off),
+                onPressed: _isDisconnecting
+                    ? null
+                    : () async {
+                        setState(() {
+                          _isDisconnecting = true;
+                          _status = 'Disconnecting...';
+                        });
+                        await Zebra.disconnect();
+                        if (mounted) {
+                          setState(() {
+                            _isDisconnecting = false;
+                            _status = 'Disconnected';
+                          });
+                        }
+                        widget.onDisconnect?.call();
+                      },
+                tooltip: 'Disconnect',
+              ),
+              const SizedBox(width: 8),
+            ],
             IconButton(
               icon: _isScanning
                   ? const SizedBox(
@@ -162,17 +201,41 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
                                 width: double.infinity,
                                 height: 32,
                                 child: ElevatedButton(
-                                  onPressed: isConnected && isSelected
+                                  onPressed: isConnected && isSelected ||
+                                          _connectingAddress != null
                                       ? null
-                                      : () => widget.onConnect(printer),
+                                      : () async {
+                                          setState(() {
+                                            _connectingAddress =
+                                                printer.address;
+                                          });
+                                          try {
+                                            await widget.onConnect(printer);
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() {
+                                                _connectingAddress = null;
+                                              });
+                                            }
+                                          }
+                                        },
                                   style: ElevatedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8),
                                     textStyle: const TextStyle(fontSize: 12),
                                   ),
-                                  child: Text(isConnected && isSelected
-                                      ? 'Connected'
-                                      : 'Connect'),
+                                  child: _connectingAddress == printer.address
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(isConnected && isSelected
+                                          ? 'Connected'
+                                          : 'Connect'),
                                 ),
                               ),
                             ],

@@ -206,6 +206,20 @@
     if (!connection) return @"UNKNOWN";
     
     @try {
+        // Try to get the language without creating a printer instance first
+        NSError *error = nil;
+        NSString *deviceLanguages = [SGD GET:@"device.languages" withPrinterConnection:connection error:&error];
+        
+        if (!error && deviceLanguages) {
+            NSString *lowerLanguages = [deviceLanguages lowercaseString];
+            if ([lowerLanguages containsString:@"zpl"]) {
+                return @"ZPL";
+            } else if ([lowerLanguages containsString:@"cpcl"] || [lowerLanguages containsString:@"line_print"]) {
+                return @"CPCL";
+            }
+        }
+        
+        // Only fall back to factory method if we couldn't determine from device.languages
         id<ZebraPrinter,NSObject> printer = [ZebraPrinterFactory getInstance:connection error:nil];
         if (printer) {
             PrinterLanguage language = [printer getPrinterControlLanguage];
@@ -239,6 +253,24 @@
     }
 }
 
++ (id)getPrinterInstanceWithLanguage:(id)connection language:(NSString *)language {
+    if (!connection) return nil;
+    
+    @try {
+        PrinterLanguage printerLanguage = PRINTER_LANGUAGE_ZPL;
+        if ([language isEqualToString:@"CPCL"]) {
+            printerLanguage = PRINTER_LANGUAGE_CPCL;
+        }
+        
+        // Use the method that doesn't send getvar commands
+        id printer = [ZebraPrinterFactory getInstance:connection withPrinterLanguage:printerLanguage];
+        return printer;
+    } @catch (NSException *exception) {
+        NSLog(@"Exception getting printer instance with language: %@", exception);
+        return nil;
+    }
+}
+
 + (BOOL)setPrinterLanguage:(NSString *)language onConnection:(id)connection {
     if (!connection || !language) return NO;
     
@@ -247,10 +279,76 @@
         // device.languages can be set to "zpl", "cpcl", or "line_print"
         NSString *languageValue = [language lowercaseString];
         
+        // For CPCL, some printers use "line_print" instead of "cpcl"
+        if ([languageValue isEqualToString:@"cpcl"]) {
+            languageValue = @"line_print";
+        }
+        
         NSError *error = nil;
-        return [SGD SET:@"device.languages" withValue:languageValue andWithPrinterConnection:connection error:&error];
+        BOOL success = [SGD SET:@"device.languages" withValue:languageValue andWithPrinterConnection:connection error:&error];
+        
+        if (success) {
+            // Give the printer time to switch modes
+            [NSThread sleepForTimeInterval:0.5];
+        }
+        
+        return success;
     } @catch (NSException *exception) {
         NSLog(@"Failed to set printer language: %@", exception);
+        return NO;
+    }
+}
+
++ (BOOL)ensurePrinterMode:(id)connection forData:(NSString *)data {
+    if (!connection || !data) return NO;
+    
+    @try {
+        NSString *trimmedData = [data stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSString *targetLanguage = nil;
+        
+        // Detect the data format
+        if ([trimmedData hasPrefix:@"^XA"]) {
+            targetLanguage = @"zpl";
+        } else if ([trimmedData hasPrefix:@"! 0"] || [trimmedData hasPrefix:@"! U1"] || [trimmedData hasPrefix:@"!"]) {
+            targetLanguage = @"cpcl";
+        } else {
+            // Default to ZPL if we can't determine
+            targetLanguage = @"zpl";
+        }
+        
+        // Get current language using SGD directly to avoid the getvar appl.name issue
+        NSError *error = nil;
+        NSString *currentLanguage = [SGD GET:@"device.languages" withPrinterConnection:connection error:&error];
+        
+        if (error) {
+            NSLog(@"Error getting current language: %@", error);
+            // Try to set the language anyway
+            return [self setPrinterLanguage:targetLanguage onConnection:connection];
+        }
+        
+        NSString *currentLower = [currentLanguage lowercaseString];
+        
+        // Check if we need to change the language
+        BOOL needsChange = NO;
+        
+        if ([targetLanguage isEqualToString:@"zpl"]) {
+            if (![currentLower containsString:@"zpl"]) {
+                needsChange = YES;
+            }
+        } else if ([targetLanguage isEqualToString:@"cpcl"]) {
+            if (![currentLower containsString:@"line_print"] && ![currentLower containsString:@"cpcl"]) {
+                needsChange = YES;
+            }
+        }
+        
+        if (needsChange) {
+            NSLog(@"Changing printer language from %@ to %@", currentLanguage, targetLanguage);
+            return [self setPrinterLanguage:targetLanguage onConnection:connection];
+        }
+        
+        return YES; // Already in correct mode
+    } @catch (NSException *exception) {
+        NSLog(@"Failed to ensure printer mode: %@", exception);
         return NO;
     }
 }

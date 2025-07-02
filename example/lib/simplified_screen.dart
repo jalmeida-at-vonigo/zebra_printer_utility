@@ -77,6 +77,15 @@ PRINT
     }
   }
 
+  void _onDisconnect() {
+    if (mounted) {
+      setState(() {
+        _isConnected = false;
+        _status = 'Disconnected';
+      });
+    }
+  }
+
   void _onPrintModeChanged(PrintMode mode) {
     if (mounted) {
       setState(() {
@@ -131,6 +140,7 @@ PRINT
             BTPrinterSelector(
               onDeviceSelected: _onDeviceSelected,
               onConnect: _onConnect,
+              onDisconnect: _onDisconnect,
               selectedDevice: _selectedDevice,
               isConnected: _isConnected,
               status: _status,
@@ -162,6 +172,7 @@ PRINT
                 controller: _labelController,
                 maxLines: null,
                 expands: true,
+                contextMenuBuilder: null,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),

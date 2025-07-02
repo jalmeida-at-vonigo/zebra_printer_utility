@@ -18,16 +18,41 @@ class _CPCLScreenState extends State<CPCLScreen> {
   late TextEditingController _cpclController;
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
+  bool _useSimpleExample = false;
 
-  final String defaultCPCL = """! 0 200 200 210 1
-TEXT 0 0 10 10 Hello World
+  final String defaultCPCL = """! 0 200 200 400 1
+ON-FEED IGNORE
+LABEL
+CONTRAST 0
+TONE 0
+SPEED 5
+PAGE-WIDTH 576
+BAR-SENSE
+TEXT 7 1 420 91 Bedroom 2 test value
+TEXT 7 1 90 190 Equalizer
+TEXT 7 1 420 42 6/27/2025
+TEXT 7 1 90 42 Test Jane
+TEXT 4 0 90 91 104
+CENTER
+BARCODE 39 1 1 50 0 237 00170000010422
+LEFT
+TEXT 4 0 88 169 689
+FORM
+PRINT
+""";
+
+  final String simpleCPCL = """! 0 200 200 400 1
+TEXT 4 0 30 40 Hello from Flutter!
+TEXT 4 0 30 100 Test Label
+TEXT 4 0 30 160 CPCL Mode
+FORM
 PRINT
 """;
 
   @override
   void initState() {
     super.initState();
-    _cpclController = TextEditingController(text: defaultCPCL);
+    _cpclController = TextEditingController(text: simpleCPCL);
     _statusSubscription = Zebra.status.listen((status) {
       if (mounted) {
         setState(() => _status = status);
@@ -67,6 +92,15 @@ PRINT
     }
   }
 
+  void _onDisconnect() {
+    if (mounted) {
+      setState(() {
+        _isConnected = false;
+        _status = 'Disconnected';
+      });
+    }
+  }
+
   Future<void> _print() async {
     if (!_isConnected || _selectedDevice == null) return;
     if (mounted) {
@@ -99,19 +133,38 @@ PRINT
             BTPrinterSelector(
               onDeviceSelected: _onDeviceSelected,
               onConnect: _onConnect,
+              onDisconnect: _onDisconnect,
               selectedDevice: _selectedDevice,
               isConnected: _isConnected,
               status: _status,
             ),
             const SizedBox(height: 16),
-            const Text('CPCL Data:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('CPCL Data:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _useSimpleExample = !_useSimpleExample;
+                      _cpclController.text =
+                          _useSimpleExample ? defaultCPCL : simpleCPCL;
+                    });
+                  },
+                  child: Text(_useSimpleExample
+                      ? 'Use Simple Example'
+                      : 'Use Complex Example'),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Expanded(
               child: TextField(
                 controller: _cpclController,
                 maxLines: null,
                 expands: true,
+                contextMenuBuilder: null,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),

@@ -283,39 +283,19 @@ class ZebraPrinterInstance: NSObject {
                 return
             }
             
-            // Update status to sending
+            // Update status to preparing
             DispatchQueue.main.async {
                 self.channel.invokeMethod("changePrinterStatus", arguments: [
-                    "Status": "Checking printer language...",
+                    "Status": "Preparing printer...",
                     "Color": "Y"
                 ])
             }
             
-            // Check printer language
-            let language = ZSDKWrapper.getPrinterLanguage(connection)
-            LogUtil.info("Detected printer language: \(language)")
-            
-            // Ensure printer is in the correct mode
-            if language == "UNKNOWN" {
-                // Try to set ZPL mode if language detection failed
-                LogUtil.warn("Could not detect printer language, attempting to set ZPL mode")
-                _ = ZSDKWrapper.setPrinterLanguage("zpl", onConnection: connection)
-                Thread.sleep(forTimeInterval: 0.5)
-            } else if data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("! 0") ||
-                      data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("! U1") {
-                // CPCL data detected, ensure printer is in CPCL mode
-                if language != "CPCL" {
-                    LogUtil.info("CPCL data detected, switching printer to CPCL mode")
-                    _ = ZSDKWrapper.setPrinterLanguage("cpcl", onConnection: connection)
-                    Thread.sleep(forTimeInterval: 0.5)
-                }
-            } else if data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("^XA") {
-                // ZPL data detected, ensure printer is in ZPL mode
-                if language != "ZPL" {
-                    LogUtil.info("ZPL data detected, switching printer to ZPL mode")
-                    _ = ZSDKWrapper.setPrinterLanguage("zpl", onConnection: connection)
-                    Thread.sleep(forTimeInterval: 0.5)
-                }
+            // Ensure printer is in the correct mode for the data
+            let modeSet = ZSDKWrapper.ensurePrinterMode(connection, forData: data)
+            if !modeSet {
+                LogUtil.error("Failed to ensure printer mode")
+                // Continue anyway, as the printer might still work
             }
             
             // Update status
