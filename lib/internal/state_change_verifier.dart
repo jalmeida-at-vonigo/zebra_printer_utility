@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../models/result.dart';
 import '../zebra_printer.dart';
+import 'logger.dart';
 
 /// Verifies state changes for operations that don't provide callbacks
 ///
@@ -10,15 +10,15 @@ import '../zebra_printer.dart';
 /// It uses a verify-retry pattern to ensure operations actually completed.
 class StateChangeVerifier {
   final ZebraPrinter printer;
-  final Function(String)? logCallback;
+  final Logger _logger;
 
   StateChangeVerifier({
     required this.printer,
-    this.logCallback,
-  });
+    void Function(String)? logCallback,
+  }) : _logger = Logger.withPrefix('StateChangeVerifier');
 
   void _log(String message) {
-    logCallback?.call('[StateChangeVerifier] $message');
+    _logger.debug(message);
   }
 
   /// Executes a command and verifies the state changed as expected
@@ -177,12 +177,4 @@ class StateChangeVerifier {
         lower == 'yes' ||
         lower == 'y';
   }
-}
-
-/// Extension to add state verification to ZebraPrinter
-extension StateVerificationExtension on ZebraPrinter {
-  StateChangeVerifier get stateVerifier => StateChangeVerifier(
-        printer: this,
-        logCallback: (msg) => debugPrint(msg), // Or use a proper logger
-      );
 }

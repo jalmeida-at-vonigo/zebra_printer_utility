@@ -110,10 +110,15 @@ class OperationManager {
   /// Get active operation IDs for debugging
   List<String> get activeOperationIds => _activeOperations.keys.toList();
 
-  /// Dispose the manager and clean up resources
+  /// Dispose of the manager and cancel all pending operations
   void dispose() {
     _timeoutChecker?.cancel();
-    cancelAll();
+    for (final operation in _activeOperations.values) {
+      if (!operation.completer.isCompleted) {
+        operation.completer.completeError('Operation cancelled');
+      }
+    }
+    _activeOperations.clear();
   }
 
   /// Generate a unique operation ID

@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:zebrautil/zebrautil.dart';
 import 'package:flutter/services.dart';
-import 'internal/parser_util.dart';
-import 'internal/auto_corrector.dart';
-/// A simplified service for Zebra printer operations.
-/// Provides a clean async/await API with proper error handling.
+import 'package:zebrautil/zebrautil.dart';
+
+/// Service for managing Zebra printer operations
+///
+/// This service provides a high-level interface for printer operations
+/// with automatic connection management, error handling, and retry logic.
 class ZebraPrinterService {
   ZebraPrinter? _printer;
   ZebraController? _controller;
@@ -439,7 +440,7 @@ class ZebraPrinterService {
           );
         }
 
-        final readiness = readinessResult.data!;
+        var readiness = readinessResult.data!;
         if (!readiness.isReady) {
           _statusStreamController
               ?.add('Printer not ready: ${readiness.summary}');
@@ -458,15 +459,15 @@ class ZebraPrinterService {
               statusCallback: (msg) => _statusStreamController?.add(msg),
             );
             final correctionResult =
-                await corrector.attemptCorrection(readiness);
+                await corrector.correctReadiness(readiness);
 
-            if (correctionResult.success &&
-                correctionResult.data?.correctionsMade == true) {
+            if (correctionResult.success && correctionResult.data == true) {
               // Re-check readiness after corrections
               final recheckResult = await checkPrinterReadiness();
               if (recheckResult.success && recheckResult.data!.isReady) {
                 _statusStreamController
                     ?.add('Auto-correction successful, printer is now ready');
+                readiness = recheckResult.data!;
                 // Continue with printing
               } else {
                 // Still not ready after corrections
@@ -928,25 +929,13 @@ class ZebraPrinterService {
 
   Future<String?> _doGetSetting(String setting) async {
     try {
-      // For now, skip getSetting calls as they might be causing issues
-      // This is a temporary workaround to test if printing works
-      _statusStreamController
-          ?.add('Skipping getSetting for $setting (temporary workaround)');
+      // Use the getSetting method from ZebraPrinter
+      final value = await _printer!.getSetting(setting);
+      if (value != null && value.isNotEmpty) {
+        // Parse the response using our SGD parser
+        return ZebraSGDCommands.parseResponse(value);
+      }
       return null;
-
-      // TODO: Re-enable once we verify getSetting is working
-      // Use the new getSetting method that reads responses
-      // final response = await _printer!.channel.invokeMethod<String>(
-      //   'getSetting',
-      //   {'setting': setting},
-      // );
-
-      // if (response != null && response.isNotEmpty) {
-      //   // Parse the response using our SGD parser
-      //   return ZebraSGDCommands.parseResponse(response);
-      // }
-      
-      // return null;
     } catch (e) {
       _statusStreamController?.add('Failed to get setting $setting: $e');
       return null;

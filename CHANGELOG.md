@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.0.10 - 2024-12-20
+
+### Added
+- Logger utility for consistent logging across the plugin
+- Logger exports to zebrautil.dart for external usage
+
+### Fixed
+- Removed all TODO comments by implementing proper functionality
+- Fixed getSetting implementation in ZebraPrinterService
+- Implemented language switching in AutoCorrector
+- Cleaned up all lint warnings and errors
+- Removed unused imports and fields
+
+### Changed
+- Updated example app to use debugPrint instead of print
+- Improved error logging with structured Logger class
+
+## 2.0.9
+- **Major Architecture Improvement**: Implemented callback-based operations framework
+  - All native operations now use real callbacks instead of artificial delays
+  - Each operation has a unique ID for tracking and proper callback routing
+  - Removed ZebraOperationQueue in favor of natural async/await sequencing
+  - Operations complete based on actual device state, not arbitrary timeouts
+- **iOS Implementation**: Added operation ID support to all method handlers
+  - All callbacks now include operation IDs for proper routing
+  - Improved error handling with operation-specific callbacks
+- **Performance**: Removed unnecessary delays, operations complete as fast as the hardware allows
+- **Reliability**: Operations can no longer be left in pending state
+- **Internal**: Extracted operation management into reusable internal framework
+
+## 2.0.8
+- **New Feature**: Added `StateChangeVerifier` utility for operations without callbacks
+  - Intelligently verifies state changes instead of using fixed delays
+  - Checks if state is already correct before sending commands (no-op optimization)
+  - Retries up to 3 times with configurable delays
+  - Provides better error messages when operations fail
+- **Improvements**: 
+  - Added `getSetting()` method to ZebraPrinter for reading printer settings
+  - Added `setPrinterMode()` example showing verified mode switching
+  - Updated AutoCorrector to use StateChangeVerifier for more reliable corrections
+- **Examples**: Operations that benefit from StateChangeVerifier:
+  - Mode switching (ZPL/CPCL)
+  - Pause/unpause operations
+  - Calibration verification
+  - Any SGD setting changes
+
 ## [2.0.7] - 2024-12-20
 
 ### Added
@@ -123,35 +169,6 @@
 - More reliable pause detection (handles '1', 'on', 'true' values)
 - Better error message extraction from printer status
 - Safer parsing that never throws exceptions
-
-## 2.1.1
-- **New Feature**: Added `StateChangeVerifier` utility for operations without callbacks
-  - Intelligently verifies state changes instead of using fixed delays
-  - Checks if state is already correct before sending commands (no-op optimization)
-  - Retries up to 3 times with configurable delays
-  - Provides better error messages when operations fail
-- **Improvements**: 
-  - Added `getSetting()` method to ZebraPrinter for reading printer settings
-  - Added `setPrinterMode()` example showing verified mode switching
-  - Updated AutoCorrector to use StateChangeVerifier for more reliable corrections
-- **Examples**: Operations that benefit from StateChangeVerifier:
-  - Mode switching (ZPL/CPCL)
-  - Pause/unpause operations
-  - Calibration verification
-  - Any SGD setting changes
-
-## 2.1.0
-- **Major Architecture Improvement**: Implemented callback-based operations framework
-  - All native operations now use real callbacks instead of artificial delays
-  - Each operation has a unique ID for tracking and proper callback routing
-  - Removed ZebraOperationQueue in favor of natural async/await sequencing
-  - Operations complete based on actual device state, not arbitrary timeouts
-- **iOS Implementation**: Added operation ID support to all method handlers
-  - All callbacks now include operation IDs for proper routing
-  - Improved error handling with operation-specific callbacks
-- **Performance**: Removed unnecessary delays, operations complete as fast as the hardware allows
-- **Reliability**: Operations can no longer be left in pending state
-- **Internal**: Extracted operation management into reusable internal framework
 
 ## Previous Versions
 

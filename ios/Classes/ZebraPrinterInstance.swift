@@ -59,12 +59,12 @@ class ZebraPrinterInstance: NSObject {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "Address is required", details: nil))
             }
             
-        case "print":
+                    case "print":
             if let data = args?["Data"] as? String {
                 printData(data: data, operationId: operationId, result: result)
-            } else {
-                result(FlutterError(code: "INVALID_ARGUMENT", message: "Data is required", details: nil))
-            }
+                } else {
+                    result(FlutterError(code: "INVALID_ARGUMENT", message: "Data is required", details: nil))
+                }
             
         case "disconnect":
             disconnect(operationId: operationId, result: result)
@@ -353,9 +353,9 @@ class ZebraPrinterInstance: NSObject {
                             "ErrorText": "Not connected to printer"
                         ])
                     } else {
-                        self?.channel.invokeMethod("onPrintError", arguments: [
-                            "ErrorText": "Not connected to printer"
-                        ])
+                    self?.channel.invokeMethod("onPrintError", arguments: [
+                        "ErrorText": "Not connected to printer"
+                    ])
                     }
                     result(FlutterError(code: "PRINT_ERROR", message: "Not connected to printer", details: nil))
                 }
@@ -371,11 +371,11 @@ class ZebraPrinterInstance: NSObject {
             }
             
             if let dataBytes = data.data(using: .utf8) {
-                let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
-                
-                if success {
+                    let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
+                    
+                    if success {
                     // Send success callback with operation ID
-                    DispatchQueue.main.async {
+                        DispatchQueue.main.async {
                         if let operationId = operationId {
                             self.channel.invokeMethod("onPrintComplete", arguments: [
                                 "operationId": operationId
@@ -383,15 +383,15 @@ class ZebraPrinterInstance: NSObject {
                         } else {
                             self.channel.invokeMethod("onPrintComplete", arguments: nil)
                         }
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Done",
-                            "Color": "G"
-                        ])
-                        result(nil)
-                    }
-                } else {
-                    let errorMsg = "Failed to send data to printer"
-                    DispatchQueue.main.async {
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Done",
+                                "Color": "G"
+                            ])
+                            result(nil)
+                        }
+                    } else {
+                        let errorMsg = "Failed to send data to printer"
+                        DispatchQueue.main.async {
                         if let operationId = operationId {
                             self.channel.invokeMethod("onPrintError", arguments: [
                                 "operationId": operationId,
@@ -403,26 +403,26 @@ class ZebraPrinterInstance: NSObject {
                                 "ErrorText": errorMsg
                             ])
                         }
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Print Error: \(errorMsg)",
-                            "Color": "R"
-                        ])
-                        result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Print Error: \(errorMsg)",
+                                "Color": "R"
+                            ])
+                            result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                        }
                     }
-                }
             } else {
                 let errorMsg = "Invalid data encoding"
-                DispatchQueue.main.async {
+                    DispatchQueue.main.async {
                     if let operationId = operationId {
                         self.channel.invokeMethod("onPrintError", arguments: [
                             "operationId": operationId,
                             "error": errorMsg,
                             "ErrorText": errorMsg
                         ])
-                    } else {
-                        self.channel.invokeMethod("onPrintError", arguments: [
-                            "ErrorText": errorMsg
-                        ])
+            } else {
+                    self.channel.invokeMethod("onPrintError", arguments: [
+                        "ErrorText": errorMsg
+                    ])
                     }
                     result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
                 }

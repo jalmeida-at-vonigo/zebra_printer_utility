@@ -245,13 +245,16 @@ PRINT
                       try {
                         result = await Zebra.print(cpclContent);
                       } catch (e, stack) {
-                        print('=== PRINT EXCEPTION ===');
-                        print('Exception: $e');
-                        print('Stack Trace:');
-                        print(stack);
-                        print('=====================');
-                        _showMessage('Print exception: $e', isError: true);
-                        setState(() => _isLoading = false);
+                        debugPrint('=== PRINT EXCEPTION ===');
+                        debugPrint('Exception: $e');
+                        debugPrint('Stack Trace:');
+                        debugPrint(stack.toString());
+                        debugPrint('=====================');
+
+                        setState(() {
+                          _isLoading = false;
+                          _status = 'Print failed: $e';
+                        });
                         return;
                       }
 
@@ -259,16 +262,17 @@ PRINT
                         _showMessage('Print sent successfully');
                       } else {
                         final errorMsg =
-                            'Print failed: ${result.error?.message}';
-                        print('=== PRINT ERROR ===');
-                        print('Error: $errorMsg');
-                        print('Error Code: ${result.error?.code}');
-                        print('Error Number: ${result.error?.errorNumber}');
+                            result.error?.message ?? 'Unknown error';
+                        debugPrint('=== PRINT ERROR ===');
+                        debugPrint('Error: $errorMsg');
+                        debugPrint('Error Code: ${result.error?.code}');
+                        debugPrint(
+                            'Error Number: ${result.error?.errorNumber}');
                         if (result.error?.dartStackTrace != null) {
-                          print('Stack Trace:');
-                          print(result.error!.dartStackTrace);
+                          debugPrint('Stack Trace:');
+                          debugPrint(result.error!.dartStackTrace.toString());
                         }
-                        print('==================');
+                        debugPrint('==================');
                         _showMessage(errorMsg, isError: true);
                       }
 

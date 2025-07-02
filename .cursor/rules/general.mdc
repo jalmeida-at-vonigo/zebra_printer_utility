@@ -7,28 +7,26 @@ alwaysApply: true
 
 * The code is clean and working.
     - There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
-    - No ANALYSIS WARNIGNN ARE ACCEPTABLE (`flutter analyze`)
+    - No ANALYSIS WARNING ARE ACCEPTABLE (`flutter analyze`)
 * Only the dart code and the iOS need to be evaluated/changed.
     - We are not supporting Android yet, therefore nothing needs to be evaluated or changed for it.
 * The change must be documented as detailed on the DOCUMENTATION section below
 * Update the version number:
-    - Major version (x.0.0) for breaking changes
-    - Minor version (x.y.0) for new features  
-    - Patch version (x.y.z) for bug fixes
-    - For v2.0+, each significant change increments the patch version
+    - Only use patch increments ALWAYS
 * Update the @CHANGELOG.md with the changes
     - There is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
-* There is no duplicate exportss on [zebrautil.dart](mdc:lib/zebrautil.dart)
+* There is no duplicate exports on [zebrautil.dart](mdc:lib/zebrautil.dart)
+* All the tests were updated and are passing with the proper implementation.
 
 # ZEBRAUTIL
 
 * The services and models are exporting using [zebrautil.dart](mdc:lib/zebrautil.dart)](mdc:lib/zebrautil.dart).
-* Hide ducplicate exports while reexporting the classes.
+* Hide duplicate exports while reexporting the classes.
 
 # DOCUMENTATION
 
-* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevante details
+* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details
 * The docs are about:
     - Usability of the API
-    - Standards about the development and architeture, and
+    - Standards about the development and architecture, and
 * There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.

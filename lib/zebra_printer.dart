@@ -7,72 +7,75 @@ import 'package:zebrautil/models/print_enums.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
+import 'package:zebrautil/internal/logger.dart';
 import 'zebra_sgd_commands.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
 
 class ZebraPrinter {
-  late MethodChannel channel;
-  late OperationManager _operationManager;
-  late OperationCallbackHandler _callbackHandler;
-
-  Function(String, String?)? onDiscoveryError;
-  Function? onPermissionDenied;
+  final String instanceId;
+  final ZebraController controller;
   bool isRotated = false;
   bool isScanning = false;
   bool shouldSync = false;
-  late ZebraController controller;
 
-  ZebraPrinter(String id,
-      {this.onDiscoveryError,
-      this.onPermissionDenied,
-      ZebraController? controller}) {
-    channel = MethodChannel('ZebraPrinterObject$id');
-    this.controller = controller ?? ZebraController();
+  Function(String, String?)? onDiscoveryError;
+  Function()? onPermissionDenied;
 
-    // Initialize operation management
-    _operationManager = OperationManager(
-      channel: channel,
-      onLog: (message) => debugPrint('ZebraPrinter: $message'),
-    );
-    _callbackHandler = OperationCallbackHandler(manager: _operationManager);
+  late final MethodChannel channel;
+  late final OperationManager _operationManager;
+  late final OperationCallbackHandler _callbackHandler;
+  final Logger _logger;
 
-    // Register event handlers for non-operation callbacks
-    _registerEventHandlers();
-
-    // Set method call handler
+  ZebraPrinter(
+    this.instanceId, {
+    ZebraController? controller,
+    this.onDiscoveryError,
+    this.onPermissionDenied,
+  })  : controller = controller ?? ZebraController(),
+        _logger = Logger.withPrefix('ZebraPrinter.$instanceId') {
+    channel = MethodChannel('ZebraPrinterObject$instanceId');
     channel.setMethodCallHandler(nativeMethodCallHandler);
-  }
-
-  /// Register event handlers for non-operation callbacks
-  void _registerEventHandlers() {
+    
+    _operationManager = OperationManager(channel: channel);
+    _callbackHandler = OperationCallbackHandler(manager: _operationManager);
+    
+    // Register event handlers for non-operation callbacks
     _callbackHandler.registerEventHandler('printerFound', (call) {
-      final newPrinter = ZebraDevice(
-        address: call.arguments["Address"],
-        status: call.arguments["Status"],
-        name: call.arguments["Name"],
-        isWifi: call.arguments["IsWifi"] == "true",
-      );
-      controller.addPrinter(newPrinter);
+      final address = call.arguments?['Address'] ?? '';
+      final name = call.arguments?['Name'] ?? 'Unknown Printer';
+      final status = call.arguments?['Status'] ?? 'Found';
+      final isWifi = call.arguments?['IsWifi'] == 'true';
+      
+      this.controller.addPrinter(ZebraDevice(
+            address: address,
+            name: name,
+            status: status,
+            isWifi: isWifi,
+          ));
     });
-
-    _callbackHandler.registerEventHandler('printerRemoved', (call) {
-      final String address = call.arguments["Address"];
-      controller.removePrinter(address);
-    });
-
+    
     _callbackHandler.registerEventHandler('changePrinterStatus', (call) {
-      final String status = call.arguments["Status"];
-      final String color = call.arguments["Color"];
-      controller.updatePrinterStatus(status, color);
+      final status = call.arguments?['Status'] ?? '';
+      final color = call.arguments?['Color'] ?? 'R';
+      this.controller.updatePrinterStatus(status, color);
     });
-
+    
+    _callbackHandler.registerEventHandler('printerRemoved', (call) {
+      final address = call.arguments?['Address'] ?? '';
+      this.controller.removePrinter(address);
+    });
+    
     _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
+      final errorText = call.arguments?['ErrorText'] ?? 'Unknown error';
       if (onDiscoveryError != null) {
-        onDiscoveryError!(
-            call.arguments["ErrorCode"], call.arguments["ErrorText"]);
+        onDiscoveryError!('DISCOVERY_ERROR', errorText);
       }
+    });
+    
+    _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
+      isScanning = false;
     });
   }
 
@@ -119,7 +122,7 @@ class ZebraPrinter {
       );
     } catch (e) {
       // Log error but don't fail
-      debugPrint('Error stopping scan: $e');
+      _logger.error('Error stopping scan', e);
     }
   }
 
@@ -173,7 +176,7 @@ class ZebraPrinter {
     this.onDiscoveryError = onDiscoveryError;
   }
 
-  void setOnPermissionDenied(Function(String, String) onPermissionDenied) {
+  void setOnPermissionDenied(Function() onPermissionDenied) {
     this.onPermissionDenied = onPermissionDenied;
   }
 
@@ -532,7 +535,7 @@ class ZebraPrinter {
   Future<Result<void>> setPrinterMode(PrinterMode mode) async {
     final verifier = StateChangeVerifier(
       printer: this,
-      logCallback: (msg) => debugPrint(msg),
+      logCallback: (msg) => _logger.info(msg),
     );
 
     final command = mode == PrinterMode.zpl

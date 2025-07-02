@@ -1,7 +1,7 @@
 name: zebrautil
-description: "A flutter plugin for working with zebra printers"
-version: 2.1.1
-homepage: https://github.com/shashwatxx/zebrautil
+description: A Flutter plugin for discovering and printing to Zebra printers via Bluetooth and network. Supports both ZPL and CPCL languages with auto-correction and retry capabilities.
+version: 2.0.10
+homepage: https://github.com/anthonyR012/zebra_printer_utility
 repository: https://github.com/anthonyR012/zebra_printer_utility
 
 environment:
