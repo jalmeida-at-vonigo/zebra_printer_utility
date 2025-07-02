@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.12] - 2025-01-02
+
+### Fixed
+- Fixed autoPrint not automatically connecting when an address is provided but printer is not connected
+- Simplified autoPrint connection logic to ensure proper connection flow
+- Fixed all Flutter lint issues including deprecated color.value usage and missing const constructors
+
+### Changed
+- Improved autoPrint logic to properly handle connection state when address is provided
+- Fixed unnecessary imports and added const constructors throughout test files
+
 ## 2.0.10 - 2024-12-20
 
 ### Added

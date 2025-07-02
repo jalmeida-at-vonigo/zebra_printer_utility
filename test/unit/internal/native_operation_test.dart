@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/internal/native_operation.dart';
-import 'dart:async';
 
 void main() {
   group('NativeOperation', () {
@@ -9,7 +8,7 @@ void main() {
         id: '1',
         method: 'test',
         arguments: {},
-        timeout: Duration(seconds: 1),
+        timeout: const Duration(seconds: 1),
       );
       op.complete('result');
       expect(await op.completer.future, equals('result'));
@@ -20,7 +19,7 @@ void main() {
         id: '2',
         method: 'test',
         arguments: {},
-        timeout: Duration(seconds: 1),
+        timeout: const Duration(seconds: 1),
       );
       op.completeError('error');
       expect(op.completer.future, throwsA('error'));
@@ -31,7 +30,7 @@ void main() {
         id: '3',
         method: 'test',
         arguments: {},
-        timeout: Duration(seconds: 1),
+        timeout: const Duration(seconds: 1),
       );
       op.cancel();
       expect(op.completer.future, throwsA('Operation cancelled'));
@@ -43,9 +42,9 @@ void main() {
         id: '4',
         method: 'test',
         arguments: {},
-        timeout: Duration(milliseconds: 10),
+        timeout: const Duration(milliseconds: 10),
       );
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future.delayed(const Duration(milliseconds: 20));
       expect(op.elapsed.inMilliseconds, greaterThanOrEqualTo(20));
     });
 
@@ -54,9 +53,9 @@ void main() {
         id: '5',
         method: 'test',
         arguments: {},
-        timeout: Duration(milliseconds: 10),
+        timeout: const Duration(milliseconds: 10),
       );
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future.delayed(const Duration(milliseconds: 20));
       expect(op.isTimedOut, isTrue);
     });
 
@@ -65,7 +64,7 @@ void main() {
         id: '6',
         method: 'test',
         arguments: {},
-        timeout: Duration(seconds: 1),
+        timeout: const Duration(seconds: 1),
       );
       op.complete('first');
       op.complete('second');

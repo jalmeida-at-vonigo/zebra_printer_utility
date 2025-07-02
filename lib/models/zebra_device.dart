@@ -55,7 +55,7 @@ class ZebraDevice {
         "isWifi": isWifi,
         "status": status,
         "isConnected": isConnected,
-        "color": color.value
+        "color": color.toARGB32()
       };
 
   @override

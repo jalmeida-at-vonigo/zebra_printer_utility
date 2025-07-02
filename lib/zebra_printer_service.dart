@@ -249,80 +249,115 @@ class ZebraPrinterService {
     bool shouldDisconnect = false;
 
     try {
-      // If printer is provided, use it directly
+      // If printer is provided, use its address
       if (printer != null) {
         address = printer.address;
-
-        // Check if already connected to this printer
-        if (connectedPrinter != null &&
-            connectedPrinter!.address == printer.address) {
-          _statusStreamController
-              ?.add('Using existing connection to ${printer.name}');
-          
-          // Verify connection is still active
-          if (verifyConnection) {
-            final isStillConnected = await _verifyConnection();
-            if (!isStillConnected) {
-              _statusStreamController?.add('Connection lost, reconnecting...');
-              await disconnect();
-            } else {
-              // Just print and return (don't disconnect if already connected)
-              final printResult = await _printWithRetry(data,
-                  format: format, maxRetries: maxRetries);
-              return printResult
-                  ? Result.success()
-                  : Result.error(
-                      'Print failed',
-                      code: ErrorCodes.printError,
-                    );
-            }
-          } else {
-            // Just print without verification
-            final printResult = await _printWithRetry(data,
-                format: format, maxRetries: maxRetries);
-            return printResult
-                ? Result.success()
-                : Result.error(
-                    'Print failed',
-                    code: ErrorCodes.printError,
-                  );
-          }
-        }
       }
 
-      // If already connected to the right printer, verify and use it
-      if (connectedPrinter != null &&
-          (address == null || connectedPrinter!.address == address)) {
+      // Check if we're already connected to the requested printer
+      if (address != null &&
+          connectedPrinter != null &&
+          connectedPrinter!.address == address) {
+        _statusStreamController
+            ?.add('Using existing connection to ${connectedPrinter!.name}');
         
+        // Verify connection is still active if requested
         if (verifyConnection) {
           final isStillConnected = await _verifyConnection();
-          if (isStillConnected) {
-            _statusStreamController?.add('Using existing connection');
-            final printResult = await _printWithRetry(data,
-                format: format, maxRetries: maxRetries);
-            return printResult
-                ? Result.success()
-                : Result.error(
-                    'Print failed',
-                    code: ErrorCodes.printError,
-                  );
-          } else {
+          if (!isStillConnected) {
             _statusStreamController?.add('Connection lost, reconnecting...');
             await disconnect();
+            // Continue to reconnection logic below
+          } else {
+            // Connection is good, proceed with printing
+            // Check printer readiness if requested
+            if (verifyConnection) {
+              final readinessResult = await checkPrinterReadiness();
+              if (!readinessResult.success) {
+                _statusStreamController
+                    ?.add('Failed to check printer readiness');
+                return Result.error(
+                  readinessResult.error?.message ??
+                      'Failed to check printer readiness',
+                  code:
+                      readinessResult.error?.code ?? ErrorCodes.operationError,
+                );
+              }
+
+              var readiness = readinessResult.data!;
+              if (!readiness.isReady) {
+                _statusStreamController
+                    ?.add('Printer not ready: ${readiness.summary}');
+
+                // Attempt auto-correction for certain issues
+                final canAutoCorrect = readiness.isPaused == true ||
+                    (readiness.errors.isNotEmpty &&
+                        readiness.headClosed != false);
+
+                if (canAutoCorrect) {
+                  _statusStreamController?.add('Attempting auto-correction...');
+                  final options =
+                      autoCorrectionOptions ?? AutoCorrectionOptions.safe();
+                  final corrector = AutoCorrector(
+                    printer: _printer!,
+                    options: options,
+                    statusCallback: (msg) => _statusStreamController?.add(msg),
+                  );
+                  final correctionResult =
+                      await corrector.correctReadiness(readiness);
+
+                  if (correctionResult.success &&
+                      correctionResult.data == true) {
+                    // Re-check readiness after corrections
+                    final recheckResult = await checkPrinterReadiness();
+                    if (recheckResult.success && recheckResult.data!.isReady) {
+                      _statusStreamController?.add(
+                          'Auto-correction successful, printer is now ready');
+                      readiness = recheckResult.data!;
+                      // Continue with printing
+                    } else {
+                      // Still not ready after corrections
+                      return Result.error(
+                        'Printer still not ready after auto-correction: ${recheckResult.data?.summary ?? readiness.summary}',
+                        code: ErrorCodes.printerNotReady,
+                      );
+                    }
+                  } else {
+                    // Could not auto-correct
+                    return Result.error(
+                      'Printer not ready and auto-correction failed: ${readiness.summary}',
+                      code: ErrorCodes.printerNotReady,
+                    );
+                  }
+                } else {
+                  // Cannot auto-correct these issues
+                  return Result.error(
+                    'Printer not ready: ${readiness.summary}',
+                    code: ErrorCodes.printerNotReady,
+                  );
+                }
+              }
+            }
+
+            // Print the data with retries
+            final printed = await _printWithRetry(data,
+                format: format, maxRetries: maxRetries);
+            
+            return printed
+                ? Result.success()
+                : Result.error('Print failed', code: ErrorCodes.printError);
           }
         } else {
+          // No verification requested, just print
           final printResult = await _printWithRetry(data,
               format: format, maxRetries: maxRetries);
           return printResult
               ? Result.success()
-              : Result.error(
-                  'Print failed',
-                  code: ErrorCodes.printError,
-                );
+              : Result.error('Print failed', code: ErrorCodes.printError);
         }
       }
 
-      // If we have a connected printer but it's not the right one, disconnect first
+      // If we have a different printer connected, disconnect first
       if (connectedPrinter != null &&
           address != null &&
           connectedPrinter!.address != address) {
@@ -330,15 +365,7 @@ class ZebraPrinterService {
         await disconnect();
       }
 
-      // Disconnect from current printer if needed (but only if we need to connect to a different one)
-      if (connectedPrinter != null &&
-          address != null &&
-          connectedPrinter!.address != address) {
-        _statusStreamController?.add('Disconnecting from current printer...');
-        await disconnect();
-      }
-
-      // If no address provided, look for paired printers only
+      // If no address provided, look for paired printers
       if (address == null) {
         _statusStreamController?.add('Looking for paired printers...');
         
@@ -388,8 +415,7 @@ class ZebraPrinterService {
               ?.add('Using paired printer: ${pairedPrinters.first.name}');
         } else {
           // Multiple paired printers - fail and ask user to specify
-          _statusStreamController
-              ?.add(
+          _statusStreamController?.add(
               'Multiple paired printers found (${pairedPrinters.length}). Please specify which one to use.');
           return Result.error(
             'Multiple paired printers found (${pairedPrinters.length}). Please specify which one to use.',
@@ -398,33 +424,35 @@ class ZebraPrinterService {
         }
       }
 
-      // Connect to the printer with retries
-      _statusStreamController?.add('Connecting to printer...');
-      Result<void>? connectResult;
+      // At this point we have an address but are not connected - connect now
+      if (connectedPrinter == null || connectedPrinter!.address != address) {
+        _statusStreamController?.add('Connecting to printer...');
+        Result<void>? connectResult;
 
-      for (int i = 0; i <= maxRetries; i++) {
-        connectResult = await connect(address);
+        for (int i = 0; i <= maxRetries; i++) {
+          connectResult = await connect(address);
 
-        if (connectResult.success) {
-          shouldDisconnect = disconnectAfter;
-          break;
+          if (connectResult.success) {
+            shouldDisconnect = disconnectAfter;
+            break;
+          }
+
+          if (i < maxRetries) {
+            _statusStreamController
+                ?.add('Connection failed, retrying... (${i + 1}/$maxRetries)');
+            await Future.delayed(
+                const Duration(seconds: 2)); // NECESSARY: Retry delay
+          }
         }
 
-        if (i < maxRetries) {
+        if (connectResult == null || !connectResult.success) {
           _statusStreamController
-              ?.add('Connection failed, retrying... (${i + 1}/$maxRetries)');
-          await Future.delayed(
-              const Duration(seconds: 2)); // NECESSARY: Retry delay
+              ?.add('Failed to connect after $maxRetries attempts');
+          return Result.error(
+            'Failed to connect after $maxRetries attempts',
+            code: ErrorCodes.connectionError,
+          );
         }
-      }
-
-      if (connectResult == null || !connectResult.success) {
-        _statusStreamController
-            ?.add('Failed to connect after $maxRetries attempts');
-        return Result.error(
-          'Failed to connect after $maxRetries attempts',
-          code: ErrorCodes.connectionError,
-        );
       }
 
       // Verify connection and readiness before printing

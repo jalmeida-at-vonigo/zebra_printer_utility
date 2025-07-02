@@ -22,7 +22,7 @@ void main() {
       });
 
       test('should create device with all fields', () {
-        final customColor = const Color.fromARGB(255, 0, 255, 0);
+        const customColor = Color.fromARGB(255, 0, 255, 0);
         final device = ZebraDevice(
           address: '00:11:22:33:44:55',
           name: 'Bluetooth Printer',
@@ -201,7 +201,8 @@ void main() {
         expect(json['status'], equals('Ready'));
         expect(json['isConnected'], isTrue);
         expect(
-            json['color'], equals(const Color.fromARGB(255, 0, 255, 0).value));
+            json['color'],
+            equals(const Color.fromARGB(255, 0, 255, 0).toARGB32()));
       });
 
       test('should handle default values in JSON', () {
@@ -216,7 +217,8 @@ void main() {
 
         expect(json['isConnected'], isFalse);
         expect(
-            json['color'], equals(const Color.fromARGB(255, 255, 0, 0).value));
+            json['color'],
+            equals(const Color.fromARGB(255, 255, 0, 0).toARGB32()));
       });
     });
 
@@ -403,7 +405,7 @@ void main() {
           status: 'Ready',
         );
 
-        final newColor = const Color.fromARGB(255, 0, 0, 255);
+        const newColor = Color.fromARGB(255, 0, 0, 255);
         final copy = original.copyWith(color: newColor);
 
         expect(copy.address, equals(original.address));
@@ -422,7 +424,7 @@ void main() {
           status: 'Ready',
         );
 
-        final newColor = const Color.fromARGB(255, 0, 0, 255);
+        const newColor = Color.fromARGB(255, 0, 0, 255);
         final copy = original.copyWith(
           name: 'Updated Printer',
           isWifi: false,
@@ -460,7 +462,7 @@ void main() {
 
   group('ZebraDevice JSON functions', () {
     test('zebraDevicesModelFromJson should parse list of devices', () {
-      final jsonString = '''
+      const jsonString = '''
       [
         {
           "ipAddress": "192.168.1.100",
@@ -521,7 +523,7 @@ void main() {
     });
 
     test('zebraDeviceModelFromJson should parse single device', () {
-      final jsonString = '''
+      const jsonString = '''
       {
         "ipAddress": "192.168.1.100",
         "name": "Test Printer",

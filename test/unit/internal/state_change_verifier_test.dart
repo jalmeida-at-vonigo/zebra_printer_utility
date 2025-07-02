@@ -3,7 +3,6 @@ import 'package:flutter/widgets.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/zebra_printer.dart';
-import 'dart:async';
 
 class MockPrinter extends ZebraPrinter {
   List<String> sentCommands = [];
@@ -61,7 +60,7 @@ void main() {
         checkState: () async => ++state,
         isStateValid: (s) => s == 2,
         maxAttempts: 3,
-        checkDelay: Duration(milliseconds: 1),
+        checkDelay: const Duration(milliseconds: 1),
       );
       expect(result.success, isTrue);
       expect(result.data, equals(2));
@@ -88,7 +87,7 @@ void main() {
         checkState: () async => 0,
         isStateValid: (s) => s == 1,
         maxAttempts: 2,
-        checkDelay: Duration(milliseconds: 1),
+        checkDelay: const Duration(milliseconds: 1),
       );
       expect(result.success, isFalse);
       expect(result.error, isNotNull);
@@ -134,7 +133,7 @@ void main() {
       final result = await verifier.executeWithDelay(
         operationName: 'Delay',
         command: 'CMD',
-        delay: Duration(milliseconds: 1),
+        delay: const Duration(milliseconds: 1),
       );
       expect(result.success, isTrue);
     });
@@ -144,7 +143,7 @@ void main() {
       final result = await verifier.executeWithDelay(
         operationName: 'Delay',
         command: 'CMD',
-        delay: Duration(milliseconds: 1),
+        delay: const Duration(milliseconds: 1),
       );
       expect(result.success, isFalse);
     });
@@ -164,7 +163,7 @@ void main() {
           },
           isStateValid: (s) => s == 3,
           maxAttempts: 3,
-          checkDelay: Duration(milliseconds: 50),
+          checkDelay: const Duration(milliseconds: 50),
         );
         
         stopwatch.stop();
@@ -183,7 +182,7 @@ void main() {
           checkState: () async => false,
           isStateValid: (s) => s == true,
           maxAttempts: 1,
-          checkDelay: Duration(milliseconds: 1),
+          checkDelay: const Duration(milliseconds: 1),
           errorCode: 'CUSTOM_ERROR',
         );
         
@@ -196,7 +195,7 @@ void main() {
         final result = await verifier.executeWithDelay(
           operationName: 'Test',
           command: 'CMD',
-          delay: Duration(milliseconds: 1),
+          delay: const Duration(milliseconds: 1),
         );
         
         expect(result.success, isFalse);
@@ -270,7 +269,7 @@ void main() {
           },
           validator: (s) => s == 'complete',
           maxAttempts: 5,
-          checkDelay: Duration(milliseconds: 1),
+          checkDelay: const Duration(milliseconds: 1),
         );
         
         expect(result.success, isTrue);
@@ -296,7 +295,7 @@ void main() {
           },
           isStateValid: (s) => s == 'complete',
           maxAttempts: 5,
-          checkDelay: Duration(milliseconds: 1),
+          checkDelay: const Duration(milliseconds: 1),
         );
         
         expect(result.success, isTrue);
@@ -311,7 +310,7 @@ void main() {
           return verifier.executeWithDelay(
             operationName: 'Concurrent$index',
             command: 'CMD$index',
-            delay: Duration(milliseconds: 10),
+            delay: const Duration(milliseconds: 10),
           );
         });
         
