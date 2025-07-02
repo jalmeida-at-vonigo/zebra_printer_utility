@@ -49,26 +49,25 @@ await printer.print('! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPR
 
 ## Documentation
 
-### 📚 [Example App](.readme/example/README.md)
-Complete working example with multiple screens demonstrating all features.
+### 🔌 API Reference
+- **[API Documentation](.readme/api/README.md)** - Complete API reference
+- **[Printing Formats](.readme/guides/printing-formats.md)** - ZPL and CPCL guide
 
-### 🧪 [Testing Guide](.readme/example/testing-guide.md)
-Comprehensive guide for testing the plugin on real devices and simulators.
+### 📱 Platform Guides
+- **[iOS Platform](.readme/platforms/ios/README.md)** - iOS setup and implementation
+  - [Setup Guide](.readme/platforms/ios/setup.md)
+  - [Architecture](.readme/platforms/ios/architecture.md)
+- **[Android Platform](.readme/platforms/android/README.md)** - Android status and limitations
 
-### 📱 [iOS Implementation](.readme/ios/README.md)
-Details about iOS-specific implementation and requirements.
+### 📚 Guides & Examples
+- **[Example App](.readme/guides/example-app.md)** - Complete working example
+- **[Testing Guide](.readme/guides/testing.md)** - Testing on devices and simulators
 
-### 🔧 [iOS ZSDK Integration Requirements](.readme/ios/zsdk-integration-requirements.md)
-Technical details about iOS ZSDK integration and build requirements.
-
-### 📦 [Library Documentation](.readme/lib/README.md)
-Complete API reference and usage examples.
-
-### 🖨️ [CPCL Printing Solution](.readme/lib/cpcl-printing-solution.md)
-Guide for CPCL printing implementation and examples.
-
-### 📋 [Future Improvements](.readme/development/TODO.md)
-Planned features and improvements for the plugin.
+### 🔧 Development
+- **[Development Docs](.readme/development/README.md)** - For contributors
+- **[Future Improvements](.readme/development/TODO.md)** - Roadmap
+- **[Architecture Changes](.readme/development/ARCHITECTURE_IMPROVEMENTS.md)** - Recent improvements
+- **[Changelog](.readme/development/CHANGELOG.md)** - Version history
 
 ## Platform Support
 

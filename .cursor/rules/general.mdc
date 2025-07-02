@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# README.md
+
+- ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevante details
+- The docs are about:
+    - Usability of the API
+    - Standards about the development and architeture, and
