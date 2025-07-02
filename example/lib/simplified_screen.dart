@@ -3,37 +3,33 @@ import 'package:flutter/material.dart';
 import 'package:zebrautil/zebra_util.dart';
 import 'bt_printer_selector.dart';
 
-class LegacyScreen extends StatefulWidget {
-  const LegacyScreen({super.key});
+enum PrintMode { cpcl, zpl, auto }
+
+class SimplifiedScreen extends StatefulWidget {
+  const SimplifiedScreen({super.key});
 
   @override
-  State<LegacyScreen> createState() => _LegacyScreenState();
+  State<SimplifiedScreen> createState() => _SimplifiedScreenState();
 }
 
-class _LegacyScreenState extends State<LegacyScreen> {
+class _SimplifiedScreenState extends State<SimplifiedScreen> {
   ZebraDevice? _selectedDevice;
   bool _isConnected = false;
-  String _status = '';
+  String _status = 'Not connected';
   bool _isPrinting = false;
-  bool _useZPL = true; // Toggle between ZPL and CPCL
+  PrintMode _printMode = PrintMode.zpl;
   late TextEditingController _labelController;
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
 
   final String defaultZPL = """^XA
-^FO50,50^A0N,50,50^FDZebra Test Print^FS
-^FO50,150^A0N,30,30^FDConnection Successful!^FS
-^FO50,200^A0N,25,25^FDPrinter Connected^FS
-^FO50,250^A0N,25,25^FDTime: ${DateTime.now()}^FS
-^FO50,350^BY3^BCN,100,Y,N,N^FD123456789^FS
+^FO50,50^A0N,50,50^FDHello from Flutter!^FS
+^FO50,100^BY2^BCN,100,Y,N,N^FD123456789^FS
 ^XZ""";
 
-  final String defaultCPCL = """! 0 200 200 600 1
-TEXT 4 0 30 40 Hello World
-TEXT 4 0 30 100 CPCL Test Print
-TEXT 4 0 30 160 Connection Successful!
-TEXT 4 0 30 220 Time: ${DateTime.now().toString()}
-BARCODE 128 1 1 50 30 350 123456789
+  final String defaultCPCL = """! 0 200 200 400 1
+TEXT 4 0 30 40 Hello from Flutter!
+BARCODE 128 1 1 50 30 100 123456789
 FORM
 PRINT
 """;
@@ -81,11 +77,16 @@ PRINT
     }
   }
 
-  void _onFormatChanged(bool useZPL) {
+  void _onPrintModeChanged(PrintMode mode) {
     if (mounted) {
       setState(() {
-        _useZPL = useZPL;
-        _labelController.text = useZPL ? defaultZPL : defaultCPCL;
+        _printMode = mode;
+        if (mode == PrintMode.zpl) {
+          _labelController.text = defaultZPL;
+        } else if (mode == PrintMode.cpcl) {
+          _labelController.text = defaultCPCL;
+        }
+        // For Auto mode, keep current text
       });
     }
   }
@@ -95,7 +96,15 @@ PRINT
     if (mounted) {
       setState(() => _isPrinting = true);
     }
-    final format = _useZPL ? PrintFormat.ZPL : PrintFormat.CPCL;
+
+    PrintFormat? format;
+    if (_printMode == PrintMode.zpl) {
+      format = PrintFormat.ZPL;
+    } else if (_printMode == PrintMode.cpcl) {
+      format = PrintFormat.CPCL;
+    }
+    // For Auto mode, format is null (auto-detected)
+
     final success = await Zebra.print(_labelController.text, format: format);
     if (mounted) {
       setState(() {
@@ -114,7 +123,7 @@ PRINT
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Legacy API (ZPL/CPCL)',
+              'Simplified Printer Demo',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
@@ -132,13 +141,15 @@ PRINT
               children: [
                 const Text('Format:',
                     style: TextStyle(fontWeight: FontWeight.bold)),
-                SegmentedButton<bool>(
+                SegmentedButton<PrintMode>(
                   segments: const [
-                    ButtonSegment(value: true, label: Text('ZPL')),
-                    ButtonSegment(value: false, label: Text('CPCL')),
+                    ButtonSegment(value: PrintMode.cpcl, label: Text('CPCL')),
+                    ButtonSegment(value: PrintMode.zpl, label: Text('ZPL')),
+                    ButtonSegment(value: PrintMode.auto, label: Text('Auto')),
                   ],
-                  selected: {_useZPL},
-                  onSelectionChanged: (value) => _onFormatChanged(value.first),
+                  selected: {_printMode},
+                  onSelectionChanged: (value) =>
+                      _onPrintModeChanged(value.first),
                 ),
               ],
             ),

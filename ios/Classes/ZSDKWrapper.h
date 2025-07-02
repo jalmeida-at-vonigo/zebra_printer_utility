@@ -36,6 +36,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)getSetting:(NSString *)setting fromConnection:(id)connection;
 + (BOOL)setSetting:(NSString *)setting value:(NSString *)value onConnection:(id)connection;
 
+// Add printer language detection
++ (NSString *)getPrinterLanguage:(id)connection;
++ (id)getPrinterInstance:(id)connection;
++ (BOOL)setPrinterLanguage:(NSString *)language onConnection:(id)connection;
+
 @end
 
 NS_ASSUME_NONNULL_END

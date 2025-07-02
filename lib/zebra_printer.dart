@@ -102,6 +102,14 @@ class ZebraPrinter {
     _setSettings(Command.mediaType, mediaType);
   }
 
+  void sendCommand(String command) {
+    try {
+      channel.invokeMethod("setSettings", {"SettingCommand": command});
+    } on PlatformException catch (e) {
+      if (onDiscoveryError != null) onDiscoveryError!(e.code, e.message);
+    }
+  }
+
   Future<void> connectToPrinter(String address) async {
     if (controller.selectedAddress != null) {
       await disconnect();

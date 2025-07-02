@@ -57,13 +57,13 @@ class ZebraPrinterInstance: NSObject {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "Address is required", details: nil))
             }
             
-        case "print":
-            if let args = call.arguments as? [String: Any],
-               let data = args["Data"] as? String {
-                printData(data: data, result: result)
-            } else {
-                result(FlutterError(code: "INVALID_ARGUMENT", message: "Data is required", details: nil))
-            }
+                    case "print":
+                if let args = call.arguments as? [String: Any],
+                   let data = args["Data"] as? String {
+                    printData(data: data, result: result)
+                } else {
+                    result(FlutterError(code: "INVALID_ARGUMENT", message: "Data is required", details: nil))
+                }
             
         case "disconnect":
             disconnect(result: result)
@@ -286,44 +286,92 @@ class ZebraPrinterInstance: NSObject {
             // Update status to sending
             DispatchQueue.main.async {
                 self.channel.invokeMethod("changePrinterStatus", arguments: [
+                    "Status": "Checking printer language...",
+                    "Color": "Y"
+                ])
+            }
+            
+            // Check printer language
+            let language = ZSDKWrapper.getPrinterLanguage(connection)
+            LogUtil.info("Detected printer language: \(language)")
+            
+            // Ensure printer is in the correct mode
+            if language == "UNKNOWN" {
+                // Try to set ZPL mode if language detection failed
+                LogUtil.warn("Could not detect printer language, attempting to set ZPL mode")
+                _ = ZSDKWrapper.setPrinterLanguage("zpl", onConnection: connection)
+                Thread.sleep(forTimeInterval: 0.5)
+            } else if data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("! 0") ||
+                      data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("! U1") {
+                // CPCL data detected, ensure printer is in CPCL mode
+                if language != "CPCL" {
+                    LogUtil.info("CPCL data detected, switching printer to CPCL mode")
+                    _ = ZSDKWrapper.setPrinterLanguage("cpcl", onConnection: connection)
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+            } else if data.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("^XA") {
+                // ZPL data detected, ensure printer is in ZPL mode
+                if language != "ZPL" {
+                    LogUtil.info("ZPL data detected, switching printer to ZPL mode")
+                    _ = ZSDKWrapper.setPrinterLanguage("zpl", onConnection: connection)
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+            }
+            
+            // Update status
+            DispatchQueue.main.async {
+                self.channel.invokeMethod("changePrinterStatus", arguments: [
                     "Status": "Sending Data",
                     "Color": "Y"
                 ])
             }
             
             if let dataBytes = data.data(using: .utf8) {
-                let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
-                
-                // Sleep for 1 second to match shashwatxx behavior
-                Thread.sleep(forTimeInterval: 1)
-                
-                DispatchQueue.main.async {
+                do {
+                    let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
+                    
+                    // Sleep for 1 second to match shashwatxx behavior
+                    Thread.sleep(forTimeInterval: 1)
+                    
                     if success {
                         // Send success callback
-                        self.channel.invokeMethod("onPrintComplete", arguments: nil)
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Done",
-                            "Color": "G"
-                        ])
-                        result(nil)
+                        DispatchQueue.main.async {
+                            self.channel.invokeMethod("onPrintComplete", arguments: nil)
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Done",
+                                "Color": "G"
+                            ])
+                            result(nil)
+                        }
                     } else {
-                        // Send error callback
+                        let errorMsg = "Failed to send data to printer"
+                        DispatchQueue.main.async {
+                            self.channel.invokeMethod("onPrintError", arguments: [
+                                "ErrorText": errorMsg
+                            ])
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Print Error: \(errorMsg)",
+                                "Color": "R"
+                            ])
+                            result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                        }
+                    }
+                } catch {
+                    let errorMsg = "Exception during print: \(error.localizedDescription)"
+                    DispatchQueue.main.async {
                         self.channel.invokeMethod("onPrintError", arguments: [
-                            "ErrorText": "Failed to send data to printer"
+                            "ErrorText": errorMsg
                         ])
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Print Error: Failed to send data to printer",
-                            "Color": "R"
-                        ])
-                        result(FlutterError(code: "PRINT_ERROR", message: "Failed to print data", details: nil))
+                        result(FlutterError(code: "PRINT_EXCEPTION", message: errorMsg, details: nil))
                     }
                 }
             } else {
+                let errorMsg = "Invalid data encoding"
                 DispatchQueue.main.async {
                     self.channel.invokeMethod("onPrintError", arguments: [
-                        "ErrorText": "Invalid data encoding"
+                        "ErrorText": errorMsg
                     ])
-                    result(FlutterError(code: "PRINT_ERROR", message: "Invalid data encoding", details: nil))
+                    result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
                 }
             }
         }

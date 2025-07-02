@@ -202,6 +202,57 @@
     }
 }
 
++ (NSString *)getPrinterLanguage:(id)connection {
+    if (!connection) return @"UNKNOWN";
+    
+    @try {
+        id<ZebraPrinter,NSObject> printer = [ZebraPrinterFactory getInstance:connection error:nil];
+        if (printer) {
+            PrinterLanguage language = [printer getPrinterControlLanguage];
+            if (language == PRINTER_LANGUAGE_ZPL) {
+                return @"ZPL";
+            } else if (language == PRINTER_LANGUAGE_CPCL) {
+                return @"CPCL";
+            }
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"Failed to get printer language: %@", exception);
+    }
+    
+    return @"UNKNOWN";
+}
 
++ (id)getPrinterInstance:(id)connection {
+    if (!connection) return nil;
+    
+    @try {
+        NSError *error = nil;
+        id printer = [ZebraPrinterFactory getInstance:connection error:&error];
+        if (error) {
+            NSLog(@"Error getting printer instance: %@", error);
+            return nil;
+        }
+        return printer;
+    } @catch (NSException *exception) {
+        NSLog(@"Exception getting printer instance: %@", exception);
+        return nil;
+    }
+}
+
++ (BOOL)setPrinterLanguage:(NSString *)language onConnection:(id)connection {
+    if (!connection || !language) return NO;
+    
+    @try {
+        // Use SGD to set the printer language
+        // device.languages can be set to "zpl", "cpcl", or "line_print"
+        NSString *languageValue = [language lowercaseString];
+        
+        NSError *error = nil;
+        return [SGD SET:@"device.languages" withValue:languageValue andWithPrinterConnection:connection error:&error];
+    } @catch (NSException *exception) {
+        NSLog(@"Failed to set printer language: %@", exception);
+        return NO;
+    }
+}
 
 @end 

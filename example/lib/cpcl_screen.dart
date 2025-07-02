@@ -3,45 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:zebrautil/zebra_util.dart';
 import 'bt_printer_selector.dart';
 
-class LegacyScreen extends StatefulWidget {
-  const LegacyScreen({super.key});
+class CPCLScreen extends StatefulWidget {
+  const CPCLScreen({super.key});
 
   @override
-  State<LegacyScreen> createState() => _LegacyScreenState();
+  State<CPCLScreen> createState() => _CPCLScreenState();
 }
 
-class _LegacyScreenState extends State<LegacyScreen> {
+class _CPCLScreenState extends State<CPCLScreen> {
   ZebraDevice? _selectedDevice;
   bool _isConnected = false;
-  String _status = '';
+  String _status = 'Not connected';
   bool _isPrinting = false;
-  bool _useZPL = true; // Toggle between ZPL and CPCL
-  late TextEditingController _labelController;
+  late TextEditingController _cpclController;
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
 
-  final String defaultZPL = """^XA
-^FO50,50^A0N,50,50^FDZebra Test Print^FS
-^FO50,150^A0N,30,30^FDConnection Successful!^FS
-^FO50,200^A0N,25,25^FDPrinter Connected^FS
-^FO50,250^A0N,25,25^FDTime: ${DateTime.now()}^FS
-^FO50,350^BY3^BCN,100,Y,N,N^FD123456789^FS
-^XZ""";
-
-  final String defaultCPCL = """! 0 200 200 600 1
-TEXT 4 0 30 40 Hello World
-TEXT 4 0 30 100 CPCL Test Print
-TEXT 4 0 30 160 Connection Successful!
-TEXT 4 0 30 220 Time: ${DateTime.now().toString()}
-BARCODE 128 1 1 50 30 350 123456789
-FORM
+  final String defaultCPCL = """! 0 200 200 210 1
+TEXT 0 0 10 10 Hello World
 PRINT
 """;
 
   @override
   void initState() {
     super.initState();
-    _labelController = TextEditingController(text: defaultZPL);
+    _cpclController = TextEditingController(text: defaultCPCL);
     _statusSubscription = Zebra.status.listen((status) {
       if (mounted) {
         setState(() => _status = status);
@@ -59,7 +45,7 @@ PRINT
   void dispose() {
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
-    _labelController.dispose();
+    _cpclController.dispose();
     super.dispose();
   }
 
@@ -81,22 +67,13 @@ PRINT
     }
   }
 
-  void _onFormatChanged(bool useZPL) {
-    if (mounted) {
-      setState(() {
-        _useZPL = useZPL;
-        _labelController.text = useZPL ? defaultZPL : defaultCPCL;
-      });
-    }
-  }
-
   Future<void> _print() async {
     if (!_isConnected || _selectedDevice == null) return;
     if (mounted) {
       setState(() => _isPrinting = true);
     }
-    final format = _useZPL ? PrintFormat.ZPL : PrintFormat.CPCL;
-    final success = await Zebra.print(_labelController.text, format: format);
+    final success =
+        await Zebra.print(_cpclController.text, format: PrintFormat.CPCL);
     if (mounted) {
       setState(() {
         _isPrinting = false;
@@ -114,7 +91,7 @@ PRINT
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Legacy API (ZPL/CPCL)',
+              'CPCL Print (Bluetooth)',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
@@ -127,34 +104,18 @@ PRINT
               status: _status,
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Format:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: true, label: Text('ZPL')),
-                    ButtonSegment(value: false, label: Text('CPCL')),
-                  ],
-                  selected: {_useZPL},
-                  onSelectionChanged: (value) => _onFormatChanged(value.first),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text('Label Data:',
+            const Text('CPCL Data:',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Expanded(
               child: TextField(
-                controller: _labelController,
+                controller: _cpclController,
                 maxLines: null,
                 expands: true,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
-                  hintText: 'Enter label data here',
+                  hintText: 'Enter CPCL commands here',
                 ),
               ),
             ),

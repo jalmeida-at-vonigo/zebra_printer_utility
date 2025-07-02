@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'cpcl_screen.dart';
 import 'legacy_screen.dart';
-import 'new_api_screen.dart';
+import 'simplified_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,38 +14,69 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Zebra Printer Demo',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: const MainTabs(),
+      home: const HomeScreen(),
     );
   }
 }
 
-class MainTabs extends StatelessWidget {
-  const MainTabs({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Zebra Printer Demo'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Legacy API', icon: Icon(Icons.history)),
-              Tab(text: 'New API', icon: Icon(Icons.auto_awesome)),
-            ],
-          ),
-        ),
-        body: const TabBarView(
-          children: [
-            LegacyPrinterScreen(),
-            NewApiScreen(),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Zebra Printer Demo'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.print),
+              text: 'CPCL Test',
+            ),
+            Tab(
+              icon: Icon(Icons.settings),
+              text: 'Legacy',
+            ),
+            Tab(
+              icon: Icon(Icons.dashboard),
+              text: 'Simplified',
+            ),
           ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: const [
+          CPCLScreen(),
+          LegacyScreen(),
+          SimplifiedScreen(),
+        ],
       ),
     );
   }
