@@ -124,6 +124,22 @@
 - Better error message extraction from printer status
 - Safer parsing that never throws exceptions
 
+## 2.1.1
+- **New Feature**: Added `StateChangeVerifier` utility for operations without callbacks
+  - Intelligently verifies state changes instead of using fixed delays
+  - Checks if state is already correct before sending commands (no-op optimization)
+  - Retries up to 3 times with configurable delays
+  - Provides better error messages when operations fail
+- **Improvements**: 
+  - Added `getSetting()` method to ZebraPrinter for reading printer settings
+  - Added `setPrinterMode()` example showing verified mode switching
+  - Updated AutoCorrector to use StateChangeVerifier for more reliable corrections
+- **Examples**: Operations that benefit from StateChangeVerifier:
+  - Mode switching (ZPL/CPCL)
+  - Pause/unpause operations
+  - Calibration verification
+  - Any SGD setting changes
+
 ## 2.1.0
 - **Major Architecture Improvement**: Implemented callback-based operations framework
   - All native operations now use real callbacks instead of artificial delays

@@ -6,6 +6,11 @@ import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/models/print_enums.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
+import 'package:zebrautil/internal/state_change_verifier.dart';
+import 'zebra_sgd_commands.dart';
+
+/// Printer language modes
+enum PrinterMode { zpl, cpcl }
 
 class ZebraPrinter {
   late MethodChannel channel;
@@ -492,6 +497,21 @@ class ZebraPrinter {
     }
   }
 
+  /// Get a printer setting value using SGD commands
+  /// Returns null if the setting cannot be retrieved
+  Future<String?> getSetting(String setting) async {
+    try {
+      final value = await _operationManager.execute<String>(
+        method: 'getSetting',
+        arguments: {'setting': setting},
+        timeout: const Duration(seconds: 5),
+      );
+      return value.isNotEmpty ? value : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> nativeMethodCallHandler(MethodCall methodCall) async {
     // First try to handle through the callback handler
     await _callbackHandler.handleMethodCall(methodCall);
@@ -505,6 +525,35 @@ class ZebraPrinter {
         });
       }
     }
+  }
+
+  /// Switch printer mode with verification
+  /// This is an example of using StateChangeVerifier for operations without callbacks
+  Future<Result<void>> setPrinterMode(PrinterMode mode) async {
+    final verifier = StateChangeVerifier(
+      printer: this,
+      logCallback: (msg) => debugPrint(msg),
+    );
+
+    final command = mode == PrinterMode.zpl
+        ? ZebraSGDCommands.setZPLMode()
+        : ZebraSGDCommands.setCPCLMode();
+
+    final desiredValue = mode == PrinterMode.zpl ? 'zpl' : 'line_print';
+
+    final result = await verifier.setStringState(
+      operationName: 'Set printer mode to ${mode.name}',
+      command: command,
+      getSetting: () => getSetting('device.languages'),
+      validator: (value) =>
+          value?.toLowerCase().contains(desiredValue) ?? false,
+      checkDelay: const Duration(milliseconds: 300),
+      maxAttempts: 3,
+    );
+
+    return result.success
+        ? Result.success()
+        : Result.error(result.error?.message ?? 'Failed to set printer mode');
   }
 
   /// Dispose the printer instance and clean up resources

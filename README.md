@@ -77,6 +77,27 @@ This architecture provides:
 - **Performance**: Operations complete as fast as the hardware allows
 - **Debugging**: Clear operation tracking with IDs for better error diagnosis
 
+### State Change Verification (v2.1.1+)
+
+For operations that don't provide native callbacks (like mode switching, calibration, settings changes), the plugin includes a `StateChangeVerifier` utility:
+
+```dart
+// Example: Switch printer mode with verification
+final result = await printer.setPrinterMode(PrinterMode.zpl);
+
+// The verifier will:
+// 1. Check if already in ZPL mode (no-op if true)
+// 2. Send the mode change command if needed
+// 3. Poll up to 3 times to verify the change
+// 4. Return success or detailed error
+```
+
+Benefits:
+- **No Guesswork**: Verifies operations actually completed instead of hoping delays are sufficient
+- **Faster**: Operations complete as soon as verified, not after fixed delays
+- **Smarter**: Skips operations if already in desired state
+- **Reliable**: Retries with exponential backoff if needed
+
 ## What's New in v2.0
 
 - **[Configurable Auto-Correction](.readme/architecture/auto-correction-v2.md)**: Fine-grained control over automatic issue resolution

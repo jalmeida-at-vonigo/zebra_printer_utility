@@ -5,6 +5,12 @@
 /// and printing operations for both ZPL and CPCL formats.
 library zebrautil;
 
+// Main API exports
+export 'zebra.dart';
+export 'zebra_printer.dart';
+export 'zebra_printer_service.dart';
+export 'zebra_sgd_commands.dart';
+
 // Model exports
 export 'models/zebra_device.dart';
 export 'models/result.dart';
@@ -12,13 +18,8 @@ export 'models/printer_readiness.dart';
 export 'models/print_enums.dart';
 export 'models/auto_correction_options.dart';
 
-// Service and utility exports
-export 'zebra.dart';
-export 'zebra_printer.dart';
-export 'zebra_printer_service.dart';
-export 'zebra_sgd_commands.dart';
-
-// Internal framework exports (not for public use)
+// Internal framework exports (advanced usage)
+export 'internal/state_change_verifier.dart' show StateChangeVerifier;
 // These are exported for internal plugin use only
 export 'internal/native_operation.dart' hide NativeOperation;
 export 'internal/operation_manager.dart' hide OperationManager;

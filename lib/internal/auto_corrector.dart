@@ -4,32 +4,35 @@ import '../models/result.dart';
 import '../zebra_printer.dart';
 import '../zebra_sgd_commands.dart';
 import 'parser_util.dart';
+import 'state_change_verifier.dart';
 
-/// Internal class that handles automatic printer issue correction
+/// Handles automatic correction of common printer issues
 class AutoCorrector {
   final ZebraPrinter _printer;
   final AutoCorrectionOptions _options;
-  final void Function(String)? _statusCallback;
+  final Function(String)? _statusCallback;
+  late final StateChangeVerifier _stateVerifier;
 
   AutoCorrector({
     required ZebraPrinter printer,
     required AutoCorrectionOptions options,
-    void Function(String)? statusCallback,
+    Function(String)? statusCallback,
   })  : _printer = printer,
         _options = options,
-        _statusCallback = statusCallback;
+        _statusCallback = statusCallback {
+    _stateVerifier = StateChangeVerifier(
+      printer: _printer,
+      logCallback: _log,
+    );
+  }
 
-  /// Attempt to correct printer issues based on readiness state
+  void _log(String message) {
+    _statusCallback?.call(message);
+  }
+
+  /// Attempt to correct printer issues based on readiness status
   Future<Result<CorrectionResult>> attemptCorrection(
       PrinterReadiness readiness) async {
-    if (!_options.hasAnyEnabled) {
-      return Result.success(CorrectionResult(
-        correctionsMade: false,
-        actions: [],
-        message: 'Auto-correction is disabled',
-      ));
-    }
-
     final actions = <String>[];
     bool anySuccess = false;
 
@@ -40,11 +43,12 @@ class AutoCorrector {
         _log('Printer is paused, attempting to unpause...');
 
         final unpauseResult = await _unpausePrinter();
-        if (unpauseResult) {
+        if (unpauseResult.success) {
           actions.add('Unpaused printer');
           anySuccess = true;
         } else {
-          actions.add('Failed to unpause printer');
+          actions.add(
+              'Failed to unpause printer: ${unpauseResult.error?.message}');
         }
       }
 
@@ -55,11 +59,11 @@ class AutoCorrector {
         _log('Clearing printer errors...');
 
         final clearResult = await _clearErrors();
-        if (clearResult) {
+        if (clearResult.success) {
           actions.add('Cleared printer errors');
           anySuccess = true;
         } else {
-          actions.add('Failed to clear errors');
+          actions.add('Failed to clear errors: ${clearResult.error?.message}');
         }
       }
 
@@ -70,20 +74,15 @@ class AutoCorrector {
         _log('Media detection issue, attempting calibration...');
 
         final calibrateResult = await _calibratePrinter();
-        if (calibrateResult) {
+        if (calibrateResult.success) {
           actions.add('Calibrated printer');
           anySuccess = true;
         } else {
-          actions.add('Failed to calibrate');
+          actions.add('Failed to calibrate: ${calibrateResult.error?.message}');
         }
       }
 
       // Language switching would be done at print time, not here
-
-      if (anySuccess) {
-        // Wait for corrections to take effect
-        await Future.delayed(Duration(milliseconds: _options.attemptDelayMs));
-      }
 
       return Result.success(CorrectionResult(
         correctionsMade: anySuccess,
@@ -102,42 +101,44 @@ class AutoCorrector {
   }
 
   /// Attempt to unpause the printer
-  Future<bool> _unpausePrinter() async {
-    try {
-      // Use SGD command to unpause (works in any mode)
-      _printer.sendCommand(ZebraSGDCommands.unpausePrinter());
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      return true;
-    } catch (e) {
-      _log('Failed to unpause: $e');
-      return false;
-    }
+  Future<Result<bool>> _unpausePrinter() async {
+    return await _stateVerifier.setBooleanState(
+      operationName: 'Unpause printer',
+      command: ZebraSGDCommands.unpausePrinter(),
+      getSetting: () => _printer.getSetting('device.pause'),
+      desiredState: false, // false = not paused
+      checkDelay: const Duration(milliseconds: 200),
+      maxAttempts: 3,
+    );
   }
 
   /// Clear printer errors
-  Future<bool> _clearErrors() async {
-    try {
-      _printer.sendCommand(ZebraSGDCommands.clearAlerts());
-      await Future.delayed(const Duration(milliseconds: 200));
-      return true;
-    } catch (e) {
-      _log('Failed to clear errors: $e');
-      return false;
-    }
+  Future<Result<bool>> _clearErrors() async {
+    // Clear errors is a fire-and-forget command with no verifiable state
+    final result = await _stateVerifier.executeWithDelay(
+      operationName: 'Clear errors',
+      command: ZebraSGDCommands.clearAlerts(),
+      delay: const Duration(milliseconds: 200),
+    );
+
+    return result.success
+        ? Result.success(true)
+        : Result.error(result.error?.message ?? 'Failed to clear errors');
   }
 
   /// Calibrate the printer
-  Future<bool> _calibratePrinter() async {
-    try {
-      _printer.calibratePrinter();
-      await Future.delayed(
-          const Duration(milliseconds: 1000)); // Calibration takes longer
-      return true;
-    } catch (e) {
-      _log('Failed to calibrate: $e');
-      return false;
-    }
+  Future<Result<bool>> _calibratePrinter() async {
+    // Calibration takes longer and we can't easily verify completion
+    // TODO: Could potentially verify by checking media.status after calibration
+    final result = await _stateVerifier.executeWithDelay(
+      operationName: 'Calibrate printer',
+      command: '~jc^xa^jus^xz',
+      delay: const Duration(milliseconds: 1000), // Calibration takes longer
+    );
+
+    return result.success
+        ? Result.success(true)
+        : Result.error(result.error?.message ?? 'Failed to calibrate');
   }
 
   /// Attempt to switch printer language based on data format
@@ -148,22 +149,17 @@ class AutoCorrector {
       final detectedLanguage = ZebraSGDCommands.detectDataLanguage(data);
       if (detectedLanguage == null) return true; // Can't detect, assume OK
 
-      // Get current language
-      final currentLanguageResult = await _printer.isPrinterConnected();
-      if (!currentLanguageResult) return false;
-
-      // For now, we'll assume the printer accepts the data
-      // In a full implementation, we'd query the current language and switch if needed
+      // TODO: Implement language switching with state verification
+      // This would need:
+      // 1. Get current language via getSetting
+      // 2. Switch if needed using stateVerifier.setStringState
+      // 3. Verify the switch worked
 
       return true;
     } catch (e) {
       _log('Failed to check/switch language: $e');
       return false;
     }
-  }
-
-  void _log(String message) {
-    _statusCallback?.call(message);
   }
 }
 
