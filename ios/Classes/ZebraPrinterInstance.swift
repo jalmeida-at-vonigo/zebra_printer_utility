@@ -147,12 +147,12 @@ class ZebraPrinterInstance: NSObject {
             for printerInfo in btPrinters {
                 if let info = printerInfo as? [String: Any] {
                     DispatchQueue.main.async {
-                        self.channel.invokeMethod("printerFound", arguments: [
-                            "Address": info["address"] ?? "",
-                            "Name": info["name"] ?? "Unknown Printer",
-                            "Status": "Found",
-                            "IsWifi": "false"
-                        ])
+                    self.channel.invokeMethod("printerFound", arguments: [
+                        "Address": info["address"] ?? "",
+                        "Name": info["name"] ?? "Unknown Printer",
+                        "Status": "Found",
+                        "IsWifi": "false"
+                    ])
                     }
                 }
             }
@@ -187,12 +187,12 @@ class ZebraPrinterInstance: NSObject {
                 for printerInfo in networkPrinters {
                     if let info = printerInfo as? [String: Any] {
                         DispatchQueue.main.async {
-                            self.channel.invokeMethod("printerFound", arguments: [
-                                "Address": info["address"] ?? "",
-                                "Name": info["name"] ?? "Unknown Printer",
-                                "Status": "Found",
-                                "IsWifi": "true"
-                            ])
+                        self.channel.invokeMethod("printerFound", arguments: [
+                            "Address": info["address"] ?? "",
+                            "Name": info["name"] ?? "Unknown Printer",
+                            "Status": "Found",
+                            "IsWifi": "true"
+                        ])
                         }
                     }
                 }
@@ -313,29 +313,29 @@ class ZebraPrinterInstance: NSObject {
             }
             
             if let dataBytes = data.data(using: .utf8) {
-                let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
-                
-                if success {
+                    let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
+                    
+                    if success {
                     // Send success callback immediately - no artificial delay
-                    DispatchQueue.main.async {
-                        self.channel.invokeMethod("onPrintComplete", arguments: nil)
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Done",
-                            "Color": "G"
-                        ])
-                        result(nil)
-                    }
-                } else {
-                    let errorMsg = "Failed to send data to printer"
-                    DispatchQueue.main.async {
-                        self.channel.invokeMethod("onPrintError", arguments: [
-                            "ErrorText": errorMsg
-                        ])
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
-                            "Status": "Print Error: \(errorMsg)",
-                            "Color": "R"
-                        ])
-                        result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                        DispatchQueue.main.async {
+                            self.channel.invokeMethod("onPrintComplete", arguments: nil)
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Done",
+                                "Color": "G"
+                            ])
+                            result(nil)
+                        }
+                    } else {
+                        let errorMsg = "Failed to send data to printer"
+                        DispatchQueue.main.async {
+                            self.channel.invokeMethod("onPrintError", arguments: [
+                                "ErrorText": errorMsg
+                            ])
+                            self.channel.invokeMethod("changePrinterStatus", arguments: [
+                                "Status": "Print Error: \(errorMsg)",
+                                "Color": "R"
+                            ])
+                            result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
                     }
                 }
             } else {

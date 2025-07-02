@@ -108,7 +108,7 @@ PRINT
       setState(() => _isPrinting = true);
     }
     final result =
-        await Zebra.print(_cpclController.text, format: PrintFormat.CPCL);
+        await Zebra.print(_cpclController.text, format: PrintFormat.cpcl);
     if (mounted) {
       setState(() {
         _isPrinting = false;

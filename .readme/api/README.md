@@ -133,7 +133,7 @@ await service.initialize();
 // Auto-print to paired printer
 final result = await service.autoPrint(
   '^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ',
-  format: PrintFormat.ZPL,
+  format: PrintFormat.zpl,
 );
 
 if (result.success) {

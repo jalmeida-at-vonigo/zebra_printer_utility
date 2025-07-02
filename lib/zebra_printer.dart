@@ -18,7 +18,7 @@ class ZebraPrinter {
       {this.onDiscoveryError,
       this.onPermissionDenied,
       ZebraController? controller}) {
-    channel = MethodChannel('ZebraPrinterObject' + id);
+    channel = MethodChannel('ZebraPrinterObject$id');
     channel.setMethodCallHandler(nativeMethodCallHandler);
     this.controller = controller ?? ZebraController();
   }
@@ -46,16 +46,16 @@ class ZebraPrinter {
     String command = "";
     switch (setting) {
       case Command.mediaType:
-        if (values == EnumMediaType.BlackMark) {
+        if (values == EnumMediaType.blackMark) {
           command = '''
           ! U1 setvar "media.type" "label"
           ! U1 setvar "media.sense_mode" "bar"
           ''';
-        } else if (values == EnumMediaType.Journal) {
+        } else if (values == EnumMediaType.journal) {
           command = '''
           ! U1 setvar "media.type" "journal"
           ''';
-        } else if (values == EnumMediaType.Label) {
+        } else if (values == EnumMediaType.label) {
           command = '''
           ! U1 setvar "media.type" "label"
            ! U1 setvar "media.sense_mode" "gap"
@@ -67,7 +67,7 @@ class ZebraPrinter {
         command = '''~jc^xa^jus^xz''';
         break;
       case Command.darkness:
-        command = '''! U1 setvar "print.tone" "$values"''';
+        command = '! U1 setvar "print.tone" "$values"';
         break;
     }
 
@@ -269,7 +269,7 @@ class ZebraPrinter {
   }
 
   void rotate() {
-    this.isRotated = !this.isRotated;
+    isRotated = !isRotated;
   }
 
   Future<String> _getLocateValue({required String key}) async {
@@ -311,7 +311,7 @@ class ZebraPrinter {
 
 /// Notifier for printers, contains list of printers and methods to add, remove and update printers
 class ZebraController extends ChangeNotifier {
-  List<ZebraDevice> _printers = [];
+  final List<ZebraDevice> _printers = [];
   List<ZebraDevice> get printers => List.unmodifiable(_printers);
   String? selectedAddress;
 

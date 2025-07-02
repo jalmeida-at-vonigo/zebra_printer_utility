@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:zebrautil/zebrautil.dart';
 import 'package:flutter/services.dart';
+import 'internal/parser_util.dart';
+import 'internal/auto_corrector.dart';
 /// A simplified service for Zebra printer operations.
 /// Provides a clean async/await API with proper error handling.
 class ZebraPrinterService {
@@ -285,7 +287,8 @@ class ZebraPrinterService {
       PrintFormat? format,
       int maxRetries = 3,
       bool verifyConnection = true,
-      bool disconnectAfter = true}) async {
+      bool disconnectAfter = true,
+      AutoCorrectionOptions? autoCorrectionOptions}) async {
     await _ensureInitialized();
 
     // Validate input data
@@ -473,18 +476,66 @@ class ZebraPrinterService {
         if (!readinessResult.success) {
           _statusStreamController?.add('Failed to check printer readiness');
           if (shouldDisconnect) await disconnect();
-          return readinessResult.map((_) => null);
+          return Result.error(
+            readinessResult.error?.message ??
+                'Failed to check printer readiness',
+            code: readinessResult.error?.code ?? ErrorCodes.operationError,
+          );
         }
 
         final readiness = readinessResult.data!;
         if (!readiness.isReady) {
           _statusStreamController
               ?.add('Printer not ready: ${readiness.summary}');
-          if (shouldDisconnect) await disconnect();
-          return Result.error(
-            'Printer not ready: ${readiness.summary}',
-            code: ErrorCodes.printerNotReady,
-          );
+          
+          // Attempt auto-correction for certain issues
+          final canAutoCorrect = readiness.isPaused == true ||
+              (readiness.errors.isNotEmpty && readiness.headClosed != false);
+
+          if (canAutoCorrect) {
+            _statusStreamController?.add('Attempting auto-correction...');
+            final options =
+                autoCorrectionOptions ?? AutoCorrectionOptions.safe();
+            final corrector = AutoCorrector(
+              printer: _printer!,
+              options: options,
+              statusCallback: (msg) => _statusStreamController?.add(msg),
+            );
+            final correctionResult =
+                await corrector.attemptCorrection(readiness);
+
+            if (correctionResult.success &&
+                correctionResult.data?.correctionsMade == true) {
+              // Re-check readiness after corrections
+              final recheckResult = await checkPrinterReadiness();
+              if (recheckResult.success && recheckResult.data!.isReady) {
+                _statusStreamController
+                    ?.add('Auto-correction successful, printer is now ready');
+                // Continue with printing
+              } else {
+                // Still not ready after corrections
+                if (shouldDisconnect) await disconnect();
+                return Result.error(
+                  'Printer still not ready after auto-correction: ${recheckResult.data?.summary ?? readiness.summary}',
+                  code: ErrorCodes.printerNotReady,
+                );
+              }
+            } else {
+              // Could not auto-correct
+              if (shouldDisconnect) await disconnect();
+              return Result.error(
+                'Printer not ready and auto-correction failed: ${readiness.summary}',
+                code: ErrorCodes.printerNotReady,
+              );
+            }
+          } else {
+            // Cannot auto-correct these issues
+            if (shouldDisconnect) await disconnect();
+            return Result.error(
+              'Printer not ready: ${readiness.summary}',
+              code: ErrorCodes.printerNotReady,
+            );
+          }
         }
       }
 
@@ -498,12 +549,14 @@ class ZebraPrinterService {
         await disconnect();
       }
 
-      return printed
-          ? Result.success()
-          : Result.error(
-              'Print failed after retries',
-              code: ErrorCodes.printError,
-            );
+      if (printed) {
+        return Result.success();
+      } else {
+        return Result.error(
+          'Print failed after retries',
+          code: ErrorCodes.printError,
+        );
+      }
     } catch (e, stack) {
       _statusStreamController?.add('Auto-print error: $e');
       
@@ -552,7 +605,7 @@ class ZebraPrinterService {
               ?.add('Print error: $e, retrying... (${i + 1}/$maxRetries)');
           await Future.delayed(const Duration(seconds: 1));
         } else {
-          throw e;
+          rethrow;
         }
       }
     }
@@ -611,9 +664,7 @@ class ZebraPrinterService {
         // Check media status
         readiness.mediaStatus = await _doGetSetting('media.status');
         if (readiness.mediaStatus != null) {
-          final mediaLower = readiness.mediaStatus!.toLowerCase();
-          readiness.hasMedia =
-              mediaLower.contains('ok') || mediaLower.contains('ready');
+          readiness.hasMedia = ParserUtil.hasMedia(readiness.mediaStatus);
           if (readiness.hasMedia == false) {
             readiness.warnings.add('Media not ready: ${readiness.mediaStatus}');
           }
@@ -622,9 +673,7 @@ class ZebraPrinterService {
         // Check head latch
         readiness.headStatus = await _doGetSetting('head.latch');
         if (readiness.headStatus != null) {
-          final headLower = readiness.headStatus!.toLowerCase();
-          readiness.headClosed =
-              headLower.contains('ok') || headLower.contains('closed');
+          readiness.headClosed = ParserUtil.isHeadClosed(readiness.headStatus);
           if (readiness.headClosed == false) {
             readiness.errors.add('Print head is open');
           }
@@ -633,8 +682,7 @@ class ZebraPrinterService {
         // Check pause status
         readiness.pauseStatus = await _doGetSetting('device.pause');
         if (readiness.pauseStatus != null) {
-          final pauseLower = readiness.pauseStatus!.toLowerCase();
-          readiness.isPaused = pauseLower == 'true' || pauseLower == 'on';
+          readiness.isPaused = ParserUtil.toBool(readiness.pauseStatus);
           if (readiness.isPaused == true) {
             readiness.warnings.add('Printer is paused');
           }
@@ -643,9 +691,11 @@ class ZebraPrinterService {
         // Check for errors
         readiness.hostStatus = await _doGetSetting('device.host_status');
         if (readiness.hostStatus != null) {
-          final hostLower = readiness.hostStatus!.toLowerCase();
-          if (!hostLower.contains('ok')) {
-            readiness.errors.add('Printer error: ${readiness.hostStatus}');
+          if (!ParserUtil.isStatusOk(readiness.hostStatus)) {
+            final errorMsg =
+                ParserUtil.parseErrorFromStatus(readiness.hostStatus) ??
+                    'Printer error: ${readiness.hostStatus}';
+            readiness.errors.add(errorMsg);
           }
         }
 
@@ -680,6 +730,8 @@ class ZebraPrinterService {
       );
     }
   }
+
+
 
   /// Get list of paired/discovered printers for selection
   Future<List<ZebraDevice>> getAvailablePrinters() async {
@@ -906,16 +958,155 @@ class ZebraPrinterService {
   }) async {
     const platform = MethodChannel('zebrautil');
 
-    // Get instance ID from platform
-    final int instanceId = await platform.invokeMethod('getInstance');
+    // Get instance ID from platform - iOS returns a String UUID
+    final String instanceId =
+        await platform.invokeMethod<String>('getInstance') ?? 'default';
 
     // Return new printer instance
     return ZebraPrinter(
-      instanceId.toString(),
+      instanceId,
       controller: controller,
       onDiscoveryError: onDiscoveryError,
       onPermissionDenied: onPermissionDenied,
     );
+  }
+
+  /// Run comprehensive diagnostics on the printer
+  Future<Result<Map<String, dynamic>>> runDiagnostics() async {
+    await _ensureInitialized();
+
+    final diagnostics = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'connected': false,
+      'printerInfo': {},
+      'status': {},
+      'settings': {},
+      'errors': [],
+      'recommendations': [],
+    };
+
+    try {
+      // Check connection
+      if (connectedPrinter == null) {
+        diagnostics['errors'].add('No printer connected');
+        diagnostics['recommendations'].add('Connect to a printer first');
+        return Result.success(diagnostics);
+      }
+
+      diagnostics['connected'] = await _verifyConnection();
+      diagnostics['printerInfo'] = {
+        'name': connectedPrinter!.name,
+        'address': connectedPrinter!.address,
+        'isWifi': connectedPrinter!.isWifi,
+      };
+
+      if (!diagnostics['connected']) {
+        diagnostics['errors'].add('Connection lost');
+        diagnostics['recommendations'].add('Reconnect to the printer');
+        return Result.success(diagnostics);
+      }
+
+      // Get comprehensive status
+      _statusStreamController?.add('Running comprehensive diagnostics...');
+
+      // Basic status checks
+      final statusChecks = {
+        'device.host_status': 'Host Status',
+        'media.status': 'Media Status',
+        'head.latch': 'Head Status',
+        'device.pause': 'Pause Status',
+        'odometer.total_print_length': 'Total Print Length',
+        'sensor.peeler': 'Peeler Status',
+        'device.languages': 'Printer Language',
+        'device.unique_id': 'Device ID',
+        'device.product_name': 'Product Name',
+        'appl.name': 'Firmware Version',
+        'media.type': 'Media Type',
+        'print.tone': 'Print Darkness',
+        'ezpl.print_width': 'Print Width',
+        'zpl.label_length': 'Label Length',
+      };
+
+      for (final entry in statusChecks.entries) {
+        try {
+          final value = await _doGetSetting(entry.key);
+          if (value != null) {
+            diagnostics['status'][entry.value] = value;
+          }
+        } catch (e) {
+          // Continue with other checks
+        }
+      }
+
+      // Analyze results and provide recommendations
+      _analyzeDiagnostics(diagnostics);
+
+      _statusStreamController?.add('Diagnostics complete');
+      return Result.success(diagnostics);
+    } catch (e, stack) {
+      diagnostics['errors'].add('Diagnostic error: $e');
+      return Result.error(
+        'Failed to run diagnostics: $e',
+        code: ErrorCodes.operationError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+  void _analyzeDiagnostics(Map<String, dynamic> diagnostics) {
+    final status = diagnostics['status'] as Map<String, dynamic>;
+    final recommendations = diagnostics['recommendations'] as List;
+    final errors = diagnostics['errors'] as List;
+
+    // Check host status
+    final hostStatus = status['Host Status']?.toString().toLowerCase();
+    if (hostStatus != null && !hostStatus.contains('ok')) {
+      errors.add('Printer reports error: $hostStatus');
+      recommendations.add('Check printer display for error details');
+    }
+
+    // Check media
+    final mediaStatus = status['Media Status']?.toString().toLowerCase();
+    if (mediaStatus != null &&
+        !mediaStatus.contains('ok') &&
+        !mediaStatus.contains('ready')) {
+      errors.add('Media issue: $mediaStatus');
+      recommendations.add('Check paper/labels are loaded correctly');
+    }
+
+    // Check head
+    final headStatus = status['Head Status']?.toString().toLowerCase();
+    if (headStatus != null &&
+        !headStatus.contains('ok') &&
+        !headStatus.contains('closed')) {
+      errors.add('Print head is open');
+      recommendations.add('Close the print head');
+    }
+
+    // Check pause
+    final pauseStatus = status['Pause Status']?.toString().toLowerCase();
+    if (pauseStatus == 'true' || pauseStatus == '1' || pauseStatus == 'on') {
+      errors.add('Printer is paused');
+      recommendations.add('Unpause the printer (can be auto-corrected)');
+    }
+
+    // Check language
+    final language = status['Printer Language']?.toString().toLowerCase();
+    if (language != null) {
+      if (language.contains('zpl')) {
+        status['Language Mode'] = 'ZPL';
+      } else if (language.contains('line_print') || language.contains('cpcl')) {
+        status['Language Mode'] = 'CPCL/Line Print';
+      }
+    }
+
+    // If no specific errors found but printer won't print
+    if (errors.isEmpty && diagnostics['connected'] == true) {
+      recommendations.add('Try power cycling the printer');
+      recommendations.add('Check printer queue on the device');
+      recommendations.add('Verify print data format matches printer language');
+      recommendations.add('Try a factory reset if issues persist');
+    }
   }
 }
 

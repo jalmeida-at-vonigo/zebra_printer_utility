@@ -5,11 +5,17 @@ alwaysApply: true
 ---
 # COMPLETION
 
-* The code is clean and working. There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
+* The code is clean and working.
+    - There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
+    - No ANALYSIS WARNIGNN ARE ACCEPTABLE (`flutter analyze`)
 * Only the dart code and the iOS need to be evaluated/changed.
     - We are not supporting Android yet, therefore nothing needs to be evaluated or changed for it.
 * The change must be documented as detailed on the DOCUMENTATION section below
-* Update the minor version everywhere on each change completion
+* Update the version number:
+    - Major version (x.0.0) for breaking changes
+    - Minor version (x.y.0) for new features  
+    - Patch version (x.y.z) for bug fixes
+    - For v2.0+, each significant change increments the patch version
 * Update the @CHANGELOG.md with the changes
     - There is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
 * There is no duplicate exportss on [zebrautil.dart](mdc:lib/zebrautil.dart)

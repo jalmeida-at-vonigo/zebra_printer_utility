@@ -83,4 +83,17 @@ class ZebraSGDCommands {
 
     return false;
   }
+
+  /// Unpause/resume commands
+  static String unpausePrinter() => setCommand('device.pause', '0');
+  
+  /// Resume printer - language agnostic using SGD
+  static String resumePrinter() => doCommand('device.reset', '');
+
+  /// Clear errors - using SGD commands instead of ZPL
+  static String clearAlerts() => setCommand('alerts.clear', 'ALL');
+
+  /// Legacy ZPL-specific commands (use only when in ZPL mode)
+  static String zplResume() => '~PS\r\n';
+  static String zplClearErrors() => '~JR\r\n';
 }

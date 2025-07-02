@@ -106,7 +106,7 @@ PRINT
     if (mounted) {
       setState(() => _isPrinting = true);
     }
-    final format = _useZPL ? PrintFormat.ZPL : PrintFormat.CPCL;
+    final format = _useZPL ? PrintFormat.zpl : PrintFormat.cpcl;
     final result = await Zebra.print(_labelController.text, format: format);
     if (mounted) {
       setState(() {

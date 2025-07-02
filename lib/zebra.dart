@@ -138,9 +138,14 @@ class Zebra {
   ///
   /// Returns Result indicating success or failure.
   static Future<Result<void>> autoPrint(String data,
-      {String? address, PrintFormat? format}) async {
+      {String? address,
+      PrintFormat? format,
+      AutoCorrectionOptions? autoCorrectionOptions}) async {
     await _ensureInitialized();
-    return await _service.autoPrint(data, address: address, format: format);
+    return await _service.autoPrint(data,
+        address: address,
+        format: format,
+        autoCorrectionOptions: autoCorrectionOptions);
   }
 
   /// Get available printers for selection
@@ -180,5 +185,11 @@ class Zebra {
   /// Rotate print orientation
   static void rotate() {
     _service.rotate();
+  }
+
+  /// Run comprehensive diagnostics on the connected printer
+  static Future<Result<Map<String, dynamic>>> runDiagnostics() async {
+    await _ensureInitialized();
+    return await _service.runDiagnostics();
   }
 }

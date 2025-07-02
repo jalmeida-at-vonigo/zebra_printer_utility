@@ -12,8 +12,62 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 - **Multiple connection types**: Bluetooth (MFi), Network (TCP/IP)
 - **Printing formats**: ZPL, CPCL, and raw text
 - **[Automatic language detection](.readme/guides/auto-detection.md)**: Detects ZPL/CPCL format and switches printer mode
+- **[Auto-Correction System v2.0](.readme/architecture/auto-correction-v2.md)**: Configurable automatic issue resolution
 - **Printer discovery**: Scan for available printers
 - **Connection management**: Connect, disconnect, and monitor connection status
+- **Auto-Correction Capabilities** (v2.0+):
+  - Configurable auto-correction with `AutoCorrectionOptions`
+  - **Auto-unpause**: Automatically unpause paused printers
+  - **Clear errors**: Clear recoverable printer errors
+  - **Connection recovery**: Reconnect on connection loss
+  - **Language switching**: Auto-switch printer language based on data format
+  - **Calibration**: Auto-calibrate when media detection issues occur
+  ```dart
+  // Use safe defaults (unpause, clear errors, reconnect)
+  await Zebra.autoPrint(data, 
+    autoCorrectionOptions: AutoCorrectionOptions.safe());
+  
+  // Or customize corrections
+  await Zebra.autoPrint(data,
+    autoCorrectionOptions: AutoCorrectionOptions(
+      enableUnpause: true,
+      enableClearErrors: true,
+      enableReconnect: false,
+      enableLanguageSwitch: true,
+      enableCalibration: false,
+    ));
+  ```
+- **Comprehensive Diagnostics**:
+  - When your printer doesn't print and you don't know why, use the diagnostics feature:
+  ```dart
+  final diagnostics = await Zebra.runDiagnostics();
+  if (diagnostics.success) {
+    final report = diagnostics.data!;
+    print('Printer Status: ${report['status']}');
+    print('Errors: ${report['errors']}');
+    print('Recommendations: ${report['recommendations']}');
+  }
+  ```
+  The diagnostics will check:
+  - Connection status
+  - Media presence
+  - Print head status
+  - Pause state
+  - Error conditions
+  - Printer configuration
+  - And provide specific recommendations for fixing issues
+- **Robust Parser Utilities** (v2.0+):
+  - Safe parsing that never fails
+  - Handles multiple boolean formats: 'true', 'on', '1', 'yes', etc.
+  - Smart status interpretation
+
+## What's New in v2.0
+
+- **[Configurable Auto-Correction](.readme/architecture/auto-correction-v2.md)**: Fine-grained control over automatic issue resolution
+- **Robust Parsing**: Parser utilities that never fail
+- **Better Architecture**: Internal organization for maintainability
+
+See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## Quick Start
 

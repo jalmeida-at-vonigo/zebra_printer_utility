@@ -114,9 +114,9 @@ PRINT
 
     PrintFormat? format;
     if (_printMode == PrintMode.zpl) {
-      format = PrintFormat.ZPL;
+      format = PrintFormat.zpl;
     } else if (_printMode == PrintMode.cpcl) {
-      format = PrintFormat.CPCL;
+      format = PrintFormat.cpcl;
     }
     // For Auto mode, format is null (auto-detected)
 

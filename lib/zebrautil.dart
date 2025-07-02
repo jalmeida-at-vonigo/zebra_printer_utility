@@ -11,6 +11,7 @@ export 'models/result.dart';
 export 'models/printer_readiness.dart';
 export 'models/zebra_operation.dart';
 export 'models/print_enums.dart';
+export 'models/auto_correction_options.dart';
 
 // Service and utility exports
 export 'zebra.dart';

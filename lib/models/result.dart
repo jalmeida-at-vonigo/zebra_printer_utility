@@ -49,9 +49,10 @@ class Result<T> {
   /// Transform the data if successful
   Result<R> map<R>(R Function(T data) transform) {
     if (success && data != null) {
-      return Result.success(transform(data!));
+      final nonNullData = data as T;
+      return Result.success(transform(nonNullData));
     }
-    return Result.failure(error!);
+    return Result.failure(error ?? ErrorInfo(message: 'Unknown error'));
   }
 
   /// Execute function if successful
@@ -75,7 +76,7 @@ class Result<T> {
     if (success) {
       return data as T;
     }
-    throw error!.toException();
+    throw error?.toException() ?? Exception('Unknown error');
   }
 
   /// Get data or default value

@@ -58,15 +58,16 @@ class ZebraDevice {
   @override
   int get hashCode => address.hashCode;
 
-  ZebraDevice copyWith(
-      {String? ipAddress,
-      String? name,
-      bool? isWifi,
-      String? status,
-      bool? isConnected,
-      Color? color}) {
+  ZebraDevice copyWith({
+    String? address,
+    String? name,
+    bool? isWifi,
+    String? status,
+    bool? isConnected,
+    Color? color,
+  }) {
     return ZebraDevice(
-        address: ipAddress ?? this.address,
+        address: address ?? this.address,
         name: name ?? this.name,
         isWifi: isWifi ?? this.isWifi,
         status: status ?? this.status,

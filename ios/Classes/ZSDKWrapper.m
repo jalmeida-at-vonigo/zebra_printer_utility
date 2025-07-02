@@ -249,7 +249,7 @@
         
         if (responseData.length > 0) {
             NSString *response = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
-            return [response autorelease];
+            return response;
         }
         
     } @catch (NSException *exception) {

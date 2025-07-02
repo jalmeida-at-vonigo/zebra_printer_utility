@@ -20,7 +20,7 @@ This is a Flutter plugin for integrating Zebra printers on iOS and Android platf
 ### Key Files Structure
 
 #### Flutter/Dart Side
-- [lib/zebra_util.dart](mdc:lib/zebra_util.dart) - Main plugin entry point
+- [lib/zebrautil.dart](mdc:lib/zebrautil.dart) - Main plugin entry point
 - [lib/zebra_printer.dart](mdc:lib/zebra_printer.dart) - Printer instance management and operations
 - [lib/zebra_device.dart](mdc:lib/zebra_device.dart) - Device model for discovered printers
 
