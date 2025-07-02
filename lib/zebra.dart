@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:zebrautil/zebra_device.dart';
 import 'package:zebrautil/zebra_printer.dart';
 import 'package:zebrautil/zebra_printer_service.dart';
+import 'package:zebrautil/result.dart';
 
 export 'zebra_device.dart';
 export 'zebra_printer.dart' show EnumMediaType, PrintFormat;
+export 'result.dart';
 
 /// Simple static API for Zebra printer operations.
 ///
@@ -68,8 +70,8 @@ class Zebra {
   /// This will scan for both Bluetooth and Network printers.
   /// On iOS, Bluetooth printers must be paired in Settings first.
   ///
-  /// Returns a list of discovered [ZebraDevice] objects.
-  static Future<List<ZebraDevice>> discoverPrinters({
+  /// Returns a Result with list of discovered [ZebraDevice] objects.
+  static Future<Result<List<ZebraDevice>>> discoverPrinters({
     Duration timeout = const Duration(seconds: 10),
   }) async {
     await _ensureInitialized();
@@ -84,21 +86,21 @@ class Zebra {
 
   /// Connect to a printer by address
   ///
-  /// Returns `true` if connection was successful.
-  static Future<bool> connect(String address) async {
+  /// Returns Result indicating success or failure.
+  static Future<Result<void>> connect(String address) async {
     await _ensureInitialized();
     return await _service.connect(address);
   }
 
   /// Disconnect from current printer
-  static Future<void> disconnect() async {
+  static Future<Result<void>> disconnect() async {
     await _ensureInitialized();
-    await _service.disconnect();
+    return await _service.disconnect();
   }
 
   /// Print data to the connected printer
   /// 
-  /// Returns `true` if print was sent successfully.
+  /// Returns Result indicating success or failure.
   /// 
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
@@ -120,7 +122,7 @@ class Zebra {
   /// FORM
   /// PRINT
   /// ```
-  static Future<bool> print(String data, {PrintFormat? format}) async {
+  static Future<Result<void>> print(String data, {PrintFormat? format}) async {
     await _ensureInitialized();
     return await _service.print(data, format: format);
   }
@@ -129,7 +131,7 @@ class Zebra {
   ///
   /// If [address] is provided, connects to that specific printer.
   /// If not provided and only one printer is found, uses that printer.
-  /// If multiple printers are found, returns false (user must select).
+  /// If multiple printers are found, returns error (user must select).
   /// 
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
@@ -141,8 +143,8 @@ class Zebra {
   /// 4. Print the data
   /// 5. Disconnect
   ///
-  /// Returns `true` if print was successful.
-  static Future<bool> autoPrint(String data,
+  /// Returns Result indicating success or failure.
+  static Future<Result<void>> autoPrint(String data,
       {String? address, PrintFormat? format}) async {
     await _ensureInitialized();
     return await _service.autoPrint(data, address: address, format: format);
@@ -157,7 +159,7 @@ class Zebra {
   /// Calibrate the connected printer
   ///
   /// This will perform media calibration on the printer.
-  static Future<bool> calibrate() async {
+  static Future<Result<void>> calibrate() async {
     await _ensureInitialized();
     return await _service.calibrate();
   }
@@ -165,13 +167,13 @@ class Zebra {
   /// Set printer darkness/density
   ///
   /// [darkness] should be between -30 and 30.
-  static Future<bool> setDarkness(int darkness) async {
+  static Future<Result<void>> setDarkness(int darkness) async {
     await _ensureInitialized();
     return await _service.setDarkness(darkness);
   }
 
   /// Set media type
-  static Future<bool> setMediaType(EnumMediaType type) async {
+  static Future<Result<void>> setMediaType(EnumMediaType type) async {
     await _ensureInitialized();
     return await _service.setMediaType(type);
   }
@@ -186,19 +188,4 @@ class Zebra {
   static void rotate() {
     _service.rotate();
   }
-}
-
-/// Result object for operations that can fail
-class ZebraResult<T> {
-  final bool success;
-  final T? data;
-  final String? error;
-
-  const ZebraResult.success(this.data)
-      : success = true,
-        error = null;
-
-  const ZebraResult.failure(this.error)
-      : success = false,
-        data = null;
 }

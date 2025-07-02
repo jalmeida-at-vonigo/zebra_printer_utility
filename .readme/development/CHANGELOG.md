@@ -1,4 +1,18 @@
+## [0.1.0] - Current Development Version
+
+**Note**: Version is automatically incremented on every commit using semantic versioning.
+
+### Version Strategy
+- Major version (1.x.x): Breaking API changes
+- Minor version (x.1.x): New features, backward compatible
+- Patch version (x.x.1): Bug fixes, backward compatible
+
 ## [Unreleased]
+* **BREAKING**: Implemented comprehensive Result<T> pattern for all action methods
+  - All methods now return Result<T> instead of bool/throwing exceptions
+  - Added detailed error information with error codes, messages, and stack traces
+  - Enhanced PrinterReadiness with nullable properties for unchecked statuses
+  - Added new error codes: NO_PRINTERS_FOUND, MULTIPLE_PRINTERS_FOUND, OPERATION_ERROR
 * iOS bi-directional communication support with `getSetting` and `sendDataWithResponse` methods
 * Enhanced autoPrint functionality that only works with paired Bluetooth printers  
 * Real printer status checks using SGD commands (media.status, head.latch, device.pause, device.host_status)

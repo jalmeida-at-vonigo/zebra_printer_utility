@@ -234,7 +234,7 @@ The ZSDK_API.xcframework cannot be properly linked when using CocoaPods' `vendor
    ```ruby
    Pod::Spec.new do |s|
      s.name             = 'zebrautil'
-     s.version          = '0.0.1'
+     s.version          = '0.1.0'
      s.summary          = 'A new Flutter plugin project.'
      s.description      = 'A new Flutter plugin project.'
      s.homepage         = 'http://example.com'

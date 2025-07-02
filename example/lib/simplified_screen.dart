@@ -72,13 +72,14 @@ PRINT
   }
 
   Future<void> _onConnect(ZebraDevice device) async {
-    final connected = await Zebra.connect(device.address);
+    final result = await Zebra.connect(device.address);
     if (mounted) {
       setState(() {
-        _isConnected = connected;
+        _isConnected = result.success;
         _selectedDevice = device;
-        _status =
-            connected ? 'Connected to ${device.name}' : 'Failed to connect';
+        _status = result.success
+            ? 'Connected to ${device.name}'
+            : 'Failed to connect: ${result.error?.message ?? "Unknown error"}';
       });
     }
   }
@@ -119,18 +120,18 @@ PRINT
     }
     // For Auto mode, format is null (auto-detected)
 
-    bool success;
+    Result<void> result;
 
     if (_isConnected && _selectedDevice != null) {
       // Use autoPrint with the connected printer
-      success = await _printerService.autoPrint(
+      result = await _printerService.autoPrint(
         _labelController.text,
         printer: _selectedDevice,
         format: format,
       );
     } else {
       // Use autoPrint to discover and use any available printer
-      success = await _printerService.autoPrint(
+      result = await _printerService.autoPrint(
         _labelController.text,
         format: format,
       );
@@ -139,7 +140,9 @@ PRINT
     if (mounted) {
       setState(() {
         _isPrinting = false;
-        if (!success) _status = 'Print failed';
+        if (!result.success) {
+          _status = 'Print failed: ${result.error?.message ?? "Unknown error"}';
+        }
       });
     }
   }

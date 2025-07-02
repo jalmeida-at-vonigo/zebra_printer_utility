@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebra_device.dart';
+import 'package:zebrautil/result.dart';
 
 enum EnumMediaType { Label, BlackMark, Journal }
 
@@ -110,60 +111,156 @@ class ZebraPrinter {
     }
   }
 
-  Future<void> connectToPrinter(String address) async {
-    if (controller.selectedAddress != null) {
-      await disconnect();
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
-    if (controller.selectedAddress == address) {
-      await disconnect();
-      controller.selectedAddress = null;
-      return;
-    }
-    controller.selectedAddress = address;
-    await channel.invokeMethod("connectToPrinter", {"Address": address});
-
-    // Check connection status after a short delay
-    await Future.delayed(const Duration(milliseconds: 500));
-    final isConnected = await isPrinterConnected();
-    if (isConnected) {
-      controller.updatePrinterStatus("Connected", "G");
-    }
-  }
-
-  Future<void> connectToGenericPrinter(String address) async {
-    if (controller.selectedAddress != null) {
-      await disconnect();
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
-    if (controller.selectedAddress == address) {
-      await disconnect();
-      controller.selectedAddress = null;
-      return;
-    }
-    controller.selectedAddress = address;
-    channel.invokeMethod("connectToGenericPrinter", {"Address": address});
-  }
-
-  Future<void> print({required String data}) async {
-    // Only modify ZPL data, not CPCL
-    if (data.trim().startsWith("^XA")) {
-      // This is ZPL - apply modifications
-      if (!data.contains("^PON")) data = data.replaceAll("^XA", "^XA^PON");
-
-      if (isRotated) {
-        data = data.replaceAll("^PON", "^POI");
+  Future<Result<void>> connectToPrinter(String address) async {
+    try {
+      if (controller.selectedAddress != null) {
+        await disconnect();
+        await Future.delayed(const Duration(milliseconds: 300));
       }
-    }
-    // For CPCL (starts with "!") or other formats, send as-is
+      if (controller.selectedAddress == address) {
+        await disconnect();
+        controller.selectedAddress = null;
+        return Result.success();
+      }
+      controller.selectedAddress = address;
+      await channel.invokeMethod("connectToPrinter", {"Address": address});
 
-    await channel.invokeMethod("print", {"Data": data});
+      // Check connection status after a short delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      final isConnected = await isPrinterConnected();
+      if (isConnected) {
+        controller.updatePrinterStatus("Connected", "G");
+        return Result.success();
+      } else {
+        controller.selectedAddress = null;
+        return Result.error(
+          'Failed to establish connection',
+          code: ErrorCodes.connectionError,
+        );
+      }
+    } on PlatformException catch (e) {
+      controller.selectedAddress = null;
+      return Result.error(
+        e.message ?? 'Connection failed',
+        code: ErrorCodes.connectionError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      controller.selectedAddress = null;
+      return Result.error(
+        'Connection error: $e',
+        code: ErrorCodes.connectionError,
+        dartStackTrace: stack,
+      );
+    }
   }
 
-  Future<void> disconnect() async {
-    await channel.invokeMethod("disconnect", null);
-    if (controller.selectedAddress != null) {
-      controller.updatePrinterStatus("Disconnected", "R");
+  Future<Result<void>> connectToGenericPrinter(String address) async {
+    try {
+      if (controller.selectedAddress != null) {
+        await disconnect();
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      if (controller.selectedAddress == address) {
+        await disconnect();
+        controller.selectedAddress = null;
+        return Result.success();
+      }
+      controller.selectedAddress = address;
+      await channel
+          .invokeMethod("connectToGenericPrinter", {"Address": address});
+
+      // Check connection status after a short delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      final isConnected = await isPrinterConnected();
+      if (isConnected) {
+        controller.updatePrinterStatus("Connected", "G");
+        return Result.success();
+      } else {
+        controller.selectedAddress = null;
+        return Result.error(
+          'Failed to establish generic connection',
+          code: ErrorCodes.connectionError,
+        );
+      }
+    } on PlatformException catch (e) {
+      controller.selectedAddress = null;
+      return Result.error(
+        e.message ?? 'Generic connection failed',
+        code: ErrorCodes.connectionError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      controller.selectedAddress = null;
+      return Result.error(
+        'Generic connection error: $e',
+        code: ErrorCodes.connectionError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+  Future<Result<void>> print({required String data}) async {
+    try {
+      // Validate input
+      if (data.isEmpty) {
+        return Result.error(
+          'Print data cannot be empty',
+          code: ErrorCodes.invalidData,
+        );
+      }
+      
+      // Only modify ZPL data, not CPCL
+      if (data.trim().startsWith("^XA")) {
+        // This is ZPL - apply modifications
+        if (!data.contains("^PON")) data = data.replaceAll("^XA", "^XA^PON");
+
+        if (isRotated) {
+          data = data.replaceAll("^PON", "^POI");
+        }
+      }
+      // For CPCL (starts with "!") or other formats, send as-is
+
+      await channel.invokeMethod("print", {"Data": data});
+      return Result.success();
+    } on PlatformException catch (e) {
+      return Result.error(
+        e.message ?? 'Print failed',
+        code: ErrorCodes.printError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      return Result.error(
+        'Print error: $e',
+        code: ErrorCodes.printError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+  Future<Result<void>> disconnect() async {
+    try {
+      await channel.invokeMethod("disconnect", null);
+      if (controller.selectedAddress != null) {
+        controller.updatePrinterStatus("Disconnected", "R");
+      }
+      return Result.success();
+    } on PlatformException catch (e) {
+      return Result.error(
+        e.message ?? 'Disconnect failed',
+        code: ErrorCodes.connectionError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      return Result.error(
+        'Disconnect error: $e',
+        code: ErrorCodes.connectionError,
+        dartStackTrace: stack,
+      );
     }
   }
 
@@ -241,7 +338,7 @@ class ZebraController extends ChangeNotifier {
 
   void updatePrinterStatus(String status, String color) {
     if (selectedAddress != null) {
-      Color newColor = Colors.grey.withOpacity(0.6);
+      Color newColor = Colors.grey.withValues(alpha: 0.6);
       switch (color) {
         case 'R':
           newColor = Colors.red;
@@ -250,7 +347,7 @@ class ZebraController extends ChangeNotifier {
           newColor = Colors.green;
           break;
         default:
-          newColor = Colors.grey.withOpacity(0.6);
+          newColor = Colors.grey.withValues(alpha: 0.6);
           break;
       }
       final int index =

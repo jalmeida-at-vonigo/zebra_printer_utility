@@ -81,13 +81,14 @@ PRINT
   }
 
   Future<void> _onConnect(ZebraDevice device) async {
-    final connected = await Zebra.connect(device.address);
+    final result = await Zebra.connect(device.address);
     if (mounted) {
       setState(() {
-        _isConnected = connected;
+        _isConnected = result.success;
         _selectedDevice = device;
-        _status =
-            connected ? 'Connected to ${device.name}' : 'Failed to connect';
+        _status = result.success
+            ? 'Connected to ${device.name}'
+            : 'Failed to connect: ${result.error?.message ?? "Unknown error"}';
       });
     }
   }
@@ -106,12 +107,14 @@ PRINT
     if (mounted) {
       setState(() => _isPrinting = true);
     }
-    final success =
+    final result =
         await Zebra.print(_cpclController.text, format: PrintFormat.CPCL);
     if (mounted) {
       setState(() {
         _isPrinting = false;
-        if (!success) _status = 'Print failed';
+        if (!result.success) {
+          _status = 'Print failed: ${result.error?.message ?? "Unknown error"}';
+        }
       });
     }
   }

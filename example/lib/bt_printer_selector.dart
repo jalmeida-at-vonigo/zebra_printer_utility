@@ -58,11 +58,15 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
     });
 
     try {
-      final printers = await Zebra.discoverPrinters();
+      final result = await Zebra.discoverPrinters();
       if (mounted) {
         setState(() {
-          _printers = printers;
+          _printers = result.success ? result.data ?? [] : [];
           _isScanning = false;
+          if (!result.success) {
+            _status =
+                'Discovery error: ${result.error?.message ?? "Unknown error"}';
+          }
         });
       }
     } catch (e) {

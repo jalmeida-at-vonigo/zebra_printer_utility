@@ -3,9 +3,15 @@ description:
 globs: 
 alwaysApply: true
 ---
+# COMPLETION
+
+* The code is clean and working. There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
+
 # README.md
 
 - ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevante details
 - The docs are about:
     - Usability of the API
     - Standards about the development and architeture, and
+- Update the [CHANGELOG.md](mdc:.readme/development/CHANGELOG.md) with the changes, but there is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
+- There is no need to wrinte any MIGRATION GUIDE document or steps anywhere as there was nothing released yet.

@@ -11,7 +11,7 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 - **Cross-platform support**: iOS and Android
 - **Multiple connection types**: Bluetooth (MFi), Network (TCP/IP)
 - **Printing formats**: ZPL, CPCL, and raw text
-- **Automatic language detection**: Detects and switches printer language automatically
+- **[Automatic language detection](.readme/guides/auto-detection.md)**: Detects ZPL/CPCL format and switches printer mode
 - **Printer discovery**: Scan for available printers
 - **Connection management**: Connect, disconnect, and monitor connection status
 
@@ -23,7 +23,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  zebra_util: ^0.0.1
+  zebra_util: ^0.1.0
 ```
 
 ### Basic Usage
@@ -37,20 +37,36 @@ final printer = ZebraUtil.getInstance();
 // Start discovery
 printer.startScan();
 
-// Connect to a printer
-await printer.connectToPrinter('192.168.1.100');
+// Connect to a printer with error handling
+final connectResult = await printer.connectToPrinter('192.168.1.100');
+if (!connectResult.success) {
+  print('Failed to connect: ${connectResult.error!.message}');
+  return;
+}
 
-// Print ZPL
-await printer.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+// Print ZPL with error handling
+final printResult = await printer.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+if (!printResult.success) {
+  print('Print failed: ${printResult.error!.message}');
+}
 
-// Print CPCL
-await printer.print('! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n');
+// Using the service layer for auto-print
+final service = ZebraPrinterService();
+await service.initialize();
+
+final result = await service.autoPrint(
+  '! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n',
+);
+result
+  .ifSuccess((_) => print('Printed successfully!'))
+  .ifFailure((error) => print('Error: ${error.code} - ${error.message}'));
 ```
 
 ## Documentation
 
 ### 🔌 API Reference
 - **[API Documentation](.readme/api/README.md)** - Complete API reference
+- **[Error Handling](.readme/guides/error-handling.md)** - Result pattern and error codes
 - **[Printing Formats](.readme/guides/printing-formats.md)** - ZPL and CPCL guide
 
 ### 📱 Platform Guides
@@ -61,6 +77,8 @@ await printer.print('! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPR
 
 ### 📚 Guides & Examples
 - **[Example App](.readme/guides/example-app.md)** - Complete working example
+- **[Auto-Detection](.readme/guides/auto-detection.md)** - Format detection explained
+- **[Performance](.readme/guides/performance.md)** - Optimization guidelines
 - **[Testing Guide](.readme/guides/testing.md)** - Testing on devices and simulators
 
 ### 🔧 Development
