@@ -146,12 +146,14 @@ class ZebraPrinterInstance: NSObject {
             
             for printerInfo in btPrinters {
                 if let info = printerInfo as? [String: Any] {
-                    self.channel.invokeMethod("printerFound", arguments: [
-                        "Address": info["address"] ?? "",
-                        "Name": info["name"] ?? "Unknown Printer",
-                        "Status": "Found",
-                        "IsWifi": "false"
-                    ])
+                    DispatchQueue.main.async {
+                        self.channel.invokeMethod("printerFound", arguments: [
+                            "Address": info["address"] ?? "",
+                            "Name": info["name"] ?? "Unknown Printer",
+                            "Status": "Found",
+                            "IsWifi": "false"
+                        ])
+                    }
                 }
             }
             
@@ -184,12 +186,14 @@ class ZebraPrinterInstance: NSObject {
                 
                 for printerInfo in networkPrinters {
                     if let info = printerInfo as? [String: Any] {
-                        self.channel.invokeMethod("printerFound", arguments: [
-                            "Address": info["address"] ?? "",
-                            "Name": info["name"] ?? "Unknown Printer",
-                            "Status": "Found",
-                            "IsWifi": "true"
-                        ])
+                        DispatchQueue.main.async {
+                            self.channel.invokeMethod("printerFound", arguments: [
+                                "Address": info["address"] ?? "",
+                                "Name": info["name"] ?? "Unknown Printer",
+                                "Status": "Found",
+                                "IsWifi": "true"
+                            ])
+                        }
                     }
                 }
                 

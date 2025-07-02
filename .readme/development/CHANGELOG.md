@@ -1,3 +1,13 @@
+## [Unreleased]
+* iOS bi-directional communication support with `getSetting` and `sendDataWithResponse` methods
+* Enhanced autoPrint functionality that only works with paired Bluetooth printers  
+* Real printer status checks using SGD commands (media.status, head.latch, device.pause, device.host_status)
+* Improved operation queue with proper async/await semantics
+* Fixed threading issue in iOS discovery callbacks that could cause crashes
+* AutoPrint now requires paired Bluetooth printers for predictable behavior
+* Operation queue processing is now truly asynchronous
+* Discovery callbacks on iOS now properly dispatch to main thread
+
 ## 0.0.39
 Updated native code.
 

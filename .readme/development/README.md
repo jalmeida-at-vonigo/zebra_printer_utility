@@ -7,6 +7,9 @@ This section contains documentation for developers working on the Zebra Printer 
 ### 📋 [Future Improvements](TODO.md)
 Comprehensive roadmap and planned features for the plugin, including architectural improvements and code sharing strategies.
 
+### 🏗️ [Architecture Improvements](ARCHITECTURE_IMPROVEMENTS.md)
+Recent architecture improvements including iOS bi-directional communication, enhanced autoPrint functionality, and operation queue enhancements.
+
 ### 📝 [Changelog](CHANGELOG.md)
 Complete history of changes, bug fixes, and new features across all versions of the plugin.
 
