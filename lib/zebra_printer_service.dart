@@ -1,72 +1,6 @@
 import 'dart:async';
-import 'package:zebrautil/zebra_printer.dart';
-import 'package:zebrautil/zebra_util.dart';
-import 'package:zebrautil/zebra_operation_queue.dart';
-import 'package:zebrautil/zebra_sgd_commands.dart';
-
-/// Represents the readiness state of a printer with detailed status information
-class PrinterReadiness {
-  /// Overall readiness state
-  bool isReady = false;
-  
-  /// Connection status - null if not checked
-  bool? isConnected;
-
-  /// Media presence - null if not checked
-  bool? hasMedia;
-
-  /// Print head status - null if not checked
-  bool? headClosed;
-
-  /// Pause status - null if not checked
-  bool? isPaused;
-
-  /// Raw status values from printer
-  String? mediaStatus;
-  String? headStatus;
-  String? pauseStatus;
-  String? hostStatus;
-
-  /// Errors and warnings collected during checks
-  List<String> errors = [];
-  List<String> warnings = [];
-  
-  /// Timestamp of the readiness check
-  DateTime timestamp = DateTime.now();
-
-  /// Whether full status check was performed
-  bool fullCheckPerformed = false;
-
-  String get summary {
-    if (isReady) return 'Printer is ready';
-    if (errors.isNotEmpty) return errors.join(', ');
-    if (isConnected == false) return 'Not connected';
-    if (hasMedia == false) return 'No media';
-    if (headClosed == false) return 'Head open';
-    if (isPaused == true) return 'Printer paused';
-    return 'Not ready';
-  }
-  
-  Map<String, dynamic> toMap() {
-    return {
-      'isReady': isReady,
-      'isConnected': isConnected,
-      'hasMedia': hasMedia,
-      'headClosed': headClosed,
-      'isPaused': isPaused,
-      'mediaStatus': mediaStatus,
-      'headStatus': headStatus,
-      'pauseStatus': pauseStatus,
-      'hostStatus': hostStatus,
-      'errors': errors,
-      'warnings': warnings,
-      'timestamp': timestamp.toIso8601String(),
-      'fullCheckPerformed': fullCheckPerformed,
-      'summary': summary,
-    };
-  }
-}
-
+import 'package:zebrautil/zebrautil.dart';
+import 'package:flutter/services.dart';
 /// A simplified service for Zebra printer operations.
 /// Provides a clean async/await API with proper error handling.
 class ZebraPrinterService {
@@ -119,7 +53,7 @@ class ZebraPrinterService {
     // Listen to controller changes
     _controller!.addListener(_onControllerChanged);
 
-    _printer = await ZebraUtil.getPrinterInstance(
+    _printer = await _getPrinterInstance(
       controller: _controller,
       onDiscoveryError: (code, message) {
         _statusStreamController?.add('Discovery error: $message');
@@ -964,6 +898,24 @@ class ZebraPrinterService {
     };
   }
 
+  /// Create a new printer instance
+  static Future<ZebraPrinter> _getPrinterInstance({
+    ZebraController? controller,
+    Function(String code, String? message)? onDiscoveryError,
+    Function()? onPermissionDenied,
+  }) async {
+    const platform = MethodChannel('zebrautil');
 
+    // Get instance ID from platform
+    final int instanceId = await platform.invokeMethod('getInstance');
+
+    // Return new printer instance
+    return ZebraPrinter(
+      instanceId.toString(),
+      controller: controller,
+      onDiscoveryError: onDiscoveryError,
+      onPermissionDenied: onPermissionDenied,
+    );
+  }
 }
 

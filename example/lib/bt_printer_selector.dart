@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:zebrautil/zebra_util.dart';
+import 'package:zebrautil/zebrautil.dart';
 
 class BTPrinterSelector extends StatefulWidget {
   final Function(ZebraDevice) onDeviceSelected;

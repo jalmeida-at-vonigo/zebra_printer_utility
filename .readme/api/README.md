@@ -4,26 +4,8 @@ Complete API documentation for the Zebra Printer Plugin.
 
 ## Core Classes
 
-### ZebraUtil
-Main entry point for the plugin. Provides singleton access to printer functionality.
-
-```dart
-final printer = ZebraUtil.getInstance();
-```
-
-### ZebraPrinter
-Manages printer operations and discovery.
-
-**Key Methods:**
-- `startScanning()` - Start printer discovery
-- `stopScanning()` - Stop printer discovery
-- `connectToPrinter(String address)` - Connect to printer (returns `Result<void>`)
-- `disconnect()` - Disconnect from printer (returns `Result<void>`)
-- `print({required String data})` - Send print data (returns `Result<void>`)
-- `isPrinterConnected()` - Check connection status (returns `Future<bool>`)
-
 ### ZebraPrinterService
-High-level service for printer operations with built-in queue management.
+High-level service for printer operations with built-in queue management. This is the main entry point for most applications.
 
 **Key Methods:**
 - `initialize()` - Initialize the service
@@ -36,6 +18,17 @@ High-level service for printer operations with built-in queue management.
 - `setDarkness(int)` - Set print darkness (returns `Result<void>`)
 - `setMediaType(EnumMediaType)` - Set media type (returns `Result<void>`)
 - `checkPrinterReadiness()` - Check printer status (returns `Result<PrinterReadiness>`)
+
+### ZebraPrinter
+Low-level printer interface. Used internally by ZebraPrinterService.
+
+**Key Methods:**
+- `startScanning()` - Start printer discovery
+- `stopScanning()` - Stop printer discovery
+- `connectToPrinter(String address)` - Connect to printer (returns `Result<void>`)
+- `disconnect()` - Disconnect from printer (returns `Result<void>`)
+- `print({required String data})` - Send print data (returns `Result<void>`)
+- `isPrinterConnected()` - Check connection status (returns `Future<bool>`)
 
 ### ZebraDevice
 Represents a discovered printer.
@@ -111,27 +104,28 @@ enum Command { calibrate, mediaType, darkness }
 
 ### Basic Printing
 ```dart
-// Get instance
-final printer = ZebraUtil.getInstance();
+// Initialize service
+final service = ZebraPrinterService();
+await service.initialize();
 
 // Connect
-final connectResult = await printer.connectToPrinter('192.168.1.100');
+final connectResult = await service.connect('192.168.1.100');
 if (!connectResult.success) {
   print('Connection failed: ${connectResult.error!.message}');
   return;
 }
 
 // Print ZPL
-final printResult = await printer.print(data: '^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ');
+final printResult = await service.print('^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ');
 if (!printResult.success) {
   print('Print failed: ${printResult.error!.message}');
 }
 
 // Disconnect
-await printer.disconnect();
+await service.disconnect();
 ```
 
-### Using Service Layer
+### Auto-Print Workflow
 ```dart
 final service = ZebraPrinterService();
 await service.initialize();
@@ -152,6 +146,8 @@ if (result.success) {
 ### Discovery
 ```dart
 final service = ZebraPrinterService();
+await service.initialize();
+
 final result = await service.discoverPrinters(
   timeout: Duration(seconds: 5),
 );

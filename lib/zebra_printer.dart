@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:zebrautil/zebra_device.dart';
-import 'package:zebrautil/result.dart';
-
-enum EnumMediaType { Label, BlackMark, Journal }
-
-enum Command { calibrate, mediaType, darkness }
-
-enum PrintFormat { ZPL, CPCL }
+import 'package:zebrautil/models/zebra_device.dart';
+import 'package:zebrautil/models/result.dart';
+import 'package:zebrautil/models/print_enums.dart';
 
 class ZebraPrinter {
   late MethodChannel channel;

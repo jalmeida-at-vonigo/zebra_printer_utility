@@ -29,31 +29,32 @@ dependencies:
 ### Basic Usage
 
 ```dart
-import 'package:zebra_util/zebra_util.dart';
+import 'package:zebrautil/zebrautil.dart';
 
-// Get a printer instance
-final printer = ZebraUtil.getInstance();
+// Using the service layer (recommended)
+final service = ZebraPrinterService();
+await service.initialize();
 
 // Start discovery
-printer.startScan();
+final discoverResult = await service.discoverPrinters();
+discoverResult
+  .ifSuccess((devices) => print('Found ${devices.length} printers'))
+  .ifFailure((error) => print('Discovery failed: ${error.message}'));
 
-// Connect to a printer with error handling
-final connectResult = await printer.connectToPrinter('192.168.1.100');
+// Connect to a printer
+final connectResult = await service.connect('192.168.1.100');
 if (!connectResult.success) {
   print('Failed to connect: ${connectResult.error!.message}');
   return;
 }
 
 // Print ZPL with error handling
-final printResult = await printer.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+final printResult = await service.print('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
 if (!printResult.success) {
   print('Print failed: ${printResult.error!.message}');
 }
 
-// Using the service layer for auto-print
-final service = ZebraPrinterService();
-await service.initialize();
-
+// Using auto-print for quick printing
 final result = await service.autoPrint(
   '! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n',
 );

@@ -1,12 +1,5 @@
 import 'dart:async';
-import 'package:zebrautil/zebra_device.dart';
-import 'package:zebrautil/zebra_printer.dart';
-import 'package:zebrautil/zebra_printer_service.dart';
-import 'package:zebrautil/result.dart';
-
-export 'zebra_device.dart';
-export 'zebra_printer.dart' show EnumMediaType, PrintFormat;
-export 'result.dart';
+import 'package:zebrautil/zebrautil.dart';
 
 /// Simple static API for Zebra printer operations.
 ///

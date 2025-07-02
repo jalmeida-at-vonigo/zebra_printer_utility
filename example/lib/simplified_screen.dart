@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:zebrautil/zebra_util.dart';
+import 'package:zebrautil/zebrautil.dart';
 import 'bt_printer_selector.dart';
 
 enum PrintMode { cpcl, zpl, auto }
