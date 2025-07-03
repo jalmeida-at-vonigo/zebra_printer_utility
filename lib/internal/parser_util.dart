@@ -114,6 +114,22 @@ class ParserUtil {
         lower.contains('idle');
   }
 
+  /// Parse printer status to determine if busy
+  static bool isStatusBusy(String? status) {
+    if (status == null) return false;
+
+    final lower = status.toLowerCase();
+
+    // Check for busy indicators
+    return lower.contains('busy') ||
+        lower.contains('printing') ||
+        lower.contains('processing') ||
+        lower.contains('receiving') ||
+        lower.contains('buffering') ||
+        lower.contains('warming') ||
+        lower.contains('initializing');
+  }
+
   /// Parse media status
   static bool hasMedia(String? status) {
     if (status == null) return false;

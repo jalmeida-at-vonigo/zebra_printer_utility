@@ -179,7 +179,13 @@ class ZebraPrinterService {
 
   /// Print data to the connected printer
   /// Returns Result indicating success or failure with error details
-  Future<Result<void>> print(String data, {PrintFormat? format}) async {
+  /// 
+  /// [printCompletionDelay] optionally adds a delay after print callback
+  /// to ensure the printer has time to process all data. This is useful
+  /// for preventing truncated prints when the connection might be closed
+  /// shortly after printing.
+  Future<Result<void>> print(String data,
+      {PrintFormat? format, Duration? printCompletionDelay}) async {
     await _ensureInitialized();
     
     if (connectedPrinter == null) {
@@ -191,13 +197,124 @@ class ZebraPrinterService {
     }
     
     try {
-      _statusStreamController?.add('Printing...');
+      _statusStreamController?.add('Preparing print data...');
+
+      // Prepare data based on format
+      String preparedData = data;
+
+      // Auto-detect format if not specified
+      if (format == null) {
+        if (ZebraSGDCommands.isZPLData(data)) {
+          format = PrintFormat.zpl;
+        } else if (ZebraSGDCommands.isCPCLData(data)) {
+          format = PrintFormat.cpcl;
+        }
+      }
+
+      // Handle CPCL-specific requirements
+      if (format == PrintFormat.cpcl || ZebraSGDCommands.isCPCLData(data)) {
+        // CPCL requires \r\n line endings
+        if (!preparedData.contains('\r\n')) {
+          preparedData = preparedData.replaceAll('\n', '\r\n');
+          _statusStreamController?.add('Fixed CPCL line endings');
+        }
+
+        // Ensure CPCL data ends with PRINT command
+        final trimmed = preparedData.trim();
+        if (!trimmed.endsWith('PRINT')) {
+          _statusStreamController
+              ?.add('Warning: CPCL data should end with PRINT command');
+          // Some printers might not print without proper termination
+          if (trimmed.endsWith('FORM')) {
+            preparedData = '$preparedData\r\nPRINT\r\n';
+            _statusStreamController?.add('Added missing PRINT command');
+          }
+        }
+      }
+
+      _statusStreamController?.add('Sending data to printer...');
       
       // Call printer directly - callback-based completion ensures sequencing
-      final result = await _printer!.print(data: data);
+      final result = await _printer!.print(data: preparedData);
       
       if (result.success) {
-        _statusStreamController?.add('Print sent successfully');
+        _statusStreamController?.add('Print data sent successfully');
+
+        // Default delay for print completion (longer for CPCL)
+        Duration effectiveDelay = printCompletionDelay ??
+            (format == PrintFormat.cpcl
+                ? const Duration(milliseconds: 1500)
+                : const Duration(milliseconds: 1000));
+
+        if (effectiveDelay.inMilliseconds > 0) {
+          _statusStreamController?.add(
+              'Waiting ${effectiveDelay.inMilliseconds}ms for print to complete...');
+          await Future.delayed(effectiveDelay);
+        }
+
+        // Check if printer is idle before confirming completion
+        try {
+          _statusStreamController?.add('Verifying print completion...');
+
+          // Check multiple status indicators
+          final hostStatus = await _doGetSetting('device.host_status');
+          final printState = await _doGetSetting('device.print_state');
+          final bufferStatus = await _doGetSetting('device.buffer_full');
+
+          // Check if printer is still busy
+          bool isBusy = false;
+
+          if (hostStatus != null) {
+            if (ParserUtil.isStatusBusy(hostStatus)) {
+              isBusy = true;
+              _statusStreamController
+                  ?.add('Printer busy (status: $hostStatus)');
+            } else if (ParserUtil.isStatusOk(hostStatus)) {
+              _statusStreamController
+                  ?.add('Printer ready (status: $hostStatus)');
+            }
+          }
+
+          if (printState != null &&
+              printState.toLowerCase().contains('printing')) {
+            isBusy = true;
+            _statusStreamController?.add('Still printing (state: $printState)');
+          }
+
+          if (bufferStatus != null && ParserUtil.toBool(bufferStatus) == true) {
+            isBusy = true;
+            _statusStreamController?.add('Buffer full');
+          }
+
+          // If printer is busy, wait for it to complete
+          if (isBusy) {
+            _statusStreamController?.add('Waiting for printer to finish...');
+
+            // Wait up to 10 seconds for printer to become idle
+            for (int i = 0; i < 20; i++) {
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              // Re-check status
+              final newStatus = await _doGetSetting('device.host_status');
+              if (newStatus != null && ParserUtil.isStatusOk(newStatus)) {
+                _statusStreamController?.add('Print completed');
+                break;
+              }
+
+              if (i == 19) {
+                _statusStreamController
+                    ?.add('Warning: Printer still busy after 10 seconds');
+                // Continue anyway - print might complete later
+              }
+            }
+          } else {
+            _statusStreamController?.add('Print completed');
+          }
+        } catch (e) {
+          // If we can't check status, log but don't fail
+          _statusStreamController?.add('Could not verify print completion: $e');
+        }
+        
         return result;
       } else {
         return Result.error(
@@ -234,7 +351,8 @@ class ZebraPrinterService {
       int maxRetries = 3,
       bool verifyConnection = true,
       bool disconnectAfter = true,
-      AutoCorrectionOptions? autoCorrectionOptions}) async {
+      AutoCorrectionOptions? autoCorrectionOptions,
+      Duration? printCompletionDelay}) async {
     await _ensureInitialized();
 
     // Validate input data
@@ -529,8 +647,76 @@ class ZebraPrinterService {
           await _printWithRetry(data, format: format, maxRetries: maxRetries);
 
       if (printed) {
-        // Print completed successfully (callback-based, no delay needed)
+        // Print completed successfully
         if (shouldDisconnect && disconnectAfter) {
+          // Add delay to ensure printer has processed all data before disconnecting
+          // This prevents the last line from being cut off
+          final delay =
+              printCompletionDelay ?? const Duration(milliseconds: 1000);
+          _statusStreamController?.add(
+              'Waiting ${delay.inMilliseconds}ms for print to complete...');
+          await Future.delayed(delay);
+
+          // Check if printer is idle before disconnecting
+          try {
+            _statusStreamController?.add('Checking if printer is idle...');
+
+            // Check multiple status indicators
+            final hostStatus = await _doGetSetting('device.host_status');
+            final printState = await _doGetSetting('device.print_state');
+            final bufferStatus = await _doGetSetting('device.buffer_full');
+
+            // Check if printer is busy
+            bool isBusy = false;
+
+            if (hostStatus != null && ParserUtil.isStatusBusy(hostStatus)) {
+              isBusy = true;
+              _statusStreamController
+                  ?.add('Printer is busy (host status: $hostStatus)');
+            }
+
+            if (printState != null &&
+                printState.toLowerCase().contains('printing')) {
+              isBusy = true;
+              _statusStreamController
+                  ?.add('Printer is still printing (state: $printState)');
+            }
+
+            if (bufferStatus != null &&
+                ParserUtil.toBool(bufferStatus) == true) {
+              isBusy = true;
+              _statusStreamController?.add('Printer buffer is full');
+            }
+
+            // If printer is busy, wait additional time
+            if (isBusy) {
+              _statusStreamController
+                  ?.add('Printer still busy, waiting additional time...');
+
+              // Wait up to 5 seconds for printer to become idle
+              for (int i = 0; i < 10; i++) {
+                await Future.delayed(const Duration(milliseconds: 500));
+
+                // Re-check status
+                final newStatus = await _doGetSetting('device.host_status');
+                if (newStatus != null && !ParserUtil.isStatusBusy(newStatus)) {
+                  _statusStreamController?.add('Printer is now idle');
+                  break;
+                }
+
+                if (i == 9) {
+                  _statusStreamController?.add(
+                      'Printer still busy after 5 seconds, proceeding with disconnect');
+                }
+              }
+            } else {
+              _statusStreamController?.add('Printer is idle');
+            }
+          } catch (e) {
+            // If we can't check status, just proceed with disconnect
+            _statusStreamController?.add('Could not check printer status: $e');
+          }
+          
           _statusStreamController?.add('Print completed, disconnecting...');
           await disconnect();
         }
@@ -1128,5 +1314,7 @@ class ZebraPrinterService {
       recommendations.add('Try a factory reset if issues persist');
     }
   }
+
+
 }
 

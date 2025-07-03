@@ -98,6 +98,11 @@ class Zebra {
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
   /// 
+  /// [printCompletionDelay] optionally adds a delay after the print callback
+  /// to ensure the printer has time to process all data. This is useful
+  /// for CPCL printing or when the connection might be closed shortly after.
+  /// Recommended: Duration(milliseconds: 500) for CPCL.
+  /// 
   /// Example ZPL:
   /// ```
   /// ^XA
@@ -115,9 +120,11 @@ class Zebra {
   /// FORM
   /// PRINT
   /// ```
-  static Future<Result<void>> print(String data, {PrintFormat? format}) async {
+  static Future<Result<void>> print(String data,
+      {PrintFormat? format, Duration? printCompletionDelay}) async {
     await _ensureInitialized();
-    return await _service.print(data, format: format);
+    return await _service.print(data,
+        format: format, printCompletionDelay: printCompletionDelay);
   }
 
   /// Auto-print workflow: automatically handles connection and printing
@@ -128,13 +135,18 @@ class Zebra {
   /// 
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
+  /// 
+  /// [printCompletionDelay] specifies how long to wait after print callback
+  /// before disconnecting. Default is 1000ms. This prevents the last line
+  /// from being cut off on some printers.
   ///
   /// The workflow:
   /// 1. Discover printers (if needed)
   /// 2. Connect to printer
   /// 3. Configure printer for the specified format
   /// 4. Print the data
-  /// 5. Disconnect
+  /// 5. Wait for print completion
+  /// 6. Disconnect
   ///
   /// Returns Result indicating success or failure.
   static Future<Result<void>> autoPrint(String data,
@@ -144,7 +156,8 @@ class Zebra {
       int maxRetries = 3,
       bool verifyConnection = true,
       bool disconnectAfter = true,
-      AutoCorrectionOptions? autoCorrectionOptions}) async {
+      AutoCorrectionOptions? autoCorrectionOptions,
+      Duration? printCompletionDelay}) async {
     await _ensureInitialized();
     return await _service.autoPrint(data,
         printer: printer,
@@ -153,7 +166,8 @@ class Zebra {
         maxRetries: maxRetries,
         verifyConnection: verifyConnection,
         disconnectAfter: disconnectAfter,
-        autoCorrectionOptions: autoCorrectionOptions);
+        autoCorrectionOptions: autoCorrectionOptions,
+        printCompletionDelay: printCompletionDelay);
   }
 
   /// Get available printers for selection
