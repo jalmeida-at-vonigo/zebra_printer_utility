@@ -2,10 +2,12 @@ import 'dart:async';
 import '../models/auto_correction_options.dart';
 import '../models/printer_readiness.dart';
 import '../models/result.dart';
+import '../models/print_enums.dart';
 import '../zebra_printer.dart';
 import '../zebra_sgd_commands.dart';
 import 'state_change_verifier.dart';
 import 'logger.dart';
+import 'parser_util.dart';
 
 /// Handles automatic correction of common printer issues
 class AutoCorrector {
@@ -188,6 +190,96 @@ class AutoCorrector {
     } catch (e) {
       _log('Failed to check/switch language: $e');
       return false;
+    }
+  }
+
+  /// Correct any issues that might prevent successful printing
+  /// This is a pre-print check that ensures the printer is in a good state
+  Future<Result<bool>> correctForPrinting({
+    required String data,
+    PrintFormat? format,
+  }) async {
+    try {
+      bool madeCorrections = false;
+
+      // Detect format if not specified
+      if (format == null) {
+        if (ZebraSGDCommands.isZPLData(data)) {
+          format = PrintFormat.zpl;
+        } else if (ZebraSGDCommands.isCPCLData(data)) {
+          format = PrintFormat.cpcl;
+        }
+      }
+
+      // 1. Clear buffer if enabled (always recommended for CPCL)
+      if (_options.enableBufferClear || format == PrintFormat.cpcl) {
+        _log('Clearing printer buffer for clean state...');
+
+        // Use sendCommand for control sequences, not print()
+        // This prevents them from being printed on labels
+        
+        if (format == PrintFormat.zpl || format == null) {
+          // For ZPL: Send cancel all command
+          _printer.sendCommand('~JA');
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+
+        if (format == PrintFormat.cpcl || format == null) {
+          // For CPCL: Send reset/cancel commands
+          // Send ESC character to reset CPCL parser
+          _printer.sendCommand('\x1B'); // ESC character
+          await Future.delayed(const Duration(milliseconds: 50));
+          
+          // Send CAN character to cancel any pending operations
+          _printer.sendCommand('\x18'); // CAN character
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+
+        _log('Buffer cleared');
+        madeCorrections = true;
+      }
+
+      // 2. Switch language if needed and enabled
+      if (_options.enableLanguageSwitch && format != null) {
+        final switched = await switchLanguageForData(data);
+        if (switched) {
+          madeCorrections = true;
+        }
+      }
+
+      // 3. Check and correct printer readiness if enabled
+      if (_options.enableUnpause || _options.enableClearErrors) {
+        // Get current printer status
+        final hostStatus = await _printer.getSetting('device.host_status');
+        final pauseStatus = await _printer.getSetting('device.pause');
+
+        // Unpause if needed
+        if (_options.enableUnpause && ParserUtil.toBool(pauseStatus) == true) {
+          _log('Printer is paused, attempting to unpause...');
+          _printer.sendCommand(ZebraSGDCommands.unpausePrinter());
+          await Future.delayed(const Duration(milliseconds: 500));
+          madeCorrections = true;
+        }
+
+        // Clear errors if needed
+        if (_options.enableClearErrors &&
+            hostStatus != null &&
+            !ParserUtil.isStatusOk(hostStatus)) {
+          _log('Clearing printer errors...');
+          _printer.sendCommand(ZebraSGDCommands.clearAlerts());
+          await Future.delayed(const Duration(milliseconds: 500));
+          madeCorrections = true;
+        }
+      }
+
+      return Result.success(madeCorrections);
+    } catch (e, stack) {
+      _logger.error('Error during pre-print correction', e);
+      return Result.error(
+        'Pre-print correction failed: $e',
+        code: ErrorCodes.operationError,
+        dartStackTrace: stack,
+      );
     }
   }
 }

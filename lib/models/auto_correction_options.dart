@@ -15,6 +15,9 @@ class AutoCorrectionOptions {
   /// Enable automatic calibration when needed
   final bool enableCalibration;
 
+  /// Enable automatic buffer clearing before printing (recommended for CPCL)
+  final bool enableBufferClear;
+
   /// Maximum number of correction attempts
   final int maxAttempts;
 
@@ -27,6 +30,7 @@ class AutoCorrectionOptions {
     this.enableReconnect = true,
     this.enableLanguageSwitch = false,
     this.enableCalibration = false,
+    this.enableBufferClear = false,
     this.maxAttempts = 3,
     this.attemptDelayMs = 500,
   });
@@ -39,6 +43,7 @@ class AutoCorrectionOptions {
       enableReconnect: true,
       enableLanguageSwitch: true,
       enableCalibration: true,
+      enableBufferClear: true,
     );
   }
 
@@ -50,6 +55,7 @@ class AutoCorrectionOptions {
       enableReconnect: false,
       enableLanguageSwitch: false,
       enableCalibration: false,
+      enableBufferClear: false,
     );
   }
 
@@ -61,6 +67,32 @@ class AutoCorrectionOptions {
       enableReconnect: true,
       enableLanguageSwitch: false,
       enableCalibration: false,
+      enableBufferClear: false,
+    );
+  }
+
+  /// Factory constructor optimized for regular print operations
+  /// Includes buffer clearing for reliability
+  factory AutoCorrectionOptions.print() {
+    return const AutoCorrectionOptions(
+      enableUnpause: true,
+      enableClearErrors: true,
+      enableReconnect: false,
+      enableLanguageSwitch: true,
+      enableBufferClear: true,
+    );
+  }
+
+  /// Factory constructor optimized for autoPrint operations
+  /// Includes all safety features
+  factory AutoCorrectionOptions.autoPrint() {
+    return const AutoCorrectionOptions(
+      enableUnpause: true,
+      enableClearErrors: true,
+      enableReconnect: true,
+      enableLanguageSwitch: true,
+      enableCalibration: true,
+      enableBufferClear: true,
     );
   }
 
@@ -71,6 +103,7 @@ class AutoCorrectionOptions {
     bool? enableReconnect,
     bool? enableLanguageSwitch,
     bool? enableCalibration,
+    bool? enableBufferClear,
     int? maxAttempts,
     int? attemptDelayMs,
   }) {
@@ -80,6 +113,7 @@ class AutoCorrectionOptions {
       enableReconnect: enableReconnect ?? this.enableReconnect,
       enableLanguageSwitch: enableLanguageSwitch ?? this.enableLanguageSwitch,
       enableCalibration: enableCalibration ?? this.enableCalibration,
+      enableBufferClear: enableBufferClear ?? this.enableBufferClear,
       maxAttempts: maxAttempts ?? this.maxAttempts,
       attemptDelayMs: attemptDelayMs ?? this.attemptDelayMs,
     );
@@ -91,7 +125,8 @@ class AutoCorrectionOptions {
       enableClearErrors ||
       enableReconnect ||
       enableLanguageSwitch ||
-      enableCalibration;
+      enableCalibration ||
+      enableBufferClear;
 
   @override
   String toString() {
@@ -101,6 +136,7 @@ class AutoCorrectionOptions {
         'reconnect: $enableReconnect, '
         'languageSwitch: $enableLanguageSwitch, '
         'calibration: $enableCalibration, '
+        'bufferClear: $enableBufferClear, '
         'maxAttempts: $maxAttempts, '
         'attemptDelayMs: $attemptDelayMs)';
   }

@@ -3,6 +3,11 @@ description:
 globs: 
 alwaysApply: true
 ---
+# GENERAL GUIDELINES
+
+* The complexity should be on the dart/flutter side as much a possible
+    - The native code side should be as thin as possible, and that makes sense.
+
 # COMPLETION
 
 * The code is clean and working.
@@ -16,14 +21,8 @@ alwaysApply: true
     - Only use patch increments ALWAYS
 * Update the @CHANGELOG.md with the changes
     - There is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
-* There is no duplicate exports on [zebrautil.dart](mdc:lib/zebrautil.dart)
 * All the tests were updated and are passing with the proper implementation.
 * There should be no TODO, either by comment or by knowing, at the end of the task. If you are not able to complete, ask for help.
-
-# ZEBRAUTIL
-
-* The services and models are exporting using [zebrautil.dart](mdc:lib/zebrautil.dart)](mdc:lib/zebrautil.dart).
-* Hide duplicate exports while reexporting the classes.
 
 # DOCUMENTATION
 

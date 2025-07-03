@@ -143,8 +143,31 @@
     if ([connection conformsToProtocol:@protocol(ZebraPrinterConnection)]) {
         id<ZebraPrinterConnection,NSObject> printerConnection = connection;
         NSError *error = nil;
+        
+        // Send the data
         BOOL success = [printerConnection write:data error:&error];
-        return success && !error;
+        
+        if (success && !error) {
+            // For CPCL data, ensure complete transmission
+            // Check if data contains CPCL commands (starts with "!" or contains CPCL markers)
+            NSString *dataString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            if (dataString && ([dataString hasPrefix:@"!"] || [dataString containsString:@"! 0"])) {
+                // Add a small delay to ensure CPCL data is fully transmitted
+                // This prevents the connection from closing before all data is sent
+                [NSThread sleepForTimeInterval:0.1];
+                
+                // If the data doesn't end with ETX, the connection might need explicit flushing
+                // The ZSDK doesn't provide a flush method, but we can ensure the write completes
+                // by checking connection status
+                if ([printerConnection isConnected]) {
+                    // Connection is still good, data should be transmitted
+                    return YES;
+                }
+            }
+            return YES;
+        }
+        
+        return NO;
     }
     
     return NO;

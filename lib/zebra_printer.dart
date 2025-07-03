@@ -222,6 +222,22 @@ class ZebraPrinter {
       );
 
       if (success) {
+        // Ensure the printer is in the list before updating status
+        final existingPrinter = controller.printers.firstWhere(
+          (p) => p.address == address,
+          orElse: () => ZebraDevice(
+            address: address,
+            name: 'Printer $address',
+            isWifi: !address.contains(':'), // Assume WiFi if no colons
+            status: 'Connected',
+          ),
+        );
+
+        // Add to list if not already there
+        if (!controller.printers.any((p) => p.address == address)) {
+          controller.addPrinter(existingPrinter);
+        }
+        
         controller.updatePrinterStatus("Connected", "G");
         return Result.success();
       } else {
@@ -275,6 +291,22 @@ class ZebraPrinter {
       );
 
       if (success) {
+        // Ensure the printer is in the list before updating status
+        final existingPrinter = controller.printers.firstWhere(
+          (p) => p.address == address,
+          orElse: () => ZebraDevice(
+            address: address,
+            name: 'Generic Printer $address',
+            isWifi: true, // Generic printers are typically network printers
+            status: 'Connected',
+          ),
+        );
+
+        // Add to list if not already there
+        if (!controller.printers.any((p) => p.address == address)) {
+          controller.addPrinter(existingPrinter);
+        }
+        
         controller.updatePrinterStatus("Connected", "G");
         return Result.success();
       } else {
@@ -603,11 +635,12 @@ class ZebraController extends ChangeNotifier {
       }
       final int index =
           _printers.indexWhere((element) => element.address == selectedAddress);
-      _printers[index] = _printers[index].copyWith(
-          status: status,
-          color: newColor,
-          isConnected: color == 'G');
-      notifyListeners();
+      
+      if (index != -1) {
+        _printers[index] = _printers[index].copyWith(
+            status: status, color: newColor, isConnected: color == 'G');
+        notifyListeners();
+      }
     }
   }
 

@@ -98,10 +98,12 @@ class Zebra {
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
   /// 
-  /// [printCompletionDelay] optionally adds a delay after the print callback
-  /// to ensure the printer has time to process all data. This is useful
-  /// for CPCL printing or when the connection might be closed shortly after.
-  /// Recommended: Duration(milliseconds: 500) for CPCL.
+  /// [clearBufferFirst] if true, clears the printer buffer before printing
+  /// to ensure no pending data interferes with the print job.
+  /// 
+  /// [autoCorrectionOptions] options for automatic issue correction. If not provided,
+  /// defaults to AutoCorrectionOptions.print() which includes buffer clearing and
+  /// language switching for reliable printing.
   /// 
   /// Example ZPL:
   /// ```
@@ -121,10 +123,28 @@ class Zebra {
   /// PRINT
   /// ```
   static Future<Result<void>> print(String data,
-      {PrintFormat? format, Duration? printCompletionDelay}) async {
+      {PrintFormat? format,
+      bool clearBufferFirst = false,
+      AutoCorrectionOptions? autoCorrectionOptions}) async {
     await _ensureInitialized();
-    return await _service.print(data,
-        format: format, printCompletionDelay: printCompletionDelay);
+    
+    // Use default print options if none provided
+    final options = autoCorrectionOptions ??
+        (clearBufferFirst
+            ? AutoCorrectionOptions.print()
+            : const AutoCorrectionOptions(
+                enableUnpause: true,
+                enableClearErrors: true,
+                enableLanguageSwitch: true,
+                enableBufferClear: false,
+              ));
+    
+    return await _service.print(
+      data, 
+      format: format,
+      clearBufferFirst: clearBufferFirst,
+      autoCorrectionOptions: options,
+    );
   }
 
   /// Auto-print workflow: automatically handles connection and printing

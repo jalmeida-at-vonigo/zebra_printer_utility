@@ -41,6 +41,36 @@ void main() {
       expect(options.enableCalibration, isFalse);
     });
 
+    test('safe factory has correct defaults', () {
+      final options = AutoCorrectionOptions.safe();
+      expect(options.enableUnpause, isTrue);
+      expect(options.enableClearErrors, isTrue);
+      expect(options.enableReconnect, isTrue);
+      expect(options.enableLanguageSwitch, isFalse);
+      expect(options.enableCalibration, isFalse);
+      expect(options.enableBufferClear, isFalse);
+    });
+
+    test('print factory has correct defaults', () {
+      final options = AutoCorrectionOptions.print();
+      expect(options.enableUnpause, isTrue);
+      expect(options.enableClearErrors, isTrue);
+      expect(options.enableReconnect, isFalse);
+      expect(options.enableLanguageSwitch, isTrue);
+      expect(options.enableCalibration, isFalse);
+      expect(options.enableBufferClear, isTrue);
+    });
+
+    test('autoPrint factory has correct defaults', () {
+      final options = AutoCorrectionOptions.autoPrint();
+      expect(options.enableUnpause, isTrue);
+      expect(options.enableClearErrors, isTrue);
+      expect(options.enableReconnect, isTrue);
+      expect(options.enableLanguageSwitch, isTrue);
+      expect(options.enableCalibration, isTrue);
+      expect(options.enableBufferClear, isTrue);
+    });
+
     test('copyWith returns identical object if no changes', () {
       const options = AutoCorrectionOptions();
       final copy = options.copyWith();

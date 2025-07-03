@@ -374,6 +374,13 @@ class ZebraPrinterInstance: NSObject {
                     let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
                     
                     if success {
+                    // For CPCL data, add extra delay to ensure complete transmission
+                    if data.hasPrefix("!") || data.contains("! 0") {
+                        // CPCL detected - wait longer to ensure all data is sent
+                        // Based on Zebra forum findings, CPCL needs more time
+                        Thread.sleep(forTimeInterval: 1.0)
+                    }
+                    
                     // Send success callback with operation ID
                         DispatchQueue.main.async {
                         if let operationId = operationId {

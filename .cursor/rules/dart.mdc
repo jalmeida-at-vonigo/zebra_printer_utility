@@ -1,0 +1,12 @@
+---
+description: 
+globs: *.dart
+alwaysApply: false
+---
+* The [zebra.dart](mdc:lib/zebra.dart) and [zebra_printer_service.dart](mdc:lib/zebra_printer_service.dart) should match the methods signatures when possible
+* There is no duplicate exports on [zebrautil.dart](mdc:lib/zebrautil.dart)
+
+# ZEBRAUTIL
+
+* The services and models are exporting using [zebrautil.dart](mdc:lib/zebrautil.dart)
+* Hide duplicate exports while reexporting the classes.

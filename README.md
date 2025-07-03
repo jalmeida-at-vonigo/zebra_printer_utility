@@ -22,20 +22,48 @@ This plugin provides a unified API for discovering, connecting to, and printing 
   - **Connection recovery**: Reconnect on connection loss
   - **Language switching**: Auto-switch printer language based on data format
   - **Calibration**: Auto-calibrate when media detection issues occur
+  - **Buffer clearing**: Clear printer buffer before printing (v2.0.20+)
   ```dart
-  // Use safe defaults (unpause, clear errors, reconnect)
-  await Zebra.autoPrint(data, 
-    autoCorrectionOptions: AutoCorrectionOptions.safe());
+  // Use optimized defaults for regular printing (v2.0.20+)
+  await Zebra.print(data); // Automatically uses AutoCorrectionOptions.print()
+  
+  // Use safe defaults for autoPrint (v2.0.20+)
+  await Zebra.autoPrint(data); // Automatically uses AutoCorrectionOptions.autoPrint()
   
   // Or customize corrections
-  await Zebra.autoPrint(data,
+  await Zebra.print(data,
     autoCorrectionOptions: AutoCorrectionOptions(
       enableUnpause: true,
       enableClearErrors: true,
       enableReconnect: false,
       enableLanguageSwitch: true,
       enableCalibration: false,
+      enableBufferClear: true,
     ));
+  
+  // Factory constructors for common scenarios
+  AutoCorrectionOptions.none()      // No corrections
+  AutoCorrectionOptions.safe()      // Basic corrections (unpause, clear errors, reconnect)
+  AutoCorrectionOptions.all()       // All corrections enabled
+  AutoCorrectionOptions.print()     // Optimized for print() - includes buffer clearing
+  AutoCorrectionOptions.autoPrint() // Optimized for autoPrint() - all safety features
+  ```
+- **Advanced Printer Control** (v2.0.18+):
+  - **SGD Commands**: Send raw SGD (Set/Get/Do) commands to the printer
+  - **Buffer Control**: Explicitly flush print buffer to ensure complete data transmission
+  - **Clear Buffer Before Print**: Optional parameter to clear printer state before printing
+  ```dart
+  // Send SGD command
+  await service.sendSGDCommand('! U1 setvar "device.languages" "zpl"');
+  
+  // Clear printer buffer to ensure clean state
+  await service.clearPrinterBuffer();
+  
+  // Print with buffer clearing (v2.0.19+)
+  await service.print(data, clearBufferFirst: true);
+  
+  // Flush print buffer (useful for CPCL)
+  await service.flushPrintBuffer();
   ```
 - **Comprehensive Diagnostics**:
   - When your printer doesn't print and you don't know why, use the diagnostics feature:

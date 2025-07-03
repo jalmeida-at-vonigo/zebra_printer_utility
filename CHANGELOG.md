@@ -1,5 +1,117 @@
 # Changelog
 
+## [2.0.23] - 2024-12-20
+### Fixed
+- Fixed connection state synchronization issue where UI showed "pending to connect" while logs showed "Connected"
+- Fixed index out of bounds error in updatePrinterStatus when printer not found in list
+- Ensured connected printer is added to the device list before updating its status
+- Improved connection state management between native code and Flutter UI
+
+## [2.0.22] - 2024-12-20
+### Fixed
+- Properly implemented buffer clearing using sendCommand instead of print
+- Buffer clearing now uses ESC and CAN characters for CPCL, and ~JA for ZPL
+- ETX character is sent as a command after CPCL printing for proper termination
+- Removed all instances of control characters being sent as print data
+- Fixed tests to reflect proper buffer clearing implementation
+
+## [2.0.21] - 2024-12-20
+### Fixed
+- Fixed CPCL printing issues where "^XZ" was being printed on labels
+- Removed ZPL termination commands from CPCL print flow
+- Simplified CPCL termination to use only line feeds for buffer flushing
+- Disabled buffer clearing temporarily to prevent interference with printing
+
+## [2.0.20] - 2025-01-03
+
+### Added
+- Integrated buffer clearing into AutoCorrector for more reliable printing
+- Added `enableBufferClear` option to AutoCorrectionOptions
+- New factory constructors for AutoCorrectionOptions:
+  - `AutoCorrectionOptions.print()` - Optimized for regular print operations
+  - `AutoCorrectionOptions.autoPrint()` - Optimized for autoPrint operations with all safety features
+- Added `autoCorrectionOptions` parameter to print method for fine-grained control
+
+### Changed
+- Default behavior for `print()` method now includes basic auto-corrections (unpause, clear errors, language switch)
+- Default behavior for `autoPrint()` method now uses comprehensive auto-corrections including buffer clearing
+- Buffer is always cleared for CPCL printing to prevent cut-off issues
+- Improved pre-print checks to ensure printer is in clean state
+
+### Technical Details
+- Based on Zebra SDK best practices, buffer clearing is essential for CPCL reliability
+- Pre-print corrections prevent common issues like paused printers or pending data
+- Language switching ensures print data format matches printer mode
+
+## [2.0.19] - 2025-01-03
+
+### Fixed
+- Fixed CPCL printing cut-off issue based on Zebra developer forum insights
+- Implemented separate packet transmission for CPCL termination sequences
+- Send ETX (`\x03`) and `^XZ` as separate packets to release print engine
+- Increased CPCL transmission delay to 1 second in iOS native code
+- Added `clearPrinterBuffer()` method to clear any pending data before printing
+
+### Added
+- Optional `clearBufferFirst` parameter in print method to clear printer state
+- Comprehensive buffer clearing that sends ETX, ^XZ, and CAN characters
+
+### Technical Details
+- Based on Zebra forum findings: the printer's print engine waits for data until it receives proper termination
+- ETX character must be sent as a separate packet, not concatenated with print data
+- This ensures the printer processes all CPCL data before considering the operation complete
+
+## [2.0.18] - 2025-01-03
+
+### Fixed
+- Fixed CPCL printing cut-off issue by ensuring complete data transmission
+- Added ETX (End of Text) character to CPCL data for proper termination
+- Implemented transmission delays in iOS native code for CPCL data
+- Added flushPrintBuffer() method to ensure all buffered data is processed
+- Enhanced iOS ZSDK wrapper to verify connection after CPCL writes
+- Added extra safeguards to prevent premature connection closure during CPCL printing
+
+## [2.0.17] - 2025-01-03
+
+### Fixed
+- Further improvements to prevent print cut-off issues
+- Added extra line feeds for CPCL to ensure buffer flush
+- Removed all status queries during printing (including odometer tracking)
+
+### Changed
+- Simplified print completion to use delay-based approach only
+- Increased base delays: CPCL 2500ms, ZPL 2000ms
+- Added dynamic delay calculation based on data size (1s extra per KB)
+- Increased disconnect delay to 3000ms to ensure complete processing
+
+### Added
+- `sendSGDCommand()` method for sending raw SGD commands
+- `flushPrintBuffer()` method to ensure print buffer is processed
+- Buffer flush line feeds for CPCL format to prevent truncation
+
+### Improved
+- Print reliability by completely avoiding any printer queries during active printing
+- Dynamic delay calculation ensures larger print jobs get adequate processing time
+- Better CPCL handling with proper termination and buffer flushing
+
+## [2.0.16] - 2025-01-03
+
+### Fixed
+- **Critical**: Fixed print cut-off issue caused by status queries interrupting active print jobs
+- Removed device status checking during print operations as per Zebra SDK best practices
+- Status queries (device.host_status, device.print_state, device.buffer_full) can cause the printer to pause mid-print
+
+### Changed
+- Replaced intrusive status checking with odometer-based print tracking for ZPL
+- Increased default print completion delays (ZPL: 1500ms, CPCL: 2000ms)
+- Simplified print completion verification to avoid interrupting print jobs
+- Removed status checking before disconnect to prevent print interruption
+
+### Improved
+- Print reliability by following Zebra SDK recommendation to avoid status queries during printing
+- CPCL printing stability with longer default completion delay
+- Overall print completion without cut-off issues
+
 ## [2.0.15] - 2025-01-03
 
 ### Fixed
