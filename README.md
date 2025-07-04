@@ -182,6 +182,37 @@ result
   .ifFailure((error) => print('Error: ${error.code} - ${error.message}'));
 ```
 
+## Advanced Usage: Printer State Management
+
+For advanced control over printer state, readiness, and buffer management, use the `PrinterStateManager` class. This is now available directly from the root of the package as `zebra_printer_state_manager.dart` and is re-exported by `zebrautil.dart`:
+
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+final stateManager = PrinterStateManager(
+  printer: myPrinter,
+  options: AutoCorrectionOptions.all(),
+  statusCallback: (msg) => print(msg),
+);
+
+// Example: Pre-print correction
+final result = await stateManager.correctForPrinting(
+  data: '^XA^FDTest^FS^XZ',
+  format: PrintFormat.zpl,
+);
+if (result.success) {
+  print('Corrections applied!');
+}
+
+// Example: Clear buffer
+await stateManager.clearPrinterBuffer();
+
+// Example: Flush buffer (for CPCL)
+await stateManager.flushPrintBuffer();
+```
+
+This class provides fine-grained control for advanced scenarios, such as custom auto-correction flows, buffer management, and language switching. See the API docs for details.
+
 ## Documentation
 
 ### 🔌 API Reference

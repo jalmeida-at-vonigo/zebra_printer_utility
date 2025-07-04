@@ -9,6 +9,8 @@ library zebrautil;
 export 'zebra.dart' show Zebra;
 export 'zebra_printer.dart' show ZebraPrinter, ZebraController, PrinterMode;
 export 'zebra_printer_service.dart' show ZebraPrinterService;
+export 'zebra_printer_discovery.dart' show ZebraPrinterDiscovery;
+export 'zebra_printer_state_manager.dart' show PrinterStateManager;
 export 'zebra_sgd_commands.dart' show ZebraSGDCommands;
 
 // Model exports
@@ -22,6 +24,5 @@ export 'models/auto_correction_options.dart' show AutoCorrectionOptions;
 
 // Internal utilities (for advanced usage)
 export 'internal/state_change_verifier.dart' show StateChangeVerifier;
-export 'internal/auto_corrector.dart' show AutoCorrector;
 export 'internal/parser_util.dart' show ParserUtil;
 export 'internal/logger.dart' show Logger;

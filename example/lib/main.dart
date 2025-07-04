@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'cpcl_screen.dart';
 import 'legacy_screen.dart';
 import 'simplified_screen.dart';
+import 'result_based_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -67,6 +68,10 @@ class _HomeScreenState extends State<HomeScreen>
               icon: Icon(Icons.dashboard),
               text: 'Simplified',
             ),
+            Tab(
+              icon: Icon(Icons.analytics),
+              text: 'Result-Based',
+            ),
           ],
         ),
       ),
@@ -76,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen>
           CPCLScreen(),
           LegacyScreen(),
           SimplifiedScreen(),
+          ResultBasedScreen(),
         ],
       ),
     );

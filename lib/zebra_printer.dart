@@ -80,29 +80,37 @@ class ZebraPrinter {
   }
 
   void startScanning() async {
+    _logger.info('Starting printer discovery process');
     isScanning = true;
     controller.cleanAll();
     
     try {
+      _logger.info('Checking Bluetooth permissions');
       // Check permission using operation manager
-      final isGrantPermission = await _operationManager.execute<bool>(
+      final isGrantPermissionResult = await _operationManager.execute<bool>(
         method: 'checkPermission',
         arguments: {},
         timeout: const Duration(seconds: 5),
       );
+      final isGrantPermission = isGrantPermissionResult.success &&
+          (isGrantPermissionResult.data ?? false);
       
       if (isGrantPermission) {
+        _logger.info('Permission granted, starting printer scan');
         // Start scan using operation manager
         await _operationManager.execute<bool>(
           method: 'startScan',
           arguments: {},
           timeout: const Duration(seconds: 30),
         );
+        _logger.info('Printer scan initiated successfully');
       } else {
+        _logger.warning('Permission denied for Bluetooth access');
         isScanning = false;
         if (onPermissionDenied != null) onPermissionDenied!();
       }
     } catch (e) {
+      _logger.error('Failed to start printer discovery', e);
       isScanning = false;
       if (onDiscoveryError != null) {
         onDiscoveryError!('SCAN_ERROR', e.toString());
@@ -111,6 +119,7 @@ class ZebraPrinter {
   }
 
   void stopScanning() async {
+    _logger.info('Stopping printer discovery process');
     isScanning = false;
     shouldSync = true;
     
@@ -120,6 +129,7 @@ class ZebraPrinter {
         arguments: {},
         timeout: const Duration(seconds: 5),
       );
+      _logger.info('Printer discovery stopped successfully');
     } catch (e) {
       // Log error but don't fail
       _logger.error('Error stopping scan', e);
@@ -203,25 +213,32 @@ class ZebraPrinter {
   }
 
   Future<Result<void>> connectToPrinter(String address) async {
+    _logger.info('Initiating connection to printer: $address');
     try {
       if (controller.selectedAddress != null) {
+        _logger.info(
+            'Disconnecting from current printer before connecting to new one');
         await disconnect();
       }
       if (controller.selectedAddress == address) {
+        _logger.info(
+            'Already connected to target printer, disconnecting and reconnecting');
         await disconnect();
         controller.selectedAddress = null;
         return Result.success();
       }
       controller.selectedAddress = address;
       
+      _logger.info('Attempting connection to printer: $address');
       // Use operation manager for tracked connection
-      final success = await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'connectToPrinter',
         arguments: {'Address': address},
         timeout: const Duration(seconds: 10),
       );
 
-      if (success) {
+      if (result.success && (result.data ?? false)) {
+        _logger.info('Successfully connected to printer: $address');
         // Ensure the printer is in the list before updating status
         final existingPrinter = controller.printers.firstWhere(
           (p) => p.address == address,
@@ -241,6 +258,7 @@ class ZebraPrinter {
         controller.updatePrinterStatus("Connected", "G");
         return Result.success();
       } else {
+        _logger.error('Failed to establish connection to printer: $address');
         controller.selectedAddress = null;
         return Result.error(
           'Failed to establish connection',
@@ -248,12 +266,15 @@ class ZebraPrinter {
         );
       }
     } on TimeoutException {
+      _logger.error('Connection timeout to printer: $address');
       controller.selectedAddress = null;
       return Result.error(
         'Connection timed out',
         code: ErrorCodes.connectionTimeout,
       );
     } on PlatformException catch (e) {
+      _logger.error(
+          'Platform exception during connection to printer: $address', e);
       controller.selectedAddress = null;
       return Result.error(
         e.message ?? 'Connection failed',
@@ -262,6 +283,8 @@ class ZebraPrinter {
         nativeError: e,
       );
     } catch (e, stack) {
+      _logger.error(
+          'Unexpected error during connection to printer: $address', e, stack);
       controller.selectedAddress = null;
       return Result.error(
         'Connection error: $e',
@@ -284,13 +307,13 @@ class ZebraPrinter {
       controller.selectedAddress = address;
       
       // Use operation manager for tracked connection
-      final success = await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'connectToGenericPrinter',
         arguments: {'Address': address},
         timeout: const Duration(seconds: 10),
       );
 
-      if (success) {
+      if (result.success && (result.data ?? false)) {
         // Ensure the printer is in the list before updating status
         final existingPrinter = controller.printers.firstWhere(
           (p) => p.address == address,
@@ -341,9 +364,12 @@ class ZebraPrinter {
   }
 
   Future<Result<void>> print({required String data}) async {
+    _logger.info(
+        'Starting print operation, data length: ${data.length} characters');
     try {
       // Validate input
       if (data.isEmpty) {
+        _logger.error('Print operation failed: Empty data provided');
         return Result.error(
           'Print data cannot be empty',
           code: ErrorCodes.invalidData,
@@ -352,36 +378,49 @@ class ZebraPrinter {
       
       // Only modify ZPL data, not CPCL
       if (data.trim().startsWith("^XA")) {
+        _logger.info('Detected ZPL format, applying modifications');
         // This is ZPL - apply modifications
         if (!data.contains("^PON")) {
           data = data.replaceAll("^XA", "^XA^PON");
+          _logger.info('Added print orientation normal (^PON) to ZPL');
         }
 
         if (isRotated) {
           data = data.replaceAll("^PON", "^POI");
+          _logger.info('Applied rotation (^POI) to ZPL data');
         }
+      } else if (data.trim().startsWith("!")) {
+        _logger.info('Detected CPCL format, sending as-is');
+      } else {
+        _logger.info('Unknown format, sending data as-is');
       }
-      // For CPCL (starts with "!") or other formats, send as-is
 
+      _logger.info('Sending print data to printer');
       // Use operation manager for tracked printing
-      final success = await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'print',
         arguments: {'Data': data},
         timeout: const Duration(seconds: 30),
       );
 
-      return success
-          ? Result.success()
-          : Result.error(
-              'Print failed',
-              code: ErrorCodes.printError,
-            );
+      if (result.success) {
+        _logger.info('Print operation completed successfully');
+        return Result.success();
+      } else {
+        _logger.error('Print operation failed: ${result.error?.message}');
+        return Result.error(
+          'Print failed',
+          code: ErrorCodes.printError,
+        );
+      }
     } on TimeoutException {
+      _logger.error('Print operation timed out after 30 seconds');
       return Result.error(
         'Print operation timed out',
         code: ErrorCodes.operationTimeout,
       );
     } on PlatformException catch (e) {
+      _logger.error('Platform exception during print operation', e);
       return Result.error(
         e.message ?? 'Print failed',
         code: ErrorCodes.printError,
@@ -389,6 +428,7 @@ class ZebraPrinter {
         nativeError: e,
       );
     } catch (e, stack) {
+      _logger.error('Unexpected error during print operation', e, stack);
       return Result.error(
         'Print error: $e',
         code: ErrorCodes.printError,
@@ -425,13 +465,13 @@ class ZebraPrinter {
       // For CPCL (starts with "!") or other formats, send as-is
 
       // Use operation manager for tracked execution
-      final success = await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'print',
         arguments: {'Data': data},
         timeout: const Duration(seconds: 30),
       );
 
-      return success
+      return result.success
           ? Result.success()
           : Result.error(
               'Print operation failed',
@@ -459,9 +499,10 @@ class ZebraPrinter {
   }
 
   Future<Result<void>> disconnect() async {
+    _logger.info('Initiating printer disconnection');
     try {
       // Use operation manager for tracked disconnection
-      final success = await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'disconnect',
         arguments: {},
         timeout: const Duration(seconds: 5),
@@ -469,20 +510,27 @@ class ZebraPrinter {
       
       if (controller.selectedAddress != null) {
         controller.updatePrinterStatus("Disconnected", "R");
+        _logger.info('Updated printer status to disconnected');
       }
       
-      return success
-          ? Result.success()
-          : Result.error(
-              'Disconnect failed',
-              code: ErrorCodes.connectionError,
-            );
+      if (result.success) {
+        _logger.info('Printer disconnected successfully');
+        return Result.success();
+      } else {
+        _logger.error('Disconnect operation failed: ${result.error?.message}');
+        return Result.error(
+          'Disconnect failed',
+          code: ErrorCodes.connectionError,
+        );
+      }
     } on TimeoutException {
+      _logger.error('Disconnect operation timed out');
       return Result.error(
         'Disconnect timed out',
         code: ErrorCodes.connectionTimeout,
       );
     } on PlatformException catch (e) {
+      _logger.error('Platform exception during disconnect', e);
       return Result.error(
         e.message ?? 'Disconnect failed',
         code: ErrorCodes.connectionError,
@@ -490,6 +538,7 @@ class ZebraPrinter {
         nativeError: e,
       );
     } catch (e, stack) {
+      _logger.error('Unexpected error during disconnect', e, stack);
       return Result.error(
         'Disconnect error: $e',
         code: ErrorCodes.connectionError,
@@ -509,7 +558,7 @@ class ZebraPrinter {
         arguments: {},
         timeout: const Duration(seconds: 5),
       );
-      return result;
+      return result.success && (result.data ?? false);
     } catch (e) {
       return false;
     }
@@ -521,12 +570,12 @@ class ZebraPrinter {
 
   Future<String> _getLocateValue({required String key}) async {
     try {
-      final value = await _operationManager.execute<String>(
+      final result = await _operationManager.execute<String>(
         method: 'getLocateValue',
         arguments: {'ResourceKey': key},
         timeout: const Duration(seconds: 5),
       );
-      return value;
+      return result.success ? (result.data ?? "") : "";
     } catch (e) {
       return "";
     }
@@ -536,12 +585,14 @@ class ZebraPrinter {
   /// Returns null if the setting cannot be retrieved
   Future<String?> getSetting(String setting) async {
     try {
-      final value = await _operationManager.execute<String>(
+      final result = await _operationManager.execute<String>(
         method: 'getSetting',
         arguments: {'setting': setting},
         timeout: const Duration(seconds: 5),
       );
-      return value.isNotEmpty ? value : null;
+      return result.success && (result.data?.isNotEmpty ?? false)
+          ? result.data
+          : null;
     } catch (e) {
       return null;
     }

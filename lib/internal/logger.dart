@@ -65,8 +65,9 @@ class Logger {
     }
 
     final timestamp = DateTime.now().toIso8601String();
-    final levelStr = level.name.toUpperCase().padRight(7);
-    final formattedMessage = '[$timestamp] [$prefix] $levelStr: $message';
+    final levelStr = level.name.toUpperCase().trim();
+    final formattedMessage =
+        '[$timestamp] [zebrautil] [$prefix] $levelStr: $message';
 
     if (customLogger != null) {
       customLogger!(formattedMessage);

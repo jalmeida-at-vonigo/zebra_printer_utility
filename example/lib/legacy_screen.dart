@@ -43,12 +43,16 @@ PRINT
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: defaultZPL);
-    _statusSubscription = Zebra.status.listen((status) {
+    _initPrinterState();
+  }
+
+  Future<void> _initPrinterState() async {
+    _statusSubscription = (await Zebra.status).listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
     });
-    _connectionSubscription = Zebra.connection.listen((device) {
+    _connectionSubscription = (await Zebra.connection).listen((device) {
       if (mounted) {
         setState(() => _isConnected =
             device != null && device.address == _selectedDevice?.address);

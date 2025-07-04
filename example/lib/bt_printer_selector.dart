@@ -29,13 +29,19 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
   bool _isScanning = false;
   String _status = '';
   StreamSubscription<String>? _statusSubscription;
+  StreamSubscription<List<ZebraDevice>>? _discoverySubscription;
   bool _isDisconnecting = false;
   String? _connectingAddress;
+  final Set<String> _discoveredAddresses = {};
 
   @override
   void initState() {
     super.initState();
-    _statusSubscription = Zebra.status.listen((status) {
+    _initPrinterState();
+  }
+
+  Future<void> _initPrinterState() async {
+    _statusSubscription = (await Zebra.status).listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
@@ -46,6 +52,7 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
   @override
   void dispose() {
     _statusSubscription?.cancel();
+    _discoverySubscription?.cancel();
     super.dispose();
   }
 
@@ -55,20 +62,57 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
     setState(() {
       _isScanning = true;
       _printers = [];
+      _discoveredAddresses.clear();
     });
 
     try {
-      final result = await Zebra.discoverPrinters();
-      if (mounted) {
-        setState(() {
-          _printers = result.success ? result.data ?? [] : [];
-          _isScanning = false;
-          if (!result.success) {
-            _status =
-                'Discovery error: ${result.error?.message ?? "Unknown error"}';
+      // Use the new streaming discovery API
+      final discoveryStream = Zebra.discovery.discoverPrintersStream(
+        timeout: const Duration(seconds: 10),
+        includeWifi: true,
+        includeBluetooth: true,
+      );
+
+      _discoverySubscription = discoveryStream.listen(
+        (printers) {
+          if (!mounted) return;
+
+          // Filter out duplicates and add new printers
+          final newPrinters = <ZebraDevice>[];
+          for (final printer in printers) {
+            if (!_discoveredAddresses.contains(printer.address)) {
+              _discoveredAddresses.add(printer.address);
+              newPrinters.add(printer);
+            }
           }
-        });
-      }
+
+          if (newPrinters.isNotEmpty) {
+            setState(() {
+              _printers.addAll(newPrinters);
+            });
+          }
+        },
+        onError: (error) {
+          if (mounted) {
+            setState(() {
+              _status = 'Discovery error: $error';
+              _isScanning = false;
+            });
+          }
+        },
+        onDone: () {
+          if (mounted) {
+            setState(() {
+              _isScanning = false;
+              if (_printers.isEmpty) {
+                _status = 'No printers found';
+              } else {
+                _status = 'Found ${_printers.length} printer(s)';
+              }
+            });
+          }
+        },
+      );
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -76,6 +120,16 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
           _isScanning = false;
         });
       }
+    }
+  }
+
+  Future<void> _stopDiscovery() async {
+    _discoverySubscription?.cancel();
+    await Zebra.stopDiscovery();
+    if (mounted) {
+      setState(() {
+        _isScanning = false;
+      });
     }
   }
 
@@ -133,6 +187,14 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
                         widget.onDisconnect?.call();
                       },
                 tooltip: 'Disconnect',
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (_isScanning) ...[
+              IconButton(
+                icon: const Icon(Icons.stop),
+                onPressed: _stopDiscovery,
+                tooltip: 'Stop Discovery',
               ),
               const SizedBox(width: 8),
             ],

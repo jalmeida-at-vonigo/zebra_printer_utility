@@ -31,19 +31,19 @@ class Zebra {
   }
 
   /// Stream of discovered devices
-  static Stream<List<ZebraDevice>> get devices {
-    _ensureInitialized();
-    return _service.devices;
+  static Future<Stream<List<ZebraDevice>>> get devices async {
+    await _ensureInitialized();
+    return _service.discovery.devices;
   }
 
   /// Stream of current connection state
-  static Stream<ZebraDevice?> get connection {
-    _ensureInitialized();
+  static Future<Stream<ZebraDevice?>> get connection async {
+    await _ensureInitialized();
     return _service.connection;
   }
 
   /// Stream of status messages
-  static Stream<String> get status {
+  static Future<Stream<String>> get status async {
     _ensureInitialized();
     return _service.status;
   }
@@ -56,7 +56,10 @@ class Zebra {
       _service.discoveredPrinters;
 
   /// Whether discovery is currently active
-  static bool get isScanning => _service.isScanning;
+  static bool get isScanning => _service.discovery.isScanning;
+
+  /// Discovery service for direct access to discovery operations
+  static ZebraPrinterDiscovery get discovery => _service.discovery;
 
   /// Discover available printers
   ///
@@ -68,13 +71,42 @@ class Zebra {
     Duration timeout = const Duration(seconds: 10),
   }) async {
     await _ensureInitialized();
-    return await _service.discoverPrinters(timeout: timeout);
+    return await _service.discovery.discoverPrinters(timeout: timeout);
   }
 
   /// Stop printer discovery
   static Future<void> stopDiscovery() async {
     await _ensureInitialized();
-    await _service.stopDiscovery();
+    await _service.discovery.stopDiscovery();
+  }
+
+  /// Discover available printers with streaming approach
+  ///
+  /// This will scan for both Bluetooth and Network printers and return
+  /// a stream of discovered devices as they are found.
+  ///
+  /// [timeout] specifies how long to scan for printers
+  /// [stopAfterCount] stops discovery after finding this many printers
+  /// [stopOnFirstPrinter] stops discovery after finding the first printer
+  /// [includeWifi] whether to include WiFi/Network printers
+  /// [includeBluetooth] whether to include Bluetooth printers
+  ///
+  /// Returns a Stream of discovered [ZebraDevice] lists.
+  static Future<Stream<List<ZebraDevice>>> discoverPrintersStream({
+    Duration timeout = const Duration(seconds: 10),
+    int? stopAfterCount,
+    bool stopOnFirstPrinter = false,
+    bool includeWifi = true,
+    bool includeBluetooth = true,
+  }) async {
+    await _ensureInitialized();
+    return _service.discovery.discoverPrintersStream(
+      timeout: timeout,
+      stopAfterCount: stopAfterCount,
+      stopOnFirstPrinter: stopOnFirstPrinter,
+      includeWifi: includeWifi,
+      includeBluetooth: includeBluetooth,
+    );
   }
 
   /// Connect to a printer by address
@@ -89,6 +121,11 @@ class Zebra {
   static Future<Result<void>> disconnect() async {
     await _ensureInitialized();
     return await _service.disconnect();
+  }
+
+  static Future<Result<void>> printCPCLDirect(String data) async {
+    await _ensureInitialized();
+    return await _service.printCPCLDirect(data);
   }
 
   /// Print data to the connected printer
@@ -234,4 +271,11 @@ class Zebra {
     await _ensureInitialized();
     return await _service.runDiagnostics();
   }
+
+  /// Printer state manager for advanced state/readiness/buffer operations
+  static PrinterStateManager get printerStateManager => PrinterStateManager(
+        printer: _service.printer!,
+        options: AutoCorrectionOptions.none(),
+        statusCallback: (msg) => _service.statusStreamController?.add(msg),
+      );
 }

@@ -10,3 +10,4 @@ alwaysApply: false
 
 * The services and models are exporting using [zebrautil.dart](mdc:lib/zebrautil.dart)
 * Hide duplicate exports while reexporting the classes.
+* Define public models classes on the [model](mdc:lib/models) folder

@@ -5,19 +5,16 @@ Complete API documentation for the Zebra Printer Plugin.
 ## Core Classes
 
 ### ZebraPrinterService
-High-level service for printer operations with built-in queue management. This is the main entry point for most applications.
+High-level service for printer operations with automatic connection management and retry logic.
 
 **Key Methods:**
-- `initialize()` - Initialize the service
-- `discoverPrinters()` - Discover available printers (returns `Result<List<ZebraDevice>>`)
-- `connect(String address)` - Connect with retry logic (returns `Result<void>`)
-- `print(String data, {PrintFormat? format})` - Print with format detection (returns `Result<void>`)
-- `autoPrint(String data, {...})` - Auto-connect and print (returns `Result<void>`)
-- `disconnect()` - Disconnect from printer (returns `Result<void>`)
-- `calibrate()` - Calibrate printer (returns `Result<void>`)
-- `setDarkness(int)` - Set print darkness (returns `Result<void>`)
-- `setMediaType(EnumMediaType)` - Set media type (returns `Result<void>`)
-- `checkPrinterReadiness()` - Check printer status (returns `Result<PrinterReadiness>`)
+- `autoPrint(String data, ...)` - Complete workflow: connect, print, disconnect (optimized to avoid redundant readiness checks)
+- `print(String data, ...)` - Print data with optional auto-corrections and format detection
+- `connect(String address)` - Connect to printer by address
+- `disconnect()` - Disconnect from current printer
+- `checkPrinterReadiness()` - Check if printer is ready to print
+- `runDiagnostics()` - Run comprehensive printer diagnostics
+- `getAvailablePrinters()` - Get list of discovered printers
 
 ### ZebraPrinter
 Low-level printer interface. Used internally by ZebraPrinterService.
@@ -77,6 +74,39 @@ if (result.success) {
   }
 }
 ```
+
+### PrinterStateManager
+Advanced utility for direct printer state, readiness, and buffer management. Exposed via `zebrautil.dart` as of v2.0.24.
+
+**Key Methods:**
+- `checkPrinterReadiness()` - Check printer connection, media, head, pause, and error status (core responsibility)
+- `runDiagnostics()` - Run comprehensive printer diagnostics and provide recommendations (core responsibility)
+- `correctReadiness(PrinterReadiness)` - Attempt to auto-correct printer issues (unpause, clear errors, calibrate, etc.)
+- `correctForPrinting({required String data, PrintFormat? format})` - Pre-print correction flow (buffer clear, language switch, readiness)
+- `clearPrinterBuffer()` - Clear all pending data and reset print engine state
+- `flushPrintBuffer()` - Ensure all buffered data is processed (important for CPCL)
+- `switchLanguageForData(String data)` - Switch printer language based on print data
+
+**Usage:**
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+final stateManager = PrinterStateManager(
+  printer: myPrinter,
+  options: AutoCorrectionOptions.all(),
+  statusCallback: (msg) => print(msg),
+);
+
+final result = await stateManager.correctForPrinting(
+  data: '^XA^FDTest^FS^XZ',
+  format: PrintFormat.zpl,
+);
+if (result.success) {
+  print('Corrections applied!');
+}
+```
+
+This class is intended for advanced scenarios where you need fine-grained control over printer state, buffer, or language switching. For most use cases, use `ZebraPrinterService` or the static `Zebra` API.
 
 ## Enums
 

@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.0.28] - 2025-07-03
+### Changed
+- Comprehensive DRY refactoring of status-related calls across `PrinterStateManager`
+- Created dedicated helper methods for common status queries:
+  - `_getHostStatus()` for `device.host_status`
+  - `_getPauseStatus()` for `device.pause`
+  - `_getPrinterLanguage()` for `device.languages`
+- Eliminated duplicate status calls in `_performPrePrintCorrections`, `checkPrinterReadiness`, `runDiagnostics`, and `switchLanguageForData` methods
+- Removed unused SGD command constants from `ZebraSGDCommands` class
+- Preserved original exception behavior in helper methods to maintain test compatibility
+- Improved code maintainability by centralizing status retrieval logic
+- Fixed logger test expectations to match actual logger format
+- Cleaned up trailing whitespace in modified files
+- All tests pass; no breaking changes to public API
+
+## [2.0.27] - 2025-07-03
+### Changed
+- Optimized `autoPrint` workflow to eliminate redundant readiness checks and corrections
+- Removed `_ensurePrinterReady` method as `print()` method already handles all readiness checks
+- Replaced full readiness check with direct connection check (`isPrinterConnected()`) in `autoPrint`
+- Reduced readiness checks from 3+ per autoPrint to 0 (connection check only)
+- Improved performance by eliminating duplicate correction attempts and unnecessary status queries
+- All tests pass; no breaking changes to public API
+
+## [2.0.26] - 2025-07-03
+### Changed
+- Moved `runDiagnostics` method to `PrinterStateManager` as a responsibility
+- Made `doGetSetting` private again (`_doGetSetting`) as it's primarily used internally
+- Further consolidated state and diagnostic operations in `PrinterStateManager`
+- `ZebraPrinterService.runDiagnostics()` now delegates to `PrinterStateManager`
+- All tests pass; no breaking changes to public API
+
+## [2.0.25] - 2025-07-03
+### Changed
+- Moved `checkPrinterReadiness` method to `PrinterStateManager` as a responsibility
+- Improved architecture by consolidating state-related operations in one place
+- `ZebraPrinterService.checkPrinterReadiness()` now delegates to `PrinterStateManager`
+- Added `doGetSetting` public method to `PrinterStateManager` for advanced usage
+- All tests pass; no breaking changes to public API
+
+## [2.0.24] - 2025-07-03
+### Changed
+- Moved PrinterStateManager to `lib/zebra_printer_state_manager.dart` (was `lib/internal/printer_state_manager.dart`)
+- Exposed PrinterStateManager via `zebrautil.dart` for advanced/low-level state, readiness, and buffer management
+- Updated documentation and API reference to reflect new location and usage
+- All tests and analysis pass; no breaking changes
+
 ## [2.0.23] - 2024-12-20
 ### Fixed
 - Fixed connection state synchronization issue where UI showed "pending to connect" while logs showed "Connected"
@@ -244,109 +291,4 @@
 
 ### Added
 - Callback-based print completion using native `onPrintComplete` and `onPrintError` events
-- New `printWithCallback()` method that waits for actual print completion
-- Print operation timeout handling (30 seconds)
-
-### Fixed
-- Replaced artificial 2-second delay with proper print completion callbacks
-- More reliable print completion detection using native printer feedback
-- Improved print timing accuracy
-
-## [2.0.5] - 2024-12-19
-
-### Fixed
-- Fixed autoPrint not reconnecting when printer gets disconnected during print
-- Added connection verification before each print attempt in retry logic
-- Added automatic reconnection when connection is lost during print retries
-- Improved connection verification with better status messages
-- Added forceReconnect method for manual reconnection when needed
-- Fixed connection state synchronization between printer and internal state
-
-### Added
-- Automatic reconnection logic in _printWithRetry method
-- Better error handling and status messages for connection issues
-- Connection verification before each print attempt
-
-## [2.0.4] - 2024-12-19
-
-### Fixed
-- Fixed autoPrint disconnecting before print operation completes
-- Added delay after printing to ensure operation completes before disconnection
-- Fixed autoPrint reconnecting unnecessarily when already connected to the right printer
-- Improved connection management to avoid "Not connected to printer" errors
-- Added proper connection verification before attempting print operations
-
-## [2.0.3] - 2024-12-19
-
-### Fixed
-- Fixed type casting error in operation queue causing print operations to fail
-- Fixed `Future<dynamic>` to `Future<bool>` type cast issue in `ZebraOperationQueue.enqueue`
-- Added proper type conversion using Completer to handle generic return types
-
-## [2.0.2] - 2024-12-19
-
-### Fixed
-- Fixed print operations failing due to Result type handling in operation implementations
-- Fixed disconnect operation not returning proper Result type
-- Added directPrint method for testing without operation queue
-- Temporarily disabled getSetting calls to isolate printing issues
-- Fixed return type handling in _doSetSetting, _doSetPrinterMode, and _doCheckStatus methods
-
-### Added
-- Test buttons in simplified screen to help diagnose printing issues
-- Direct print method that bypasses operation queue for debugging
-
-## [2.0.1] - 2024-01-XX
-
-### Fixed
-- Standardized getInstance to expect String (iOS returns UUID string)
-- Improved ZSDK compatibility by using SGD commands instead of ZPL-specific commands
-- Auto-correction commands now work in both ZPL and CPCL modes
-- Replaced `~JR` (ZPL) with `alerts.clear` (SGD) for clearing errors
-- Removed redundant `~PS` command, using only SGD `device.pause = 0`
-
-## [2.0.0] - 2024-01-XX
-
-### Added
-- **Configurable Auto-Correction System**
-  - New `AutoCorrectionOptions` class for fine-grained control
-  - Factory methods: `.safe()`, `.all()`, `.none()`
-  - Individual flags for each correction type
-  - Configurable retry attempts and delays
-  
-- **Robust Parser Utilities**
-  - New `ParserUtil` class that never fails
-  - Handles multiple boolean formats ('true', 'on', '1', 'yes', etc.)
-  - Smart status interpretation for media, head, and error states
-  - Safe number extraction from strings
-
-- **Internal Architecture Improvements**
-  - Created `lib/internal/` folder for implementation details
-  - New `AutoCorrector` class handles all correction logic
-  - Better separation of concerns
-
-- **Enhanced Auto-Corrections**
-  - Auto-unpause paused printers
-  - Clear recoverable errors
-  - Reconnect on connection loss
-  - Auto-switch printer language based on data format
-  - Auto-calibrate on media detection issues
-
-- **Comprehensive Documentation**
-  - Architecture diagram and detailed documentation
-  - Usage examples for all scenarios
-  - Parser capabilities documentation
-
-### Changed
-- `autoPrint` now accepts optional `AutoCorrectionOptions` parameter
-- Printer readiness checks now use `ParserUtil` for robust parsing
-- Version numbering scheme: patch versions for each significant change in v2.0+
-
-### Fixed
-- More reliable pause detection (handles '1', 'on', 'true' values)
-- Better error message extraction from printer status
-- Safer parsing that never throws exceptions
-
-## Previous Versions
-
-See [.readme/development/CHANGELOG.md](.readme/development/CHANGELOG.md) for pre-2.0 versions. 
+- New `printWithCallback()`

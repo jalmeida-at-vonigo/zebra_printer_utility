@@ -46,7 +46,7 @@ void main() {
       expect(printCall, isA<Function>());
     });
 
-    test('AutoCorrector correctForPrinting handles different formats',
+    test('PrinterStateManager correctForPrinting handles different formats',
         () async {
       // Test that CPCL always gets buffer clearing
       const cpclData =

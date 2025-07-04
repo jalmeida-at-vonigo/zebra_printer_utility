@@ -15,14 +15,6 @@ class ZebraSGDCommands {
     return '! U1 do "$action" "$value"\r\n';
   }
 
-  /// Common SGD commands
-  static const String getPrinterLanguage = '! U1 getvar "device.languages"\r\n';
-  static const String getApplName = '! U1 getvar "appl.name"\r\n';
-  static const String getPrinterStatus = '! U1 getvar "device.host_status"\r\n';
-  static const String getMediaStatus = '! U1 getvar "media.status"\r\n';
-  static const String getHeadStatus = '! U1 getvar "head.latch"\r\n';
-  static const String getPaused = '! U1 getvar "device.pause"\r\n';
-
   /// Set printer to ZPL mode
   static String setZPLMode() => setCommand('device.languages', 'zpl');
 

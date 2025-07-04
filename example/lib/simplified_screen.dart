@@ -29,9 +29,25 @@ class _SimplifiedScreenState extends State<SimplifiedScreen> {
 ^FO50,100^BY2^BCN,100,Y,N,N^FD123456789^FS
 ^XZ""";
 
-  final String defaultCPCL = """! 0 200 200 200 1
-TEXT 4 0 30 40 Hello from Flutter!
-BARCODE 128 1 1 50 30 100 123456789
+  final String defaultCPCL = """! 0 200 200 400 1
+ON-FEED IGNORE
+LABEL
+CONTRAST 0
+TONE 0
+SPEED 5
+PAGE-WIDTH 800
+BAR-SENSE
+T 7 1 550 91 Bedroom 2 test value
+T 7 1 220 190 Equalizer
+T 7 1 550 42 6/27/2025
+T 7 1 220 42 Test Jane
+T 4 0 220 91 104
+CENTER 800
+BT 0 4 8
+B 39 1 1 50 0 237 00170000010422
+BT OFF
+LEFT 0
+T 4 0 88 169 689
 FORM
 PRINT
 """;
@@ -40,12 +56,16 @@ PRINT
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: defaultZPL);
-    _statusSubscription = Zebra.status.listen((status) {
+    _initPrinterState();
+  }
+
+  Future<void> _initPrinterState() async {
+    _statusSubscription = (await Zebra.status).listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
     });
-    _connectionSubscription = Zebra.connection.listen((device) {
+    _connectionSubscription = (await Zebra.connection).listen((device) {
       if (mounted) {
         setState(() => _isConnected =
             device != null && device.address == _selectedDevice?.address);
@@ -125,7 +145,6 @@ PRINT
         address: _selectedDevice!.address,
         format: format,
         disconnectAfter: false,
-
       );
     } else {
       // Use autoPrint to discover and use any available printer
@@ -134,7 +153,7 @@ PRINT
         format: format,
       );
     }
-    
+
     if (mounted) {
       setState(() {
         _isPrinting = false;
@@ -280,8 +299,6 @@ PRINT
                     },
               child: const Text('Manual Print'),
             ),
-
-
           ],
         ),
       ),
