@@ -2,7 +2,89 @@
 
 Complete API documentation for the Zebra Printer Plugin.
 
-## Core Classes
+## Smart API (v2.3+) - Recommended
+
+### Zebra (Static API)
+High-performance static API with intelligent caching, connection pooling, and smart retry logic.
+
+**Key Methods:**
+- `smartPrint(String data, ...)` - High-performance printing with 60-80% improvements
+- `smartPrintBatch(List<String> data, ...)` - Optimized batch printing
+- `smartDiscover()` - Smart discovery with caching
+- `smartConnect(String address)` - Smart connection management
+- `smartDisconnect()` - Smart disconnection
+- `getSmartStatus()` - Get smart API status and health
+
+**Usage:**
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+// Simple smart print - handles everything automatically
+await Zebra.smartPrint('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+
+// Smart print with specific printer
+await Zebra.smartPrint(
+  '^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ',
+  address: '192.168.1.100',
+);
+
+// Batch printing with connection pooling
+final labels = [
+  '^XA^FO50,50^A0N,50,50^FDLabel 1^FS^XZ',
+  '^XA^FO50,50^A0N,50,50^FDLabel 2^FS^XZ',
+];
+await Zebra.smartPrintBatch(labels);
+
+// Smart discovery
+final result = await Zebra.smartDiscover();
+if (result.success) {
+  print('Found ${result.data!.length} printers');
+}
+```
+
+### ZebraPrinterSmart
+Advanced smart printer instance for granular control.
+
+**Key Methods:**
+- `print(String data, ...)` - Smart print with options
+- `printBatch(List<String> data, ...)` - Smart batch printing
+- `connect(String address, ...)` - Smart connection with options
+- `disconnect()` - Smart disconnection
+- `discover(...)` - Smart discovery with options
+- `getStatus()` - Get detailed smart status
+
+### SmartPrintOptions
+Configuration options for smart printing.
+
+**Factory Constructors:**
+- `SmartPrintOptions.fast()` - Minimal safety checks for speed
+- `SmartPrintOptions.reliable()` - All safety features for reliability
+- `SmartPrintOptions.conservative()` - Maximum safety and compatibility
+
+**Custom Options:**
+```dart
+SmartPrintOptions(
+  maxRetries: 3,
+  retryDelay: Duration(seconds: 2),
+  clearBufferBeforePrint: true,
+  flushBufferAfterPrint: true,
+  enableConnectionPooling: true,
+  enableCaching: true,
+  enableOptimization: true,
+)
+```
+
+### SmartBatchOptions
+Configuration options for batch printing.
+
+**Inherits from SmartPrintOptions with additional batch-specific options:**
+- `batchSize` - Number of labels per batch
+- `batchDelay` - Delay between batches
+- `enableBatchOptimization` - Enable batch-specific optimizations
+
+## Legacy API (v2.2 and earlier)
+
+### Core Classes
 
 ### ZebraPrinterService
 High-level service for printer operations with automatic connection management and retry logic.

@@ -4,8 +4,9 @@ import 'package:zebrautil/zebra.dart';
 import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/smart/options/smart_print_options.dart';
 import 'package:zebrautil/smart/options/smart_batch_options.dart';
-
+import 'package:zebrautil/smart/options/discovery_options.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
+
 import 'bt_printer_selector.dart';
 import 'operation_log_panel.dart';
 
@@ -32,9 +33,7 @@ class _SmartScreenState extends State<SmartScreen> {
   // Advanced options
   SmartPrintOptions _smartOptions = const SmartPrintOptions.reliable();
   bool _showAdvancedOptions = false;
-  bool _enableIOSOptimization = true;
-  bool _enableMulticast = true;
-  bool _enableMFiOptimization = true;
+  bool _enableConnectionPooling = true;
   bool _enableCaching = true;
   bool _enableOptimization = true;
   bool _clearBufferBeforePrint = true;
@@ -46,7 +45,6 @@ class _SmartScreenState extends State<SmartScreen> {
   List<String> _batchLabels = [];
   bool _isBatchPrinting = false;
 
-  
   // Logs
   final List<OperationLogEntry> _logs = [];
   
@@ -189,9 +187,7 @@ PRINT
         retryDelay: Duration(seconds: _retryDelay.toInt()),
         clearBufferBeforePrint: _clearBufferBeforePrint,
         flushBufferAfterPrint: _flushBufferAfterPrint,
-        enableIOSOptimization: _enableIOSOptimization,
-        enableMulticast: _enableMulticast,
-        enableMFiOptimization: _enableMFiOptimization,
+        enableConnectionPooling: _enableConnectionPooling,
         enableCaching: _enableCaching,
         enableOptimization: _enableOptimization,
       );
@@ -298,7 +294,13 @@ PRINT
     _addLog('Starting smart printer discovery', 'INFO');
 
     try {
-      final result = await Zebra.smartDiscover();
+      final result = await Zebra.smartDiscover(
+        options: const DiscoveryOptions(
+          timeout: Duration(seconds: 10),
+          includeBluetooth: true,
+          includeNetwork: true,
+        ),
+      );
       
       if (result.success) {
         _addLog('Smart discovery found ${result.data?.length ?? 0} printers',
@@ -318,25 +320,28 @@ PRINT
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          // Left panel - Printer selection and controls
-          Expanded(
-            flex: 1,
-            child: Card(
-              margin: const EdgeInsets.all(8.0),
+      appBar: AppBar(
+        title: const Text('Smart API Demo'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Printer Selection Section
+            Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Smart API Controls',
+                      'Printer Selection',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 16),
                     
-                    // Printer selector
                     BTPrinterSelector(
                       onDeviceSelected: _onDeviceSelected,
                       onConnect: _onConnect,
@@ -351,7 +356,7 @@ PRINT
                           ? Colors.green.shade100
                           : Colors.red.shade100,
                       child: Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Row(
                           children: [
                             Icon(
@@ -374,7 +379,24 @@ PRINT
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
 
+            const SizedBox(height: 16),
+
+            // Print Configuration Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Print Configuration',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 16),
 
                     // Print mode selector
@@ -397,115 +419,10 @@ PRINT
                     
                     const SizedBox(height: 16),
 
-                    // Action buttons
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _discoverPrinters,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.search),
-                        label: Text(_isLoading
-                            ? 'Discovering...'
-                            : 'Discover Printers'),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isPrinting ? null : _smartPrint,
-                        icon: _isPrinting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.print),
-                        label:
-                            Text(_isPrinting ? 'Printing...' : 'Smart Print'),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isBatchPrinting ? null : _smartBatchPrint,
-                        icon: _isBatchPrinting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.batch_prediction),
-                        label: Text(_isBatchPrinting
-                            ? 'Batch Printing...'
-                            : 'Smart Batch Print'),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 8),
-                    
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _getSmartStatus,
-                        icon: const Icon(Icons.analytics),
-                        label: const Text('Get Smart Status'),
-                      ),
-                    ),
-                    
-                    const Spacer(),
-
-                    // Status display
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Status:',
-                                style: Theme.of(context).textTheme.titleSmall),
-                            const SizedBox(height: 4),
-                            Text(_status,
-                                style: Theme.of(context).textTheme.bodySmall),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          
-          // Right panel - Advanced options and data input
-          Expanded(
-            flex: 2,
-            child: Card(
-              margin: const EdgeInsets.all(8.0),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    // Advanced options toggle
                     Row(
                       children: [
-                        Text(
-                          'Smart API Configuration',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
+                        const Text('Advanced Options'),
                         const Spacer(),
                         Switch(
                           value: _showAdvancedOptions,
@@ -513,39 +430,26 @@ PRINT
                             setState(() => _showAdvancedOptions = value);
                           },
                         ),
-                        const Text('Advanced Options'),
                       ],
                     ),
-                    
-                    const SizedBox(height: 16),
 
                     // Advanced options
                     if (_showAdvancedOptions) ...[
-                      Text('Advanced Options:',
+                      const SizedBox(height: 16),
+                      Text('Smart Options:',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       
                       Wrap(
-                        spacing: 16,
+                        spacing: 8,
                         runSpacing: 8,
                         children: [
                           FilterChip(
-                            label: const Text('iOS Optimization'),
-                            selected: _enableIOSOptimization,
+                            label: const Text('Connection Pooling'),
+                            selected: _enableConnectionPooling,
                             onSelected: (value) =>
-                                setState(() => _enableIOSOptimization = value),
-                          ),
-                          FilterChip(
-                            label: const Text('Multicast'),
-                            selected: _enableMulticast,
-                            onSelected: (value) =>
-                                setState(() => _enableMulticast = value),
-                          ),
-                          FilterChip(
-                            label: const Text('MFi Optimization'),
-                            selected: _enableMFiOptimization,
-                            onSelected: (value) =>
-                                setState(() => _enableMFiOptimization = value),
+                                setState(
+                                () => _enableConnectionPooling = value),
                           ),
                           FilterChip(
                             label: const Text('Caching'),
@@ -613,15 +517,104 @@ PRINT
                           ),
                         ],
                       ),
-                      
-                      const SizedBox(height: 16),
                     ],
+                  ],
+                ),
+              ),
+            ),
 
-                    // Data input
-                    Text('Print Data:',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Expanded(
+            const SizedBox(height: 16),
+
+            // Action Buttons Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Actions',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Action buttons in a grid
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      childAspectRatio: 3,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _discoverPrinters,
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.search),
+                          label:
+                              Text(_isLoading ? 'Discovering...' : 'Discover'),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _isPrinting ? null : _smartPrint,
+                          icon: _isPrinting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.print),
+                          label:
+                              Text(_isPrinting ? 'Printing...' : 'Smart Print'),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _isBatchPrinting ? null : _smartBatchPrint,
+                          icon: _isBatchPrinting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.batch_prediction),
+                          label: Text(
+                              _isBatchPrinting ? 'Batch...' : 'Batch Print'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _getSmartStatus,
+                          icon: const Icon(Icons.analytics),
+                          label: const Text('Status'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Print Data Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Print Data',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    SizedBox(
+                      height: 200,
                       child: TextField(
                         controller: _labelController,
                         maxLines: null,
@@ -636,14 +629,53 @@ PRINT
                 ),
               ),
             ),
-          ),
 
-          // Rightmost panel - Operation logs
-          Expanded(
-            flex: 1,
-            child: OperationLogPanel(logs: _logs),
-          ),
-        ],
+            const SizedBox(height: 16),
+
+            // Status Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Status',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(_status,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Operation Logs Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Operation Logs',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    SizedBox(
+                      height: 300,
+                      child: OperationLogPanel(logs: _logs),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
