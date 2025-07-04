@@ -46,7 +46,10 @@ class ZebraPrinterService {
   List<ZebraDevice> get discoveredPrinters => _controller?.printers ?? [];
 
   /// Initialize the printer service
-  Future<void> initialize() async {
+  Future<void> initialize({
+    Function(String code, String? message)? onDiscoveryError,
+    Function()? onPermissionDenied,
+  }) async {
     if (_printer != null) return;
 
     _logger.info('Initializing ZebraPrinterService');
@@ -67,11 +70,13 @@ class ZebraPrinterService {
     _logger.info('Creating printer instance');
     _printer = await _getPrinterInstance(
       controller: _controller,
-      onDiscoveryError: (code, message) {
+      onDiscoveryError: onDiscoveryError ??
+          (code, message) {
         _logger.error('Discovery error: $code - $message');
         _statusStreamController?.add('Discovery error: $message');
       },
-      onPermissionDenied: () {
+      onPermissionDenied: onPermissionDenied ??
+          () {
         _logger.warning('Bluetooth permission denied');
         _statusStreamController?.add('Permission denied');
       },
@@ -724,9 +729,14 @@ class ZebraPrinterService {
   }
 
   /// Check if a printer is currently connected
-  Future<bool> isConnected() async {
+  Future<bool> isPrinterConnected() async {
     await _ensureInitialized();
     return await _printer!.isPrinterConnected();
+  }
+
+  /// Check if a printer is currently connected (alias for backward compatibility)
+  Future<bool> isConnected() async {
+    return await isPrinterConnected();
   }
 
   /// Force reconnect to the current printer
@@ -948,8 +958,9 @@ class ZebraPrinterService {
     try {
       _statusStreamController?.add('Sending SGD command: $command');
 
-      // Use the sendCommand method from ZebraPrinter
-      _printer!.sendCommand(command);
+      // Use the command pattern instead of direct sendCommand
+      await CommandFactory.createSendCommandCommand(_printer!, command)
+          .execute();
 
       // For SGD commands that return values, we need to read the response
       // This is a simplified implementation - enhance as needed

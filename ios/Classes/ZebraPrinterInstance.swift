@@ -79,6 +79,13 @@ class ZebraPrinterInstance: NSObject {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "SettingCommand is required", details: nil))
             }
             
+        case "sendCommand":
+            if let command = args?["command"] as? String {
+                sendCommand(command: command, operationId: operationId, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT", message: "command is required", details: nil))
+            }
+            
         case "getLocateValue":
             if let key = args?["ResourceKey"] as? String {
                 getLocateValue(key: key, operationId: operationId, result: result)
@@ -432,6 +439,60 @@ class ZebraPrinterInstance: NSObject {
                     ])
                     }
                     result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                }
+            }
+        }
+    }
+    
+    // MARK: - Command Operations
+    
+    private func sendCommand(command: String, operationId: String?, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self, let connection = self.connection else {
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self?.channel.invokeMethod("onCommandError", arguments: [
+                            "operationId": operationId,
+                            "error": "Not connected to printer"
+                        ])
+                    }
+                    result(FlutterError(code: "COMMAND_ERROR", message: "Not connected to printer", details: nil))
+                }
+                return
+            }
+            
+            // Send command using ZSDKWrapper.sendData
+            if let commandData = command.data(using: .utf8) {
+                let success = ZSDKWrapper.send(commandData, toConnection: connection)
+                
+                DispatchQueue.main.async {
+                    if success {
+                        if let operationId = operationId {
+                            self.channel.invokeMethod("onCommandComplete", arguments: [
+                                "operationId": operationId
+                            ])
+                        }
+                        result(nil)
+                    } else {
+                        if let operationId = operationId {
+                            self.channel.invokeMethod("onCommandError", arguments: [
+                                "operationId": operationId,
+                                "error": "Failed to send command"
+                            ])
+                        }
+                        result(FlutterError(code: "COMMAND_ERROR", message: "Failed to send command", details: nil))
+                    }
+                }
+            } else {
+                let errorMsg = "Invalid command encoding"
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onCommandError", arguments: [
+                            "operationId": operationId,
+                            "error": errorMsg
+                        ])
+                    }
+                    result(FlutterError(code: "COMMAND_ERROR", message: errorMsg, details: nil))
                 }
             }
         }

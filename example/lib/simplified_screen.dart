@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 import 'bt_printer_selector.dart';
+import 'log_widget.dart';
 
 enum PrintMode { cpcl, zpl, auto }
 
@@ -22,6 +23,9 @@ class _SimplifiedScreenState extends State<SimplifiedScreen> {
   StreamSubscription<String>? _statusSubscription;
   StreamSubscription<ZebraDevice?>? _connectionSubscription;
   bool _isLoading = false;
+  
+  // Logs
+  final List<SimpleLogEntry> _logs = [];
 
   final String defaultZPL = """^XA
 ^LL250
@@ -60,12 +64,12 @@ PRINT
   }
 
   Future<void> _initPrinterState() async {
-    _statusSubscription = (await Zebra.status).listen((status) {
+    _statusSubscription = Zebra.statusStream.listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
     });
-    _connectionSubscription = (await Zebra.connection).listen((device) {
+    _connectionSubscription = Zebra.connectionStream.listen((device) {
       if (mounted) {
         setState(() => _isConnected =
             device != null && device.address == _selectedDevice?.address);
@@ -88,7 +92,7 @@ PRINT
   }
 
   Future<void> _onConnect(ZebraDevice device) async {
-    final result = await Zebra.connect(device.address);
+    final result = await Zebra.smartConnect(device.address);
     if (mounted) {
       setState(() {
         _isConnected = result.success;
@@ -128,6 +132,8 @@ PRINT
       setState(() => _isPrinting = true);
     }
 
+    _addLog('Starting print operation', 'INFO');
+
     PrintFormat? format;
     if (_printMode == PrintMode.zpl) {
       format = PrintFormat.zpl;
@@ -139,6 +145,7 @@ PRINT
     Result<void> result;
 
     if (_isConnected && _selectedDevice != null) {
+      _addLog('Using connected printer: ${_selectedDevice!.address}', 'INFO');
       // Use autoPrint with the connected printer
       result = await Zebra.autoPrint(
         _labelController.text,
@@ -147,6 +154,7 @@ PRINT
         disconnectAfter: false,
       );
     } else {
+      _addLog('Auto-discovering printer', 'INFO');
       // Use autoPrint to discover and use any available printer
       result = await Zebra.autoPrint(
         _labelController.text,
@@ -157,11 +165,30 @@ PRINT
     if (mounted) {
       setState(() {
         _isPrinting = false;
-        if (!result.success) {
+        if (result.success) {
+          _status = 'Print completed successfully';
+          _addLog('Print operation successful', 'SUCCESS');
+        } else {
           _status = 'Print failed: ${result.error?.message ?? "Unknown error"}';
+          _addLog('Print operation failed: ${result.error?.message}', 'ERROR');
         }
       });
     }
+  }
+
+  void _addLog(String message, String level) {
+    final log = SimpleLogEntry(
+      message: message,
+      level: level,
+      timestamp: DateTime.now(),
+    );
+
+    setState(() {
+      _logs.insert(0, log);
+      if (_logs.length > 50) {
+        _logs.removeLast();
+      }
+    });
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -252,6 +279,7 @@ PRINT
                   ? null
                   : () async {
                       setState(() => _isLoading = true);
+                      _addLog('Starting manual print operation', 'INFO');
 
                       // Get the CPCL content
                       const cpclContent = '''! 0 200 200 210 1
@@ -274,11 +302,13 @@ PRINT
                           _isLoading = false;
                           _status = 'Print failed: $e';
                         });
+                        _addLog('Print exception: $e', 'ERROR');
                         return;
                       }
 
                       if (result.success) {
                         _showMessage('Print sent successfully');
+                        _addLog('Manual print successful', 'SUCCESS');
                       } else {
                         final errorMsg =
                             result.error?.message ?? 'Unknown error';
@@ -293,11 +323,20 @@ PRINT
                         }
                         debugPrint('==================');
                         _showMessage(errorMsg, isError: true);
+                        _addLog('Manual print failed: $errorMsg', 'ERROR');
                       }
 
                       setState(() => _isLoading = false);
                     },
               child: const Text('Manual Print'),
+            ),
+            
+            // Log Widget
+            const SizedBox(height: 8),
+            SimpleLogWidget(
+              logs: _logs,
+              onClearLogs: () => setState(() => _logs.clear()),
+              height: 150,
             ),
           ],
         ),

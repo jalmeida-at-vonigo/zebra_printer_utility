@@ -517,6 +517,59 @@ public class Printer implements MethodChannel.MethodCallHandler {
         print(settings);
     }
 
+    public void sendCommand(String command) {
+        if (isZebraPrinter && printerConnection != null && printerConnection.isConnected()) {
+            try {
+                printerConnection.write(command.getBytes());
+            } catch (ConnectionException e) {
+                e.printStackTrace();
+            }
+        } else if (!isZebraPrinter && socketmanager != null && socketmanager.getIstate()) {
+            socketmanager.threadconnectwrite(command.getBytes());
+        }
+    }
+
+    public String getSetting(String setting) {
+        if (isZebraPrinter && printerConnection != null && printerConnection.isConnected()) {
+            try {
+                // Send SGD GET command
+                String sgdCommand = "! U1 getvar \"" + setting + "\"\r\n";
+                printerConnection.write(sgdCommand.getBytes());
+
+                // Read response
+                byte[] response = printerConnection.read();
+                if (response != null) {
+                    return new String(response).trim();
+                }
+            } catch (ConnectionException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    public String sendDataWithResponse(String data, int timeout) {
+        if (isZebraPrinter && printerConnection != null && printerConnection.isConnected()) {
+            try {
+                // Send data
+                printerConnection.write(data.getBytes());
+
+                // Read response with timeout
+                byte[] response = printerConnection.read();
+                if (response != null) {
+                    return new String(response).trim();
+                }
+            } catch (ConnectionException e) {
+                e.printStackTrace();
+            }
+        } else if (!isZebraPrinter && socketmanager != null && socketmanager.getIstate()) {
+            socketmanager.threadconnectwrite(data.getBytes());
+            // For generic printers, we can't easily read responses
+            return "OK";
+        }
+        return null;
+    }
+
     public void setDarkness(int darkness) {
         String setting = "             ! U1 setvar \"print.tone\" \"" + darkness + "\"\n";
         setSettings(setting);
@@ -596,7 +649,20 @@ public class Printer implements MethodChannel.MethodCallHandler {
             String resourceKey = call.argument("ResourceKey");
             @SuppressLint("DiscouragedApi") int resId = context.getResources().getIdentifier(resourceKey, "string", context.getPackageName());
             result.success(resId == 0 ? "" : context.getString(resId));
-        }else {
+        } else if (call.method.equals("sendCommand")) {
+            String command = call.argument("command");
+            sendCommand(command);
+            result.success(true);
+        } else if (call.method.equals("getSetting")) {
+            String setting = call.argument("setting");
+            String value = getSetting(setting);
+            result.success(value);
+        } else if (call.method.equals("sendDataWithResponse")) {
+            String data = call.argument("data");
+            Integer timeout = call.argument("timeout");
+            String response = sendDataWithResponse(data, timeout != null ? timeout : 5000);
+            result.success(response);
+        } else {
             result.notImplemented();
         }
     }

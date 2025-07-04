@@ -1,31 +1,11 @@
 import 'package:zebrautil/models/print_enums.dart';
 
-/// SGD (Set Get Do) command builder for Zebra printers
+/// SGD (Set Get Do) command utility for Zebra printers
+///
+/// This class contains ONLY utility methods for data format detection,
+/// response parsing, and language matching. Command strings are defined
+/// in their respective command classes.
 class ZebraSGDCommands {
-  /// Get a printer setting value
-  static String getCommand(String setting) {
-    return '! U1 getvar "$setting"\r\n';
-  }
-
-  /// Set a printer setting value
-  static String setCommand(String setting, String value) {
-    return '! U1 setvar "$setting" "$value"\r\n';
-  }
-
-  /// Execute a printer action
-  static String doCommand(String action, String value) {
-    return '! U1 do "$action" "$value"\r\n';
-  }
-
-  /// Set printer to ZPL mode
-  static String setZPLMode() => setCommand('device.languages', 'zpl');
-
-  /// Set printer to CPCL/Line Print mode
-  static String setCPCLMode() => setCommand('device.languages', 'line_print');
-
-  /// Reset the printer
-  static String resetPrinter() => doCommand('device.reset', '');
-
   /// Check if data is ZPL format
   static bool isZPLData(String data) {
     final trimmed = data.trim();
@@ -49,56 +29,53 @@ class ZebraSGDCommands {
 
   /// Parse SGD response to extract value
   static String? parseResponse(String response) {
-    // SGD responses typically come in format: "setting_name" : "value"
-    final match = RegExp(r'"[^"]*"\s*:\s*"([^"]*)"').firstMatch(response);
-    if (match != null && match.groupCount >= 1) {
-      return match.group(1);
-    }
+    if (response.isEmpty) return null;
 
-    // Sometimes just the value is returned
-    final trimmed = response.trim();
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-      return trimmed.substring(1, trimmed.length - 1);
-    }
+    // Remove common response prefixes/suffixes
+    String cleaned = response.trim();
 
-    return trimmed.isEmpty ? null : trimmed;
+    // Handle responses like "OK" or "ERROR"
+    if (cleaned == 'OK' || cleaned == 'ERROR') {
+      return cleaned;
+    }
+    
+    // Handle responses in format "key" : "value" - extract just the value
+    final keyValueMatch =
+        RegExp(r'"[^"]*"\s*:\s*"([^"]*)"').firstMatch(cleaned);
+    if (keyValueMatch != null) {
+      return keyValueMatch.group(1);
+    }
+    
+    // Handle responses with quotes: "value"
+    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+      return cleaned.substring(1, cleaned.length - 1);
+    }
+    
+    // Handle responses with brackets: [value]
+    if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+      return cleaned.substring(1, cleaned.length - 1);
+    }
+    
+    // Handle responses with parentheses: (value)
+    if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+      return cleaned.substring(1, cleaned.length - 1);
+    }
+    
+    return cleaned;
   }
 
-  /// Check if printer language matches expected
-  static bool isLanguageMatch(String currentLanguage, String expectedLanguage) {
-    final current = currentLanguage.toLowerCase();
-    final expected = expectedLanguage.toLowerCase();
-
-    if (expected == 'zpl') {
-      return current.contains('zpl');
-    } else if (expected == 'cpcl' || expected == 'line_print') {
-      return current.contains('line_print') || current.contains('cpcl');
+  /// Check if current language matches expected language
+  static bool isLanguageMatch(String current, String expected) {
+    final currentLower = current.toLowerCase();
+    final expectedLower = expected.toLowerCase();
+    
+    if (expectedLower == 'zpl') {
+      return currentLower.contains('zpl');
+    } else if (expectedLower == 'cpcl') {
+      return currentLower.contains('cpcl') ||
+          currentLower.contains('line_print');
     }
-
+    
     return false;
   }
-
-  /// Unpause/resume commands
-  static String unpausePrinter() => setCommand('device.pause', '0');
-  
-  /// Resume printer - language agnostic using SGD
-  static String resumePrinter() => doCommand('device.reset', '');
-
-  /// Clear errors - using SGD commands instead of ZPL
-  static String clearAlerts() => setCommand('alerts.clear', 'ALL');
-
-  /// CPCL-specific commands
-  static String cpclClearBuffer() =>
-      '\x18'; // CAN character for CPCL buffer clearing
-  static String cpclFlushBuffer() =>
-      '\x03'; // ETX character for CPCL buffer flushing
-  static String cpclClearErrors() => setCommand('alerts.clear', 'ALL');
-
-  /// Legacy ZPL-specific commands (use only when in ZPL mode)
-  static String zplResume() => '~PS\r\n';
-  static String zplClearErrors() => '~JR\r\n';
-  static String zplClearBuffer() =>
-      '\x18'; // CAN character for ZPL buffer clearing
-  static String zplFlushBuffer() =>
-      '\x03'; // ETX character for ZPL buffer flushing
 }

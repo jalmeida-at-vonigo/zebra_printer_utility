@@ -56,7 +56,7 @@ void main() {
         final stackTrace = StackTrace.current;
         final result = Result.error(
           'Test error',
-          code: 'TEST_ERROR',
+          code: ErrorCodes.unknownError,
           errorNumber: 123,
           nativeError: 'Native error',
           dartStackTrace: stackTrace,
@@ -64,7 +64,7 @@ void main() {
 
         expect(result.success, isFalse);
         expect(result.error!.message, equals('Test error'));
-        expect(result.error!.code, equals('TEST_ERROR'));
+        expect(result.error!.code, equals(ErrorCodes.unknownError));
         expect(result.error!.errorNumber, equals(123));
         expect(result.error!.nativeError, equals('Native error'));
         expect(result.error!.dartStackTrace, equals(stackTrace));
@@ -258,7 +258,7 @@ void main() {
       final timestamp = DateTime(2023, 1, 1);
       final error = ErrorInfo(
         message: 'Test error',
-        code: 'TEST_ERROR',
+        code: ErrorCodes.unknownError,
         errorNumber: 123,
         nativeError: 'Native error',
         dartStackTrace: stackTrace,
@@ -267,7 +267,7 @@ void main() {
       );
 
       expect(error.message, equals('Test error'));
-      expect(error.code, equals('TEST_ERROR'));
+      expect(error.code, equals(ErrorCodes.unknownError));
       expect(error.errorNumber, equals(123));
       expect(error.nativeError, equals('Native error'));
       expect(error.dartStackTrace, equals(stackTrace));
@@ -303,7 +303,7 @@ void main() {
       final timestamp = DateTime(2023, 1, 1, 12, 0, 0);
       final error = ErrorInfo(
         message: 'Test error',
-        code: 'TEST_ERROR',
+        code: ErrorCodes.unknownError,
         errorNumber: 123,
         nativeError: 'Native error',
         dartStackTrace: stackTrace,
@@ -314,7 +314,7 @@ void main() {
       final map = error.toMap();
 
       expect(map['message'], equals('Test error'));
-      expect(map['code'], equals('TEST_ERROR'));
+      expect(map['code'], equals(ErrorCodes.unknownError));
       expect(map['errorNumber'], equals(123));
       expect(map['nativeError'], equals('Native error'));
       expect(map['dartStackTrace'], equals(stackTrace.toString()));
@@ -325,7 +325,7 @@ void main() {
     test('toString should include all relevant information', () {
       final error = ErrorInfo(
         message: 'Test error',
-        code: 'TEST_ERROR',
+        code: ErrorCodes.unknownError,
         errorNumber: 123,
         nativeError: 'Native error',
         nativeStackTrace: 'Native stack trace',
@@ -335,7 +335,7 @@ void main() {
 
       expect(string, contains('ErrorInfo:'));
       expect(string, contains('Message: Test error'));
-      expect(string, contains('Code: TEST_ERROR'));
+      expect(string, contains('Code: ${ErrorCodes.unknownError}'));
       expect(string, contains('Error Number: 123'));
       expect(string, contains('Native Error: Native error'));
       expect(string, contains('Native Stack Trace:'));

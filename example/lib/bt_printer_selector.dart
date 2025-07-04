@@ -41,7 +41,7 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
   }
 
   Future<void> _initPrinterState() async {
-    _statusSubscription = (await Zebra.status).listen((status) {
+    _statusSubscription = Zebra.statusStream.listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
@@ -125,7 +125,6 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
 
   Future<void> _stopDiscovery() async {
     _discoverySubscription?.cancel();
-    await Zebra.stopDiscovery();
     if (mounted) {
       setState(() {
         _isScanning = false;

@@ -4,19 +4,19 @@ import 'package:flutter/services.dart';
 import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/models/print_enums.dart';
-import 'package:zebrautil/models/readiness_options.dart';
-import 'package:zebrautil/models/readiness_result.dart';
-import 'package:zebrautil/models/printer_readiness.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
-import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/internal/logger.dart';
-import 'zebra_printer_readiness_manager.dart';
-import 'internal/commands/command_factory.dart';
+import 'package:zebrautil/zebra_printer_readiness_manager.dart';
+import 'package:zebrautil/models/readiness_result.dart';
+import 'package:zebrautil/models/printer_readiness.dart';
+import 'package:zebrautil/models/readiness_options.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
 
+/// Simplified ZebraPrinter class - clean Dart layer for printer operations
+/// Complex smart logic moved to ZebraPrinterSmart API
 class ZebraPrinter {
   final String instanceId;
   final ZebraController controller;
@@ -31,7 +31,6 @@ class ZebraPrinter {
   late final OperationManager _operationManager;
   late final OperationCallbackHandler _callbackHandler;
   final Logger _logger;
-  late final PrinterReadinessManager _readinessManager;
 
   ZebraPrinter(
     this.instanceId, {
@@ -82,13 +81,9 @@ class ZebraPrinter {
     _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
       isScanning = false;
     });
-    
-    // Initialize the readiness manager
-    _readinessManager = PrinterReadinessManager(
-      printer: this,
-      statusCallback: (msg) => _logger.debug('Readiness: $msg'),
-    );
   }
+
+  // ===== DISCOVERY OPERATIONS =====
 
   void startScanning() async {
     _logger.info('Starting printer discovery process');
@@ -97,7 +92,6 @@ class ZebraPrinter {
     
     try {
       _logger.info('Checking Bluetooth permissions');
-      // Check permission using operation manager
       final isGrantPermissionResult = await _operationManager.execute<bool>(
         method: 'checkPermission',
         arguments: {},
@@ -108,7 +102,6 @@ class ZebraPrinter {
       
       if (isGrantPermission) {
         _logger.info('Permission granted, starting printer scan');
-        // Start scan using operation manager
         await _operationManager.execute<bool>(
           method: 'startScan',
           arguments: {},
@@ -142,86 +135,11 @@ class ZebraPrinter {
       );
       _logger.info('Printer discovery stopped successfully');
     } catch (e) {
-      // Log error but don't fail
       _logger.error('Error stopping scan', e);
     }
   }
 
-  void _setSettings(Command setting, dynamic values) {
-    String command = "";
-    switch (setting) {
-      case Command.mediaType:
-        if (values == EnumMediaType.blackMark) {
-          command = '''
-          ! U1 setvar "media.type" "label"
-          ! U1 setvar "media.sense_mode" "bar"
-          ''';
-        } else if (values == EnumMediaType.journal) {
-          command = '''
-          ! U1 setvar "media.type" "journal"
-          ''';
-        } else if (values == EnumMediaType.label) {
-          command = '''
-          ! U1 setvar "media.type" "label"
-           ! U1 setvar "media.sense_mode" "gap"
-          ''';
-        }
-
-        break;
-      case Command.calibrate:
-        command = '''~jc^xa^jus^xz''';
-        break;
-      case Command.darkness:
-        command = '! U1 setvar "print.tone" "$values"';
-        break;
-    }
-
-    if (setting == Command.calibrate) {
-      command = '''~jc^xa^jus^xz''';
-    }
-
-    try {
-      _operationManager.execute<bool>(
-        method: 'setSettings',
-        arguments: {'SettingCommand': command},
-        timeout: const Duration(seconds: 5),
-      );
-    } catch (e) {
-      if (onDiscoveryError != null) {
-        onDiscoveryError!('SETTINGS_ERROR', e.toString());
-      }
-    }
-  }
-
-  void setOnDiscoveryError(Function(String, String?)? onDiscoveryError) {
-    this.onDiscoveryError = onDiscoveryError;
-  }
-
-  void setOnPermissionDenied(Function() onPermissionDenied) {
-    this.onPermissionDenied = onPermissionDenied;
-  }
-
-  void setDarkness(int darkness) {
-    _setSettings(Command.darkness, darkness.toString());
-  }
-
-  void setMediaType(EnumMediaType mediaType) {
-    _setSettings(Command.mediaType, mediaType);
-  }
-
-  void sendCommand(String command) {
-    try {
-      _operationManager.execute<bool>(
-        method: 'setSettings',
-        arguments: {'SettingCommand': command},
-        timeout: const Duration(seconds: 5),
-      );
-    } catch (e) {
-      if (onDiscoveryError != null) {
-        onDiscoveryError!('SETTINGS_ERROR', e.toString());
-      }
-    }
-  }
+  // ===== CONNECTION OPERATIONS =====
 
   Future<Result<void>> connectToPrinter(String address) async {
     _logger.info('Initiating connection to printer: $address');
@@ -241,7 +159,6 @@ class ZebraPrinter {
       controller.selectedAddress = address;
       
       _logger.info('Attempting connection to printer: $address');
-      // Use operation manager for tracked connection
       final result = await _operationManager.execute<bool>(
         method: 'connectToPrinter',
         arguments: {'Address': address},
@@ -250,18 +167,16 @@ class ZebraPrinter {
 
       if (result.success && (result.data ?? false)) {
         _logger.info('Successfully connected to printer: $address');
-        // Ensure the printer is in the list before updating status
         final existingPrinter = controller.printers.firstWhere(
           (p) => p.address == address,
           orElse: () => ZebraDevice(
             address: address,
             name: 'Printer $address',
-            isWifi: !address.contains(':'), // Assume WiFi if no colons
+            isWifi: !address.contains(':'),
             status: 'Connected',
           ),
         );
 
-        // Add to list if not already there
         if (!controller.printers.any((p) => p.address == address)) {
           controller.addPrinter(existingPrinter);
         }
@@ -317,7 +232,6 @@ class ZebraPrinter {
       }
       controller.selectedAddress = address;
       
-      // Use operation manager for tracked connection
       final result = await _operationManager.execute<bool>(
         method: 'connectToGenericPrinter',
         arguments: {'Address': address},
@@ -325,18 +239,16 @@ class ZebraPrinter {
       );
 
       if (result.success && (result.data ?? false)) {
-        // Ensure the printer is in the list before updating status
         final existingPrinter = controller.printers.firstWhere(
           (p) => p.address == address,
           orElse: () => ZebraDevice(
             address: address,
             name: 'Generic Printer $address',
-            isWifi: true, // Generic printers are typically network printers
+            isWifi: true,
             status: 'Connected',
           ),
         );
 
-        // Add to list if not already there
         if (!controller.printers.any((p) => p.address == address)) {
           controller.addPrinter(existingPrinter);
         }
@@ -374,11 +286,73 @@ class ZebraPrinter {
     }
   }
 
+  Future<Result<void>> disconnect() async {
+    _logger.info('Initiating printer disconnection');
+    try {
+      final result = await _operationManager.execute<bool>(
+        method: 'disconnect',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+
+      if (controller.selectedAddress != null) {
+        controller.updatePrinterStatus("Disconnected", "R");
+        _logger.info('Updated printer status to disconnected');
+      }
+
+      if (result.success) {
+        _logger.info('Printer disconnected successfully');
+        return Result.success();
+      } else {
+        _logger.error('Disconnect operation failed: ${result.error?.message}');
+        return Result.error(
+          'Disconnect failed',
+          code: ErrorCodes.connectionError,
+        );
+      }
+    } on TimeoutException {
+      _logger.error('Disconnect operation timed out');
+      return Result.error(
+        'Disconnect timed out',
+        code: ErrorCodes.connectionTimeout,
+      );
+    } on PlatformException catch (e) {
+      _logger.error('Platform exception during disconnect', e);
+      return Result.error(
+        e.message ?? 'Disconnect failed',
+        code: ErrorCodes.connectionError,
+        errorNumber: int.tryParse(e.code),
+        nativeError: e,
+      );
+    } catch (e, stack) {
+      _logger.error('Unexpected error during disconnect', e, stack);
+      return Result.error(
+        'Disconnect error: $e',
+        code: ErrorCodes.connectionError,
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+  Future<bool> isPrinterConnected() async {
+    try {
+      final result = await _operationManager.execute<bool>(
+        method: 'isPrinterConnected',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      return result.success && (result.data ?? false);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ===== PRINT OPERATIONS =====
+
   Future<Result<void>> print({required String data}) async {
     _logger.info(
         'Starting print operation, data length: ${data.length} characters');
     try {
-      // Validate input
       if (data.isEmpty) {
         _logger.error('Print operation failed: Empty data provided');
         return Result.error(
@@ -387,10 +361,9 @@ class ZebraPrinter {
         );
       }
       
-      // Only modify ZPL data, not CPCL
+      // Basic ZPL modifications (kept for compatibility)
       if (data.trim().startsWith("^XA")) {
-        _logger.info('Detected ZPL format, applying modifications');
-        // This is ZPL - apply modifications
+        _logger.info('Detected ZPL format, applying basic modifications');
         if (!data.contains("^PON")) {
           data = data.replaceAll("^XA", "^XA^PON");
           _logger.info('Added print orientation normal (^PON) to ZPL');
@@ -407,7 +380,6 @@ class ZebraPrinter {
       }
 
       _logger.info('Sending print data to printer');
-      // Use operation manager for tracked printing
       final result = await _operationManager.execute<bool>(
         method: 'print',
         arguments: {'Data': data},
@@ -448,152 +420,85 @@ class ZebraPrinter {
     }
   }
 
-  /// Print with completion callback using operation manager
-  Future<Result<void>> printWithCallback({
-    required String data,
-    String? operationId,
-  }) async {
-    try {
-      // Validate input
-      if (data.isEmpty) {
-        return Result.error(
-          'Print data cannot be empty',
-          code: ErrorCodes.invalidData,
-        );
-      }
+  // ===== BASIC SETTINGS OPERATIONS =====
 
-      // Only modify ZPL data, not CPCL
-      if (data.trim().startsWith("^XA")) {
-        // This is ZPL - apply modifications
-        if (!data.contains("^PON")) {
-          data = data.replaceAll("^XA", "^XA^PON");
-        }
-
-        if (isRotated) {
-          data = data.replaceAll("^PON", "^POI");
-        }
-      }
-      // For CPCL (starts with "!") or other formats, send as-is
-
-      // Use operation manager for tracked execution
-      final result = await _operationManager.execute<bool>(
-        method: 'print',
-        arguments: {'Data': data},
-        timeout: const Duration(seconds: 30),
-      );
-
-      return result.success
-          ? Result.success()
-          : Result.error(
-              'Print operation failed',
-              code: ErrorCodes.printError,
-            );
-    } on TimeoutException {
-      return Result.error(
-        'Print operation timed out',
-        code: ErrorCodes.operationTimeout,
-      );
-    } on PlatformException catch (e) {
-      return Result.error(
-        e.message ?? 'Print failed',
-        code: ErrorCodes.printError,
-        errorNumber: int.tryParse(e.code),
-        nativeError: e,
-      );
-    } catch (e, stack) {
-      return Result.error(
-        'Print error: $e',
-        code: ErrorCodes.printError,
-        dartStackTrace: stack,
-      );
-    }
+  void setDarkness(int darkness) {
+    final command = '! U1 setvar "print.tone" "$darkness"';
+    _sendSettingCommand(command);
   }
 
-  Future<Result<void>> disconnect() async {
-    _logger.info('Initiating printer disconnection');
-    try {
-      // Use operation manager for tracked disconnection
-      final result = await _operationManager.execute<bool>(
-        method: 'disconnect',
-        arguments: {},
-        timeout: const Duration(seconds: 5),
-      );
-      
-      if (controller.selectedAddress != null) {
-        controller.updatePrinterStatus("Disconnected", "R");
-        _logger.info('Updated printer status to disconnected');
-      }
-      
-      if (result.success) {
-        _logger.info('Printer disconnected successfully');
-        return Result.success();
-      } else {
-        _logger.error('Disconnect operation failed: ${result.error?.message}');
-        return Result.error(
-          'Disconnect failed',
-          code: ErrorCodes.connectionError,
-        );
-      }
-    } on TimeoutException {
-      _logger.error('Disconnect operation timed out');
-      return Result.error(
-        'Disconnect timed out',
-        code: ErrorCodes.connectionTimeout,
-      );
-    } on PlatformException catch (e) {
-      _logger.error('Platform exception during disconnect', e);
-      return Result.error(
-        e.message ?? 'Disconnect failed',
-        code: ErrorCodes.connectionError,
-        errorNumber: int.tryParse(e.code),
-        nativeError: e,
-      );
-    } catch (e, stack) {
-      _logger.error('Unexpected error during disconnect', e, stack);
-      return Result.error(
-        'Disconnect error: $e',
-        code: ErrorCodes.connectionError,
-        dartStackTrace: stack,
-      );
+  void setMediaType(EnumMediaType mediaType) {
+    String command = "";
+    switch (mediaType) {
+      case EnumMediaType.blackMark:
+        command = '''
+        ! U1 setvar "media.type" "label"
+        ! U1 setvar "media.sense_mode" "bar"
+        ''';
+        break;
+      case EnumMediaType.journal:
+        command = '! U1 setvar "media.type" "journal"';
+        break;
+      case EnumMediaType.label:
+        command = '''
+        ! U1 setvar "media.type" "label"
+        ! U1 setvar "media.sense_mode" "gap"
+        ''';
+        break;
     }
+    _sendSettingCommand(command);
   }
 
   void calibratePrinter() {
-    _setSettings(Command.calibrate, null);
+    const command = '~jc^xa^jus^xz';
+    _sendSettingCommand(command);
   }
 
-  Future<bool> isPrinterConnected() async {
+  void sendCommand(String command) {
     try {
-      final result = await _operationManager.execute<bool>(
-        method: 'isPrinterConnected',
-        arguments: {},
+      _operationManager.execute<bool>(
+        method: 'sendCommand',
+        arguments: {'command': command},
         timeout: const Duration(seconds: 5),
       );
-      return result.success && (result.data ?? false);
     } catch (e) {
-      return false;
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('COMMAND_ERROR', e.toString());
+      }
     }
   }
 
-  void rotate() {
-    isRotated = !isRotated;
-  }
-
-  Future<String> _getLocateValue({required String key}) async {
+  /// Set printer settings using SGD commands
+  void setSettings(String command) {
     try {
-      final result = await _operationManager.execute<String>(
-        method: 'getLocateValue',
-        arguments: {'ResourceKey': key},
+      _operationManager.execute<bool>(
+        method: 'setSettings',
+        arguments: {'SettingCommand': command},
         timeout: const Duration(seconds: 5),
       );
-      return result.success ? (result.data ?? "") : "";
     } catch (e) {
-      return "";
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('SETTINGS_ERROR', e.toString());
+      }
     }
   }
 
-  /// Get a printer setting value using SGD commands
-  /// Returns null if the setting cannot be retrieved
+  void _sendSettingCommand(String command) {
+    try {
+      _operationManager.execute<bool>(
+        method: 'setSettings',
+        arguments: {'SettingCommand': command},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      if (onDiscoveryError != null) {
+        onDiscoveryError!('SETTINGS_ERROR', e.toString());
+      }
+    }
+  }
+
+  // ===== STATUS AND QUERY OPERATIONS =====
+
   Future<String?> getSetting(String setting) async {
     try {
       final result = await _operationManager.execute<String>(
@@ -609,11 +514,38 @@ class ZebraPrinter {
     }
   }
 
+  Future<String> _getLocateValue({required String key}) async {
+    try {
+      final result = await _operationManager.execute<String>(
+        method: 'getLocateValue',
+        arguments: {'ResourceKey': key},
+        timeout: const Duration(seconds: 5),
+      );
+      return result.success ? (result.data ?? "") : "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // ===== UTILITY OPERATIONS =====
+
+  void rotate() {
+    isRotated = !isRotated;
+  }
+
+  void setOnDiscoveryError(Function(String, String?)? onDiscoveryError) {
+    this.onDiscoveryError = onDiscoveryError;
+  }
+
+  void setOnPermissionDenied(Function() onPermissionDenied) {
+    this.onPermissionDenied = onPermissionDenied;
+  }
+
+  // ===== INTERNAL METHODS =====
+
   Future<void> nativeMethodCallHandler(MethodCall methodCall) async {
-    // First try to handle through the callback handler
     await _callbackHandler.handleMethodCall(methodCall);
 
-    // Handle special cases that need additional processing
     if (methodCall.method == "onDiscoveryDone") {
       if (shouldSync) {
         _getLocateValue(key: "connected").then((connectedString) {
@@ -624,64 +556,46 @@ class ZebraPrinter {
     }
   }
 
-  /// Switch printer mode with verification
-  /// This is an example of using StateChangeVerifier for operations without callbacks
-  Future<Result<void>> setPrinterMode(PrinterMode mode) async {
-    final verifier = StateChangeVerifier(
-      printer: this,
-      logCallback: (msg) => _logger.info(msg),
-    );
-
-    final command = mode == PrinterMode.zpl
-        ? CommandFactory.createSendSetZplModeCommand(this).command
-        : CommandFactory.createSendSetCpclModeCommand(this).command;
-
-    final desiredValue = mode == PrinterMode.zpl ? 'zpl' : 'line_print';
-
-    final result = await verifier.setStringState(
-      operationName: 'Set printer mode to ${mode.name}',
-      command: command,
-      getSetting: () => getSetting('device.languages'),
-      validator: (value) =>
-          value?.toLowerCase().contains(desiredValue) ?? false,
-      checkDelay: const Duration(milliseconds: 300),
-      maxAttempts: 3,
-    );
-
-    return result.success
-        ? Result.success()
-        : Result.error(result.error?.message ?? 'Failed to set printer mode');
+  void dispose() {
+    _operationManager.dispose();
   }
 
-  // New Readiness API - replaces all old readiness methods
+  // ===== READINESS AND DIAGNOSTICS METHODS =====
 
   /// Prepare printer for printing with specified options
   Future<Result<ReadinessResult>> prepareForPrint({
     required PrintFormat format,
     ReadinessOptions? options,
   }) async {
-    final opts = options ?? ReadinessOptions.forPrinting();
-    return await _readinessManager.prepareForPrint(format, opts);
-  }
-
-  /// Run comprehensive diagnostics on the printer
-  Future<Result<Map<String, dynamic>>> runDiagnostics() async {
-    return await _readinessManager.runDiagnostics();
+    final readinessManager = PrinterReadinessManager(
+      printer: this,
+    );
+    return await readinessManager.prepareForPrint(
+        format, options ?? ReadinessOptions.quick());
   }
 
   /// Get detailed status of the printer
   Future<Result<PrinterReadiness>> getDetailedStatus() async {
-    return await _readinessManager.getDetailedStatus();
+    final readinessManager = PrinterReadinessManager(
+      printer: this,
+    );
+    return await readinessManager.getDetailedStatus();
   }
 
   /// Validate if the printer state is ready
   Future<Result<bool>> validatePrinterState() async {
-    return await _readinessManager.validatePrinterState();
+    final readinessManager = PrinterReadinessManager(
+      printer: this,
+    );
+    return await readinessManager.validatePrinterState();
   }
 
-  /// Dispose the printer instance and clean up resources
-  void dispose() {
-    _operationManager.dispose();
+  /// Run comprehensive diagnostics on the printer
+  Future<Result<Map<String, dynamic>>> runDiagnostics() async {
+    final readinessManager = PrinterReadinessManager(
+      printer: this,
+    );
+    return await readinessManager.runDiagnostics();
   }
 }
 

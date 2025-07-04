@@ -1,0 +1,25 @@
+# Error Code Usage Rule for Dart
+
+## Rule
+- **All error codes must be declared as constants in [`lib/models/result.dart`](mdc:lib/models/result.dart) in the `ErrorCodes` class.**
+- **Never use direct string literals for the `code` property in errors.**
+- **Always use the constants from `ErrorCodes` (e.g., `ErrorCodes.connectionError`) everywhere an error code is set or checked.**
+
+## Examples
+
+### ✅ Correct
+```dart
+return Result.error('No printer connected', code: ErrorCodes.notConnected);
+```
+
+### ❌ Incorrect
+```dart
+return Result.error('No printer connected', code: 'NOT_CONNECTED');
+```
+
+## Migration
+- If you find any direct string usage for error codes, replace it with the appropriate constant from `ErrorCodes`.
+- If a new error code is needed, add it to `ErrorCodes` in `result.dart` and use the constant.
+
+## Scope
+- This rule applies to **all Dart files** in the project.

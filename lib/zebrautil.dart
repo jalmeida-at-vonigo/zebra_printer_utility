@@ -8,6 +8,7 @@ library zebrautil;
 // Main API exports
 export 'zebra.dart' show Zebra;
 export 'zebra_printer.dart' show ZebraPrinter, ZebraController, PrinterMode;
+export 'smart/smart.dart';
 export 'zebra_printer_service.dart' show ZebraPrinterService;
 export 'zebra_printer_discovery.dart' show ZebraPrinterDiscovery;
 export 'zebra_printer_readiness_manager.dart' show PrinterReadinessManager;

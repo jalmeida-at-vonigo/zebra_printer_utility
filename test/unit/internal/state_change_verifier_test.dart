@@ -183,11 +183,11 @@ void main() {
           isStateValid: (s) => s == true,
           maxAttempts: 1,
           checkDelay: const Duration(milliseconds: 1),
-          errorCode: 'CUSTOM_ERROR',
+          errorCode: ErrorCodes.unknownError,
         );
         
         expect(result.success, isFalse);
-        expect(result.error?.code, equals('CUSTOM_ERROR'));
+        expect(result.error?.code, equals(ErrorCodes.unknownError));
       });
 
       test('executeWithDelay handles exceptions properly', () async {
@@ -199,7 +199,7 @@ void main() {
         );
         
         expect(result.success, isFalse);
-        expect(result.error?.code, equals('OPERATION_ERROR'));
+        expect(result.error?.code, equals(ErrorCodes.operationError));
         expect(result.error?.message, contains('Network error'));
       });
     });

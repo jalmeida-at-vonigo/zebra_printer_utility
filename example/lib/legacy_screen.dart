@@ -47,12 +47,12 @@ PRINT
   }
 
   Future<void> _initPrinterState() async {
-    _statusSubscription = (await Zebra.status).listen((status) {
+    _statusSubscription = Zebra.statusStream.listen((status) {
       if (mounted) {
         setState(() => _status = status);
       }
     });
-    _connectionSubscription = (await Zebra.connection).listen((device) {
+    _connectionSubscription = Zebra.connectionStream.listen((device) {
       if (mounted) {
         setState(() => _isConnected =
             device != null && device.address == _selectedDevice?.address);
@@ -75,7 +75,7 @@ PRINT
   }
 
   Future<void> _onConnect(ZebraDevice device) async {
-    final result = await Zebra.connect(device.address);
+    final result = await Zebra.smartConnect(device.address);
     if (mounted) {
       setState(() {
         _isConnected = result.success;

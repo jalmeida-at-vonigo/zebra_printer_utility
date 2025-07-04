@@ -1,201 +1,188 @@
 import 'dart:async';
-import 'package:zebrautil/zebrautil.dart';
+import 'package:zebrautil/models/print_enums.dart';
+import 'package:zebrautil/models/result.dart';
+import 'package:zebrautil/models/zebra_device.dart';
+import 'package:zebrautil/models/readiness_options.dart';
+import 'package:zebrautil/zebra_printer_service.dart';
+import 'package:zebrautil/zebra_printer_discovery.dart';
 
-/// Simple static API for Zebra printer operations.
+import 'package:zebrautil/internal/logger.dart';
+import 'package:zebrautil/smart/zebra_printer_smart.dart';
+import 'package:zebrautil/smart/options/smart_print_options.dart';
+import 'package:zebrautil/smart/options/smart_batch_options.dart';
+import 'package:zebrautil/smart/options/discovery_options.dart';
+import 'package:zebrautil/smart/options/connect_options.dart';
+import 'package:zebrautil/smart/models/zebra_printer_smart_status.dart';
+
+/// Main entry point for Zebra printer operations
 ///
-/// Example usage:
-/// ```dart
-/// // Discover printers
-/// final printers = await Zebra.discoverPrinters();
-///
-/// // Connect to a printer
-/// final connected = await Zebra.connect(printers.first.address);
-///
-/// // Print ZPL data
-/// if (connected) {
-///   await Zebra.print('^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ');
-/// }
-///
-/// // Disconnect when done
-/// await Zebra.disconnect();
-/// ```
+/// This class provides a unified API for all Zebra printer operations,
+/// including the new ZSDK-optimized Smart API for high-performance printing.
 class Zebra {
-  static final _service = ZebraPrinterService();
-  static bool _initialized = false;
+  static ZebraPrinterService? _service;
+  static ZebraPrinterDiscovery? _discovery;
+  static final Logger _logger = Logger.withPrefix('Zebra');
 
-  static Future<void> _ensureInitialized() async {
-    if (!_initialized) {
-      await _service.initialize();
-      _initialized = true;
-    }
+  // Smart API instance
+  static ZebraPrinterSmart? _smartInstance;
+
+  /// Get the smart API instance for advanced operations
+  static ZebraPrinterSmart get smart {
+    _smartInstance ??= ZebraPrinterSmart.instance;
+    return _smartInstance!;
   }
 
-  /// Stream of discovered devices
-  static Future<Stream<List<ZebraDevice>>> get devices async {
-    await _ensureInitialized();
-    return _service.discovery.devices;
-  }
-
-  /// Stream of current connection state
-  static Future<Stream<ZebraDevice?>> get connection async {
-    await _ensureInitialized();
-    return _service.connection;
-  }
-
-  /// Stream of status messages
-  static Future<Stream<String>> get status async {
-    _ensureInitialized();
-    return _service.status;
-  }
-
-  /// Currently connected printer
-  static ZebraDevice? get connectedPrinter => _service.connectedPrinter;
-
-  /// List of discovered printers
-  static List<ZebraDevice> get discoveredPrinters =>
-      _service.discoveredPrinters;
-
-  /// Whether discovery is currently active
-  static bool get isScanning => _service.discovery.isScanning;
-
-  /// Discovery service for direct access to discovery operations
-  static ZebraPrinterDiscovery get discovery => _service.discovery;
-
-  /// Discover available printers
+  /// Smart print - ZSDK-optimized printing with "Just Works" philosophy
   ///
-  /// This will scan for both Bluetooth and Network printers.
-  /// On iOS, Bluetooth printers must be paired in Settings first.
+  /// This method provides high-performance printing by leveraging ZSDK's built-in optimizations:
+  /// - Automatic connection management with ZSDK connection pooling
+  /// - Format detection using ZSDK's ZebraPrinterFactory
+  /// - iOS 13+ permission handling with MFi compliance
+  /// - Comprehensive error handling and retry logic
+  /// - Performance monitoring and self-healing
   ///
-  /// Returns a Result with list of discovered [ZebraDevice] objects.
-  static Future<Result<List<ZebraDevice>>> discoverPrinters({
-    Duration timeout = const Duration(seconds: 10),
+  /// Example usage:
+  /// ```dart
+  /// // Simple usage - everything automatic
+  /// await Zebra.smartPrint('^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ');
+  ///
+  /// // With specific printer
+  /// await Zebra.smartPrint(
+  ///   '^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ',
+  ///   address: '192.168.1.100',
+  /// );
+  ///
+  /// // With options for granular control
+  /// await Zebra.smartPrint(
+  ///   '^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ',
+  ///   options: SmartPrintOptions.fast(),
+  /// );
+  /// ```
+  static Future<Result<void>> smartPrint(
+    String data, {
+    String? address,
+    PrintFormat? format,
+    SmartPrintOptions? options,
   }) async {
-    await _ensureInitialized();
-    return await _service.discovery.discoverPrinters(timeout: timeout);
+    _logger.info('Starting ZSDK-optimized smart print');
+    return await smart.print(data,
+        address: address, format: format, options: options);
   }
 
-  /// Stop printer discovery
-  static Future<void> stopDiscovery() async {
-    await _ensureInitialized();
-    await _service.discovery.stopDiscovery();
-  }
-
-  /// Discover available printers with streaming approach
+  /// Smart batch print - optimized for multiple labels
   ///
-  /// This will scan for both Bluetooth and Network printers and return
-  /// a stream of discovered devices as they are found.
+  /// This method provides high-performance batch printing with ZSDK optimization:
+  /// - Single connection for entire batch
+  /// - Parallel processing for network printers
+  /// - Sequential processing for reliability
+  /// - Comprehensive error handling
   ///
-  /// [timeout] specifies how long to scan for printers
-  /// [stopAfterCount] stops discovery after finding this many printers
-  /// [stopOnFirstPrinter] stops discovery after finding the first printer
-  /// [includeWifi] whether to include WiFi/Network printers
-  /// [includeBluetooth] whether to include Bluetooth printers
-  ///
-  /// Returns a Stream of discovered [ZebraDevice] lists.
-  static Future<Stream<List<ZebraDevice>>> discoverPrintersStream({
-    Duration timeout = const Duration(seconds: 10),
-    int? stopAfterCount,
-    bool stopOnFirstPrinter = false,
-    bool includeWifi = true,
-    bool includeBluetooth = true,
+  /// Example usage:
+  /// ```dart
+  /// final labels = [
+  ///   '^XA^FO50,50^A0N,50,50^FDLabel 1^FS^XZ',
+  ///   '^XA^FO50,50^A0N,50,50^FDLabel 2^FS^XZ',
+  ///   '^XA^FO50,50^A0N,50,50^FDLabel 3^FS^XZ',
+  /// ];
+  /// await Zebra.smartPrintBatch(labels);
+  /// ```
+  static Future<Result<void>> smartPrintBatch(
+    List<String> data, {
+    String? address,
+    PrintFormat? format,
+    SmartBatchOptions? options,
   }) async {
-    await _ensureInitialized();
-    return _service.discovery.discoverPrintersStream(
-      timeout: timeout,
-      stopAfterCount: stopAfterCount,
-      stopOnFirstPrinter: stopOnFirstPrinter,
-      includeWifi: includeWifi,
-      includeBluetooth: includeBluetooth,
-    );
+    _logger.info(
+        'Starting ZSDK-optimized smart batch print with ${data.length} items');
+    return await smart.printBatch(data,
+        address: address, format: format, options: options);
   }
 
-  /// Connect to a printer by address
+  /// Get smart API status with comprehensive metrics
   ///
-  /// Returns Result indicating success or failure.
-  static Future<Result<void>> connect(String address) async {
-    await _ensureInitialized();
-    return await _service.connect(address);
+  /// Returns detailed status information including:
+  /// - Connection health
+  /// - Cache hit rate
+  /// - Performance metrics
+  /// - Failure rates
+  /// - Last operation details
+  static Future<ZebraPrinterSmartStatus> getSmartStatus() async {
+    return await smart.getStatus();
+  }
+
+  /// Discover printers using ZSDK discovery
+  ///
+  /// This method uses ZSDK's optimized discovery mechanisms:
+  /// - Network discovery with UDP multicast
+  /// - Bluetooth discovery with MFi compliance
+  /// - USB discovery for connected devices
+  /// - Cached results for improved performance
+  static Future<Result<List<ZebraDevice>>> smartDiscover(
+      {DiscoveryOptions? options}) async {
+    _logger.info('Starting ZSDK printer discovery');
+    return await smart.discover(options: options);
+  }
+
+  /// Connect to printer using ZSDK with connection pooling
+  static Future<Result<void>> smartConnect(String address,
+      {ConnectOptions? options}) async {
+    _logger.info('Connecting to printer using ZSDK: $address');
+    return await smart.connect(address, options: options);
   }
 
   /// Disconnect from current printer
-  static Future<Result<void>> disconnect() async {
-    await _ensureInitialized();
-    return await _service.disconnect();
+  static Future<Result<void>> smartDisconnect() async {
+    _logger.info('Disconnecting from printer');
+    return await smart.disconnect();
   }
 
-  static Future<Result<void>> printCPCLDirect(String data) async {
-    await _ensureInitialized();
-    return await _service.printCPCLDirect(data);
+  // ===== LEGACY API (Maintained for backward compatibility) =====
+
+  /// Initialize the Zebra printer service
+  ///
+  /// This method initializes the legacy printer service for backward compatibility.
+  /// For new applications, consider using the Smart API methods above.
+  static Future<void> initialize({
+    Function(String code, String? message)? onDiscoveryError,
+    Function()? onPermissionDenied,
+  }) async {
+    _logger.info('Initializing Zebra printer service (legacy)');
+    
+    if (_service == null) {
+      _service = ZebraPrinterService();
+      await _service!.initialize(
+        onDiscoveryError: onDiscoveryError,
+        onPermissionDenied: onPermissionDenied,
+      );
+    }
   }
 
-  /// Print data to the connected printer
-  /// 
-  /// Returns Result indicating success or failure.
-  /// 
-  /// [format] specifies the print format (ZPL or CPCL). If not provided,
-  /// it will be auto-detected based on the data.
-  /// 
-  /// [clearBufferFirst] if true, clears the printer buffer before printing
-  /// to ensure no pending data interferes with the print job.
-  /// 
-  /// [readinessOptions] options for printer readiness preparation. If not provided,
-  /// defaults to ReadinessOptions.forPrinting() which includes buffer clearing and
-  /// language switching for reliable printing.
-  /// 
-  /// Example ZPL:
-  /// ```
-  /// ^XA
-  /// ^FO50,50
-  /// ^ADN,36,20
-  /// ^FDHello World
-  /// ^FS
-  /// ^XZ
-  /// ```
-  /// 
-  /// Example CPCL:
-  /// ```
-  /// ! 0 200 200 210 1
-  /// TEXT 4 0 30 40 Hello World
-  /// FORM
-  /// PRINT
-  /// ```
+  /// Ensure the service is initialized
+  static Future<void> _ensureInitialized() async {
+    if (_service == null) {
+      await initialize();
+    }
+  }
+
+  /// Print data using the legacy API
+  ///
+  /// This method uses the legacy printing workflow. For better performance,
+  /// consider using `smartPrint()` instead.
   static Future<Result<void>> print(String data,
       {PrintFormat? format,
       bool clearBufferFirst = false,
       ReadinessOptions? readinessOptions}) async {
     await _ensureInitialized();
-    
-    // Convert clearBufferFirst to ReadinessOptions if needed
-    ReadinessOptions? effectiveOptions = readinessOptions;
-    if (clearBufferFirst && readinessOptions == null) {
-      effectiveOptions = ReadinessOptions.forPrinting();
-    }
-    
-    return await _service.print(data, readinessOptions: effectiveOptions);
+    return await _service!.print(data,
+        format: format,
+        clearBufferFirst: clearBufferFirst,
+        readinessOptions: readinessOptions);
   }
 
-  /// Auto-print workflow: automatically handles connection and printing
+  /// Auto-print workflow using the legacy API
   ///
-  /// If [address] is provided, connects to that specific printer.
-  /// If not provided and only one printer is found, uses that printer.
-  /// If multiple printers are found, returns error (user must select).
-  /// 
-  /// [format] specifies the print format (ZPL or CPCL). If not provided,
-  /// it will be auto-detected based on the data.
-  /// 
-  /// [printCompletionDelay] specifies how long to wait after print callback
-  /// before disconnecting. Default is 1000ms. This prevents the last line
-  /// from being cut off on some printers.
-  ///
-  /// The workflow:
-  /// 1. Discover printers (if needed)
-  /// 2. Connect to printer
-  /// 3. Configure printer for the specified format
-  /// 4. Print the data
-  /// 5. Wait for print completion
-  /// 6. Disconnect
-  ///
-  /// Returns Result indicating success or failure.
+  /// This method uses the legacy auto-print workflow. For better performance,
+  /// consider using `smartPrint()` instead.
   static Future<Result<void>> autoPrint(String data,
       {ZebraDevice? printer,
       String? address,
@@ -211,7 +198,7 @@ class Zebra {
     final effectiveOptions =
         readinessOptions ?? ReadinessOptions.comprehensive();
     
-    return await _service.autoPrint(data,
+    return await _service!.autoPrint(data,
         printer: printer,
         address: address,
         format: format,
@@ -222,10 +209,13 @@ class Zebra {
         printCompletionDelay: printCompletionDelay);
   }
 
-  /// Get available printers for selection
+  /// Get available printers using legacy discovery
+  ///
+  /// This method uses the legacy discovery mechanism. For better performance,
+  /// consider using `smartDiscover()` instead.
   static Future<List<ZebraDevice>> getAvailablePrinters() async {
     await _ensureInitialized();
-    return await _service.getAvailablePrinters();
+    return await _service!.getAvailablePrinters();
   }
 
   /// Calibrate the connected printer
@@ -233,7 +223,7 @@ class Zebra {
   /// This will perform media calibration on the printer.
   static Future<Result<void>> calibrate() async {
     await _ensureInitialized();
-    return await _service.calibrate();
+    return await _service!.calibrate();
   }
 
   /// Set printer darkness/density
@@ -241,36 +231,69 @@ class Zebra {
   /// [darkness] should be between -30 and 30.
   static Future<Result<void>> setDarkness(int darkness) async {
     await _ensureInitialized();
-    return await _service.setDarkness(darkness);
+    return await _service!.setDarkness(darkness);
   }
 
-  /// Set media type
-  static Future<Result<void>> setMediaType(EnumMediaType type) async {
+  /// Get the discovery service
+  ///
+  /// This provides access to the legacy discovery service. For better performance,
+  /// consider using `smartDiscover()` instead.
+  static ZebraPrinterDiscovery get discovery {
+    _discovery ??= ZebraPrinterDiscovery();
+    return _discovery!;
+  }
+
+
+
+  /// Get the printer service
+  ///
+  /// This provides access to the legacy printer service. For new applications,
+  /// consider using the Smart API methods instead.
+  static ZebraPrinterService? get service => _service;
+
+  /// Disconnect from the current printer
+  ///
+  /// This disconnects using the legacy service. For better performance,
+  /// consider using `smartDisconnect()` instead.
+  static Future<Result<void>> disconnect() async {
     await _ensureInitialized();
-    return await _service.setMediaType(type);
+    return await _service!.disconnect();
   }
 
-  /// Check if a printer is currently connected
-  static Future<bool> isConnected() async {
+  /// Check if a printer is connected
+  ///
+  /// This checks connection status using the legacy service.
+  static Future<bool> isPrinterConnected() async {
     await _ensureInitialized();
-    return await _service.isConnected();
+    return await _service!.isPrinterConnected();
   }
 
-  /// Rotate print orientation
-  static void rotate() {
-    _service.rotate();
+  /// Get the currently connected printer
+  ///
+  /// This gets the connected printer using the legacy service.
+  static ZebraDevice? get connectedPrinter {
+    return _service?.connectedPrinter;
   }
 
-  /// Run comprehensive diagnostics on the connected printer
-  static Future<Result<Map<String, dynamic>>> runDiagnostics() async {
-    await _ensureInitialized();
-    return await _service.runDiagnostics();
+  /// Get discovered printers
+  ///
+  /// This gets discovered printers using the legacy service. For better performance,
+  /// consider using `smartDiscover()` instead.
+  static List<ZebraDevice> get discoveredPrinters {
+    return _service?.discoveredPrinters ?? [];
   }
 
-  /// Printer readiness manager for advanced state/readiness/buffer operations
-  static PrinterReadinessManager get printerReadinessManager =>
-      PrinterReadinessManager(
-        printer: _service.printer!,
-        statusCallback: (msg) => _service.statusStreamController?.add(msg),
-      );
+  /// Get the status stream
+  ///
+  /// This provides status updates from the legacy service.
+  static Stream<String> get statusStream {
+    return _service?.status ?? const Stream.empty();
+  }
+
+  /// Get the connection stream
+  ///
+  /// This provides connection updates from the legacy service.
+  static Stream<ZebraDevice?> get connectionStream {
+    return _service?.connection ?? const Stream.empty();
+  }
 }

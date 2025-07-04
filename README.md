@@ -150,6 +150,25 @@ Benefits:
 - **CommandFactory Pattern**: Centralized command creation for better maintainability
 - **Utility-Only ZebraSGDCommands**: Simplified utility class focused on format detection and parsing
 
+## Coming Soon: ZebraPrinterSmart API
+
+We're developing a new high-performance `ZebraPrinterSmart` API that will provide significant performance improvements through intelligent caching, connection pooling, and smart retry logic. This new API is designed to achieve **60-80% performance improvements** over the current `autoPrint` method.
+
+### Key Features (Planned)
+- **Intelligent Caching**: Cache language mode, printer status, and connection state
+- **Connection Pooling**: Maintain persistent connections for faster subsequent prints
+- **Smart Retry Logic**: Intelligent retry with exponential backoff
+- **Connection-Aware Optimization**: Different strategies for network vs Bluetooth printers
+- **Background Operations**: Move non-critical operations to background
+- **Batch Printing Optimization**: Optimized for multiple label printing
+
+### Performance Targets
+- **Conservative**: 60-80% improvement (1-3 seconds for network, 2-4 seconds for Bluetooth)
+- **Hopeful**: 70-85% improvement (0.5-1.5 seconds for network, 1-2 seconds for Bluetooth)
+- **Batch Printing**: 70-80% improvement (15-30 seconds for 10 labels)
+
+See [ZebraPrinterSmart Performance API Plan](.readme/plan/zebra-auto-performance-api.md) for detailed implementation plan.
+
 ## What's New in v2.0
 
 - **[Configurable Auto-Correction](.readme/architecture/auto-correction-v2.md)**: Fine-grained control over automatic issue resolution
@@ -254,6 +273,7 @@ This class provides fine-grained control for advanced scenarios, such as custom 
 - **[Auto-Detection](.readme/guides/auto-detection.md)** - Format detection explained
 - **[Performance](.readme/guides/performance.md)** - Optimization guidelines
 - **[Testing Guide](.readme/guides/testing.md)** - Testing on devices and simulators
+- **[ZebraPrinterSmart](.readme/guides/zebra-printer-smart.md)** - High-performance API guide
 
 ### 🔧 Development
 - **[Development Docs](.readme/development/README.md)** - For contributors
