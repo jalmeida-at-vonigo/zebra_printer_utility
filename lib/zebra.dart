@@ -138,8 +138,8 @@ class Zebra {
   /// [clearBufferFirst] if true, clears the printer buffer before printing
   /// to ensure no pending data interferes with the print job.
   /// 
-  /// [autoCorrectionOptions] options for automatic issue correction. If not provided,
-  /// defaults to AutoCorrectionOptions.print() which includes buffer clearing and
+  /// [readinessOptions] options for printer readiness preparation. If not provided,
+  /// defaults to ReadinessOptions.forPrinting() which includes buffer clearing and
   /// language switching for reliable printing.
   /// 
   /// Example ZPL:
@@ -162,26 +162,16 @@ class Zebra {
   static Future<Result<void>> print(String data,
       {PrintFormat? format,
       bool clearBufferFirst = false,
-      AutoCorrectionOptions? autoCorrectionOptions}) async {
+      ReadinessOptions? readinessOptions}) async {
     await _ensureInitialized();
     
-    // Use default print options if none provided
-    final options = autoCorrectionOptions ??
-        (clearBufferFirst
-            ? AutoCorrectionOptions.print()
-            : const AutoCorrectionOptions(
-                enableUnpause: true,
-                enableClearErrors: true,
-                enableLanguageSwitch: true,
-                enableBufferClear: false,
-              ));
+    // Convert clearBufferFirst to ReadinessOptions if needed
+    ReadinessOptions? effectiveOptions = readinessOptions;
+    if (clearBufferFirst && readinessOptions == null) {
+      effectiveOptions = ReadinessOptions.forPrinting();
+    }
     
-    return await _service.print(
-      data, 
-      format: format,
-      clearBufferFirst: clearBufferFirst,
-      autoCorrectionOptions: options,
-    );
+    return await _service.print(data, readinessOptions: effectiveOptions);
   }
 
   /// Auto-print workflow: automatically handles connection and printing
@@ -213,9 +203,14 @@ class Zebra {
       int maxRetries = 3,
       bool verifyConnection = true,
       bool disconnectAfter = true,
-      AutoCorrectionOptions? autoCorrectionOptions,
+      ReadinessOptions? readinessOptions,
       Duration? printCompletionDelay}) async {
     await _ensureInitialized();
+    
+    // Use provided readinessOptions or default to comprehensive
+    final effectiveOptions =
+        readinessOptions ?? ReadinessOptions.comprehensive();
+    
     return await _service.autoPrint(data,
         printer: printer,
         address: address,
@@ -223,7 +218,7 @@ class Zebra {
         maxRetries: maxRetries,
         verifyConnection: verifyConnection,
         disconnectAfter: disconnectAfter,
-        autoCorrectionOptions: autoCorrectionOptions,
+        readinessOptions: effectiveOptions,
         printCompletionDelay: printCompletionDelay);
   }
 
@@ -272,10 +267,10 @@ class Zebra {
     return await _service.runDiagnostics();
   }
 
-  /// Printer state manager for advanced state/readiness/buffer operations
-  static PrinterStateManager get printerStateManager => PrinterStateManager(
+  /// Printer readiness manager for advanced state/readiness/buffer operations
+  static PrinterReadinessManager get printerReadinessManager =>
+      PrinterReadinessManager(
         printer: _service.printer!,
-        options: AutoCorrectionOptions.none(),
         statusCallback: (msg) => _service.statusStreamController?.add(msg),
       );
 }

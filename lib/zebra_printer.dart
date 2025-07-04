@@ -4,11 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/models/print_enums.dart';
+import 'package:zebrautil/models/readiness_options.dart';
+import 'package:zebrautil/models/readiness_result.dart';
+import 'package:zebrautil/models/printer_readiness.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/internal/logger.dart';
 import 'zebra_sgd_commands.dart';
+import 'zebra_printer_readiness_manager.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
@@ -27,6 +31,7 @@ class ZebraPrinter {
   late final OperationManager _operationManager;
   late final OperationCallbackHandler _callbackHandler;
   final Logger _logger;
+  late final PrinterReadinessManager _readinessManager;
 
   ZebraPrinter(
     this.instanceId, {
@@ -77,6 +82,12 @@ class ZebraPrinter {
     _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
       isScanning = false;
     });
+    
+    // Initialize the readiness manager
+    _readinessManager = PrinterReadinessManager(
+      printer: this,
+      statusCallback: (msg) => _logger.debug('Readiness: $msg'),
+    );
   }
 
   void startScanning() async {
@@ -640,6 +651,31 @@ class ZebraPrinter {
     return result.success
         ? Result.success()
         : Result.error(result.error?.message ?? 'Failed to set printer mode');
+  }
+
+  // New Readiness API - replaces all old readiness methods
+
+  /// Prepare printer for printing with specified options
+  Future<Result<ReadinessResult>> prepareForPrint({
+    ReadinessOptions? options,
+  }) async {
+    final opts = options ?? ReadinessOptions.forPrinting();
+    return await _readinessManager.prepareForPrint(opts);
+  }
+
+  /// Run comprehensive diagnostics on the printer
+  Future<Result<Map<String, dynamic>>> runDiagnostics() async {
+    return await _readinessManager.runDiagnostics();
+  }
+
+  /// Get detailed status of the printer
+  Future<Result<PrinterReadiness>> getDetailedStatus() async {
+    return await _readinessManager.getDetailedStatus();
+  }
+
+  /// Validate if the printer state is ready
+  Future<Result<bool>> validatePrinterState() async {
+    return await _readinessManager.validatePrinterState();
   }
 
   /// Dispose the printer instance and clean up resources

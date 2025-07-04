@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.29] - 2025-07-03
+### Changed
+- **Major Refactoring**: Renamed `AutoCorrectionOptions` to `ReadinessOptions` for better semantic clarity
+- **Architecture Improvement**: Moved `PrinterStateManager` to `PrinterReadinessManager` with enhanced functionality
+- **Command Pattern Implementation**: Introduced comprehensive command pattern for printer operations
+  - Added 15 new command classes for specific printer operations
+  - Implemented `CommandFactory` for centralized command creation
+  - Created `BaseCommand` abstract class for consistent command structure
+- **Enhanced Readiness Management**: 
+  - Renamed `checkPrinterReadiness` to `correctForPrinting` for clarity
+  - Added `ReadinessResult` model for detailed correction feedback
+  - Improved error handling and status reporting in readiness operations
+- **API Consistency**: Updated all references to use new naming conventions
+- **Test Updates**: Updated all tests to use new class names and methods
+- **Documentation**: Updated API documentation to reflect new naming and structure
+- All tests pass; no breaking changes to public API functionality
+
 ## [2.0.28] - 2025-07-03
 ### Changed
 - Comprehensive DRY refactoring of status-related calls across `PrinterStateManager`

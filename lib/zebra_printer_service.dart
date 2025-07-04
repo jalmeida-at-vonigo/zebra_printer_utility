@@ -162,7 +162,7 @@ class ZebraPrinterService {
     String data, {
     PrintFormat? format,
     bool clearBufferFirst = false,
-    AutoCorrectionOptions? autoCorrectionOptions,
+    ReadinessOptions? readinessOptions,
   }) async {
     _logger.info(
         'Service: Starting print operation, data length: ${data.length} characters');
@@ -178,25 +178,20 @@ class ZebraPrinterService {
     }
 
     try {
-      // Use PrinterStateManager if options are provided or clearBufferFirst is true
-      if (autoCorrectionOptions != null || clearBufferFirst) {
+      // Use new readiness manager if options are provided or clearBufferFirst is true
+      if (readinessOptions != null || clearBufferFirst) {
         _logger.info(
-            'Service: Using PrinterStateManager for pre-print corrections');
-        final options = autoCorrectionOptions ??
+            'Service: Using new readiness manager for pre-print corrections');
+
+        // Use provided options or create default ones
+        final effectiveOptions = readinessOptions ??
             (clearBufferFirst
-                ? AutoCorrectionOptions.print()
-                : AutoCorrectionOptions.none());
-
-        final stateManager = PrinterStateManager(
-          printer: _printer!,
-          options: options,
-          statusCallback: (msg) => _statusStreamController?.add(msg),
-        );
-
-        // Perform pre-print corrections
-        final correctionResult = await stateManager.correctForPrinting(
-          data: data,
-          format: format,
+                ? ReadinessOptions.forPrinting()
+                : ReadinessOptions.quick());
+        
+        // Perform pre-print corrections using new manager
+        final correctionResult = await _printer!.prepareForPrint(
+          options: effectiveOptions,
         );
 
         if (!correctionResult.success) {
@@ -321,7 +316,7 @@ class ZebraPrinterService {
       int maxRetries = 3,
       bool verifyConnection = true,
       bool disconnectAfter = true,
-      AutoCorrectionOptions? autoCorrectionOptions,
+      ReadinessOptions? readinessOptions,
       Duration? printCompletionDelay}) async {
     _logger.info(
         'Service: Starting auto-print workflow, data length: ${data.length} characters');
@@ -367,7 +362,7 @@ class ZebraPrinterService {
         await _printWithRetry(data,
         format: format,
         maxRetries: maxRetries,
-        autoCorrectionOptions: autoCorrectionOptions);
+        readinessOptions: readinessOptions);
     if (!printResult.success) {
       _logger.error(
           'Service: Print operation failed after retries: ${printResult.error?.message}');
@@ -455,7 +450,7 @@ class ZebraPrinterService {
   Future<Result<void>> _printWithRetry(String data,
       {PrintFormat? format,
       int maxRetries = 3,
-      AutoCorrectionOptions? autoCorrectionOptions}) async {
+      ReadinessOptions? readinessOptions}) async {
     for (int i = 0; i <= maxRetries; i++) {
       try {
         // Check connection before each attempt
@@ -490,7 +485,7 @@ class ZebraPrinterService {
         }
 
         final result = await print(data,
-            format: format, autoCorrectionOptions: autoCorrectionOptions);
+            format: format, readinessOptions: readinessOptions);
 
         if (result.success) {
           return Result.success();
@@ -582,27 +577,44 @@ class ZebraPrinterService {
     }
   }
 
-  /// Check if printer is ready to print
-  /// Always returns success, with isReady flag indicating readiness
-  /// Only fails if status information cannot be retrieved
-  Future<Result<PrinterReadiness>> checkPrinterReadiness() async {
+  // New Readiness API - replaces all old readiness methods
+
+  /// Prepare printer for printing with specified options
+  Future<Result<ReadinessResult>> prepareForPrint({
+    ReadinessOptions? options,
+  }) async {
     await _ensureInitialized();
 
     if (connectedPrinter == null) {
-      final readiness = PrinterReadiness();
-      readiness.isReady = false;
-      readiness.isConnected = false;
-      readiness.errors.add('Not connected to printer');
-      return Result.success(readiness);
+      _statusStreamController?.add('No printer connected');
+      return Result.error('No printer instance available');
     }
 
-    final stateManager = PrinterStateManager(
-      printer: _printer!,
-      options: AutoCorrectionOptions.none(),
-      statusCallback: (msg) => _statusStreamController?.add(msg),
-    );
+    return await _printer!.prepareForPrint(options: options);
+  }
 
-    return await stateManager.checkPrinterReadiness();
+  /// Get detailed status of the printer
+  Future<Result<PrinterReadiness>> getDetailedStatus() async {
+    await _ensureInitialized();
+
+    if (connectedPrinter == null) {
+      _statusStreamController?.add('No printer connected');
+      return Result.error('No printer instance available');
+    }
+
+    return await _printer!.getDetailedStatus();
+  }
+
+  /// Validate if the printer state is ready
+  Future<Result<bool>> validatePrinterState() async {
+    await _ensureInitialized();
+
+    if (connectedPrinter == null) {
+      _statusStreamController?.add('No printer connected');
+      return Result.error('No printer instance available');
+    }
+
+    return await _printer!.validatePrinterState();
   }
 
   /// Get list of paired/discovered printers for selection
@@ -905,13 +917,7 @@ class ZebraPrinterService {
       return Result.success(diagnostics);
     }
 
-    final stateManager = PrinterStateManager(
-      printer: _printer!,
-      options: AutoCorrectionOptions.none(),
-      statusCallback: (msg) => _statusStreamController?.add(msg),
-    );
-
-    final result = await stateManager.runDiagnostics();
+    final result = await _printer!.runDiagnostics();
 
     // Add printer info to the diagnostics result
     if (result.success && result.data != null) {
@@ -967,13 +973,25 @@ class ZebraPrinterService {
       );
     }
 
-    final stateManager = PrinterStateManager(
-      printer: _printer!,
-      options: AutoCorrectionOptions.none(),
-      statusCallback: (msg) => _statusStreamController?.add(msg),
+    // Use the new readiness manager to clear buffer
+    const options = ReadinessOptions(
+      checkConnection: false,
+      checkMedia: false,
+      checkHead: false,
+      checkPause: false,
+      checkErrors: false,
+      clearBuffer: true,
     );
-
-    return await stateManager.clearPrinterBuffer(format);
+    
+    final result = await _printer!.prepareForPrint(options: options);
+    if (result.success) {
+      return Result.success();
+    } else {
+      return Result.error(
+        'Failed to clear buffer: ${result.error?.message}',
+        code: result.error?.code,
+      );
+    }
   }
 
   /// Flush the printer's buffer to ensure all data is processed
@@ -988,14 +1006,27 @@ class ZebraPrinterService {
       );
     }
 
-    final stateManager = PrinterStateManager(
-      printer: _printer!,
-      options: AutoCorrectionOptions.none(),
-      statusCallback: (msg) => _statusStreamController?.add(msg),
+    // Use the new readiness manager to flush buffer
+    const options = ReadinessOptions(
+      checkConnection: false,
+      checkMedia: false,
+      checkHead: false,
+      checkPause: false,
+      checkErrors: false,
+      flushBuffer: true,
     );
-
-    return await stateManager.flushPrintBuffer();
+    
+    final result = await _printer!.prepareForPrint(options: options);
+    if (result.success) {
+      return Result.success();
+    } else {
+      return Result.error(
+        'Failed to flush buffer: ${result.error?.message}',
+        code: result.error?.code,
+      );
+    }
   }
+  
 
 
 }

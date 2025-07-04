@@ -10,7 +10,7 @@ export 'zebra.dart' show Zebra;
 export 'zebra_printer.dart' show ZebraPrinter, ZebraController, PrinterMode;
 export 'zebra_printer_service.dart' show ZebraPrinterService;
 export 'zebra_printer_discovery.dart' show ZebraPrinterDiscovery;
-export 'zebra_printer_state_manager.dart' show PrinterStateManager;
+export 'zebra_printer_readiness_manager.dart' show PrinterReadinessManager;
 export 'zebra_sgd_commands.dart' show ZebraSGDCommands;
 
 // Model exports
@@ -20,7 +20,8 @@ export 'models/result.dart'
 export 'models/print_enums.dart' 
     show PrintFormat, EnumMediaType, Command;
 export 'models/printer_readiness.dart' show PrinterReadiness;
-export 'models/auto_correction_options.dart' show AutoCorrectionOptions;
+export 'models/readiness_options.dart' show ReadinessOptions;
+export 'models/readiness_result.dart' show ReadinessResult;
 
 // Internal utilities (for advanced usage)
 export 'internal/state_change_verifier.dart' show StateChangeVerifier;

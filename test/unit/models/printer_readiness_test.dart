@@ -20,9 +20,22 @@ void main() {
       expect(readiness.timestamp, isA<DateTime>());
     });
 
+    test('should be ready when all conditions are met', () {
+      final readiness = PrinterReadiness();
+      readiness.isConnected = true;
+      readiness.headClosed = true;
+      readiness.isPaused = false;
+      readiness.errors.clear();
+
+      expect(readiness.isReady, isTrue);
+    });
+
     test('summary returns "Printer is ready" if isReady', () {
       final readiness = PrinterReadiness();
-      readiness.isReady = true;
+      readiness.isConnected = true;
+      readiness.headClosed = true;
+      readiness.isPaused = false;
+      readiness.errors.clear();
       expect(readiness.summary, equals('Printer is ready'));
     });
 
@@ -63,7 +76,6 @@ void main() {
 
     test('toMap returns correct structure', () {
       final readiness = PrinterReadiness();
-      readiness.isReady = true;
       readiness.isConnected = true;
       readiness.hasMedia = true;
       readiness.headClosed = true;
@@ -72,7 +84,7 @@ void main() {
       readiness.headStatus = 'OK';
       readiness.pauseStatus = 'Not Paused';
       readiness.hostStatus = 'Online';
-      readiness.errors.add('No errors');
+      readiness.errors.clear(); // Clear errors to make isReady true
       readiness.warnings.add('Low media');
       readiness.fullCheckPerformed = true;
       final map = readiness.toMap();
@@ -85,7 +97,7 @@ void main() {
       expect(map['headStatus'], equals('OK'));
       expect(map['pauseStatus'], equals('Not Paused'));
       expect(map['hostStatus'], equals('Online'));
-      expect(map['errors'], contains('No errors'));
+      expect(map['errors'], isEmpty);
       expect(map['warnings'], contains('Low media'));
       expect(map['timestamp'], isA<String>());
       expect(map['fullCheckPerformed'], isTrue);

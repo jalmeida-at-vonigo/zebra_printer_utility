@@ -14,6 +14,7 @@ alwaysApply: true
     - There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
     - No ANALYSIS WARNING ARE ACCEPTABLE (`flutter analyze`)
     - If you find issues warnings because of LINT or ANALYSIS, fix them, even if it is not related with your change.
+* The is a initial implementation, so no DEPRECTATED code is allowed, and all changes MUST BE COMPLETELY migrated to the new API
 * Only the dart code and the iOS need to be evaluated/changed.
     - We are not supporting Android yet, therefore nothing needs to be evaluated or changed for it.
 * The change must be documented as detailed on the DOCUMENTATION section below
