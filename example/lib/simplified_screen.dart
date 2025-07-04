@@ -127,7 +127,7 @@ PRINT
     if (mounted) {
       setState(() => _isPrinting = true);
     }
-
+ 
     PrintFormat? format;
     if (_printMode == PrintMode.zpl) {
       format = PrintFormat.zpl;
@@ -139,16 +139,16 @@ PRINT
     Result<void> result;
 
     if (_isConnected && _selectedDevice != null) {
-      // Use autoPrint with the connected printer
-      result = await Zebra.autoPrint(
+      // Use simplifiedPrint with the connected printer
+      result = await Zebra.simplifiedPrint(
         _labelController.text,
         address: _selectedDevice!.address,
         format: format,
         disconnectAfter: false,
       );
     } else {
-      // Use autoPrint to discover and use any available printer
-      result = await Zebra.autoPrint(
+      // Use simplifiedPrint to discover and use any available printer
+      result = await Zebra.simplifiedPrint(
         _labelController.text,
         format: format,
       );

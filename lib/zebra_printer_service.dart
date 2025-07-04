@@ -85,15 +85,16 @@ class ZebraPrinterService {
 
   /// Connect to a printer by address
   /// Returns Result indicating success or failure with error details
-  Future<Result<void>> connect(String address) async {
+  Future<Result<void>> connect(String? address) async {
     _logger.info('Service: Initiating connection to printer: $address');
     await _ensureInitialized();
+    address ??= connectedPrinter?.address;
 
     try {
       _statusStreamController?.add('Connecting to $address...');
 
       // Call printer directly - callback-based completion ensures sequencing
-      final result = await _printer!.connectToPrinter(address);
+      final result = await _printer!.connectToPrinter(address!);
 
       if (result.success) {
         _logger.info('Service: Successfully connected to printer: $address');

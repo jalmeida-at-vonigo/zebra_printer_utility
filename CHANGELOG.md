@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.0.31] - 2025-01-03
+
+### Added
+- **Simplified Print Workflow**: Added `simplifiedPrint` method to `Zebra` class for streamlined printing
+  - Single-call workflow that handles discovery, connection, and printing
+  - Maintains connection between prints by default (`disconnectAfter = false`)
+  - Smart connection management that checks if already connected to target printer
+  - Proper delays after connection to ensure printer readiness
+  - Support for both ZPL and CPCL formats with auto-detection
+
+### Fixed
+- **Connection State Management**: Fixed alternating print failure issue in simplified workflow
+  - Eliminated unnecessary disconnections between prints
+  - Added proper connection verification before printing
+  - Implemented connection state checking to avoid redundant connections
+  - Added stability delays after new connections
+
+### Changed
+- **Default Behavior**: Changed `disconnectAfter` default to `false` in `simplifiedPrint` to maintain connection
+- **Connection Logic**: Improved connection handling to check if already connected to target printer
+- **Error Handling**: Enhanced error messages for better debugging
+
+### Technical Details
+- `simplifiedPrint` now properly manages printer connection state
+- Connection is only established if not already connected to the target printer
+- 250ms delay after new connections ensures printer stability
+- No breaking changes to existing API
+
 ## [2.0.30] - 2025-01-03
 
 ### Added

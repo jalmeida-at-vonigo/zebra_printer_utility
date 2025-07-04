@@ -23,6 +23,8 @@ class Zebra {
   static final _service = ZebraPrinterService();
   static bool _initialized = false;
 
+  static ZebraDevice? _savedPrinterToUseOnSimplified;
+
   static Future<void> _ensureInitialized() async {
     if (!_initialized) {
       await _service.initialize();
@@ -129,19 +131,19 @@ class Zebra {
   }
 
   /// Print data to the connected printer
-  /// 
+  ///
   /// Returns Result indicating success or failure.
-  /// 
+  ///
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
-  /// 
+  ///
   /// [clearBufferFirst] if true, clears the printer buffer before printing
   /// to ensure no pending data interferes with the print job.
-  /// 
+  ///
   /// [readinessOptions] options for printer readiness preparation. If not provided,
   /// defaults to ReadinessOptions.forPrinting() which includes buffer clearing and
   /// language switching for reliable printing.
-  /// 
+  ///
   /// Example ZPL:
   /// ```
   /// ^XA
@@ -151,7 +153,7 @@ class Zebra {
   /// ^FS
   /// ^XZ
   /// ```
-  /// 
+  ///
   /// Example CPCL:
   /// ```
   /// ! 0 200 200 210 1
@@ -164,13 +166,13 @@ class Zebra {
       bool clearBufferFirst = false,
       ReadinessOptions? readinessOptions}) async {
     await _ensureInitialized();
-    
+
     // Convert clearBufferFirst to ReadinessOptions if needed
     ReadinessOptions? effectiveOptions = readinessOptions;
     if (clearBufferFirst && readinessOptions == null) {
       effectiveOptions = ReadinessOptions.forPrinting();
     }
-    
+
     return await _service.print(data, readinessOptions: effectiveOptions);
   }
 
@@ -179,10 +181,10 @@ class Zebra {
   /// If [address] is provided, connects to that specific printer.
   /// If not provided and only one printer is found, uses that printer.
   /// If multiple printers are found, returns error (user must select).
-  /// 
+  ///
   /// [format] specifies the print format (ZPL or CPCL). If not provided,
   /// it will be auto-detected based on the data.
-  /// 
+  ///
   /// [printCompletionDelay] specifies how long to wait after print callback
   /// before disconnecting. Default is 1000ms. This prevents the last line
   /// from being cut off on some printers.
@@ -206,11 +208,11 @@ class Zebra {
       ReadinessOptions? readinessOptions,
       Duration? printCompletionDelay}) async {
     await _ensureInitialized();
-    
+
     // Use provided readinessOptions or default to comprehensive
     final effectiveOptions =
         readinessOptions ?? ReadinessOptions.comprehensive();
-    
+
     return await _service.autoPrint(data,
         printer: printer,
         address: address,
@@ -273,4 +275,101 @@ class Zebra {
         printer: _service.printer!,
         statusCallback: (msg) => _service.statusStreamController?.add(msg),
       );
+
+  /// Simplified print workflow: handles discovery, connection, and printing in a single call
+  ///
+  /// This method handles the complete workflow:
+  /// 1. If no saved printer exists, discovers paired printers and saves the first one
+  /// 2. Ensures connection to the printer (checks if already connected)
+  /// 3. Prints the data in the specified format
+  ///
+  /// [data] is the data to print
+  /// [format] specifies the print format (ZPL or CPCL). If not provided, auto-detected
+  /// [address] specific printer address to use (optional)
+  /// [timeout] specifies how long to scan for printers if discovery is needed
+  /// [disconnectAfter] whether to disconnect after printing (default: false to maintain connection)
+  ///
+  /// Returns Result indicating success or failure.
+  static Future<Result<void>> simplifiedPrint(
+    String data, {
+    PrintFormat? format,
+    String? address,
+    Duration timeout = const Duration(seconds: 10),
+    bool disconnectAfter = false,
+  }) async {
+    await _ensureInitialized();
+
+    try {
+      // Step 1: Get or discover a printer
+      ZebraDevice? printerToUse = _savedPrinterToUseOnSimplified;
+
+      if (printerToUse == null ||
+          (address != null && printerToUse.address != address)) {
+        // If we have a different printer, disconnect first
+        if (printerToUse != null) {
+          await disconnect();
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
+
+        // Discover paired printers
+        final discoveryResult = await discoverPrinters(timeout: timeout);
+        if (!discoveryResult.success) {
+          return Result.error(
+              'Failed to discover printers: ${discoveryResult.error?.message}');
+        }
+
+        final printers = discoveryResult.data!;
+        if (printers.isEmpty) {
+          return Result.error(
+              'No paired printers found. Please pair a printer in Settings first.');
+        }
+
+        // Find the target printer
+        printerToUse = address != null
+            ? printers
+                .where((printer) => printer.address == address)
+                .firstOrNull
+            : printers.first;
+
+        if (printerToUse == null) {
+          return Result.error('Specified printer not found: $address');
+        }
+
+        _savedPrinterToUseOnSimplified = printerToUse;
+      }
+
+      // Step 2: Check if already connected to the target printer
+      final isConnected = await _service.isConnected();
+      final connectedPrinter = _service.connectedPrinter;
+
+      bool needsConnection =
+          !isConnected || connectedPrinter?.address != printerToUse.address;
+
+      if (needsConnection) {
+        // Connect to the printer
+        final connectResult = await connect(printerToUse.address);
+        if (!connectResult.success) {
+          return Result.error(
+              'Failed to connect to printer: ${connectResult.error?.message}');
+        }
+        // Small delay after connection to ensure stability
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
+
+      // Step 3: Print the data
+      final printResult = await print(data, format: format);
+      if (!printResult.success) {
+        return Result.error('Failed to print: ${printResult.error?.message}');
+      }
+
+      // Step 4: Disconnect if requested
+      if (disconnectAfter) {
+        await disconnect();
+      }
+
+      return Result.success();
+    } catch (e) {
+      return Result.error('Simplified print failed: $e');
+    }
+  }
 }
