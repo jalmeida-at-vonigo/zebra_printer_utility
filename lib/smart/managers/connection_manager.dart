@@ -204,13 +204,21 @@ class ConnectionManager {
       // Create ZebraPrinter instance which handles ZSDK integration
       final printer = _printerFactory(address);
       
-      // Test connection by checking if printer is reachable
+      // Actually establish the connection first
+      final connectResult = await printer.connectToPrinter(address);
+      if (!connectResult.success) {
+        _logger.warning(
+            'Failed to establish ZSDK connection for $address: ${connectResult.error?.message}');
+        return null;
+      }
+
+      // Verify the connection is working
       final isConnected = await printer.isPrinterConnected();
       if (isConnected) {
-        _logger.debug('ZSDK connection test successful for $address');
+        _logger.debug('ZSDK connection established and verified for $address');
         return printer;
       } else {
-        _logger.warning('ZSDK connection test failed for $address');
+        _logger.warning('ZSDK connection verification failed for $address');
         return null;
       }
     } catch (e) {
