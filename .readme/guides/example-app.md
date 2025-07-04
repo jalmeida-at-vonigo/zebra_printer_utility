@@ -16,6 +16,7 @@ This directory contains a complete working example of the Zebra Printer Utility 
 - **ZPL Printing**: Print labels using ZPL commands
 - **CPCL Printing**: Print labels using CPCL commands
 - **Language Detection**: Automatic printer language detection
+- **Simplified Print Workflow**: Single-call printing with `Zebra.simplifiedPrint()` (v2.0.31+)
 - **Test Mode**: Test without physical printers
 
 ## Screens

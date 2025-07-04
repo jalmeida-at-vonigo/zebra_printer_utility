@@ -144,6 +144,13 @@ Benefits:
 - **Smarter**: Skips operations if already in desired state
 - **Reliable**: Retries with exponential backoff if needed
 
+## What's New in v2.0.31
+
+- **Simplified Print Workflow**: New `Zebra.simplifiedPrint()` method for streamlined printing
+  - Single-call workflow that handles discovery, connection, and printing
+  - Smart connection management that maintains connection between prints
+  - Automatic format detection and printer readiness handling
+
 ## What's New in v2.2
 
 - **Command Architecture**: Clean separation of ZPL and CPCL commands with automatic format selection
@@ -204,7 +211,62 @@ final result = await service.autoPrint(
 result
   .ifSuccess((_) => print('Printed successfully!'))
   .ifFailure((error) => print('Error: ${error.code} - ${error.message}'));
+
+// Using simplified print for streamlined workflow (v2.0.31+)
+final simplifiedResult = await Zebra.simplifiedPrint(
+  '! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n',
+  format: PrintFormat.cpcl,
+);
+simplifiedResult
+  .ifSuccess((_) => print('Simplified print successful!'))
+  .ifFailure((error) => print('Simplified print failed: ${error.message}'));
 ```
+
+## Simplified Print Workflow (v2.0.31+)
+
+For the most streamlined printing experience, use the `Zebra.simplifiedPrint()` method. This single-call method handles discovery, connection, and printing automatically:
+
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+// Basic simplified print - auto-detects format
+final result = await Zebra.simplifiedPrint('^XA^FO50,50^FDHello World^FS^XZ');
+
+// With specific format
+final result = await Zebra.simplifiedPrint(
+  '! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n',
+  format: PrintFormat.cpcl,
+);
+
+// With specific printer address
+final result = await Zebra.simplifiedPrint(
+  '^XA^FO50,50^FDHello World^FS^XZ',
+  address: '192.168.1.100',
+);
+
+// Maintain connection for multiple prints
+final result = await Zebra.simplifiedPrint(
+  '^XA^FO50,50^FDHello World^FS^XZ',
+  disconnectAfter: false, // Keep connection for next print
+);
+```
+
+### Key Features
+
+- **Single Call**: Handles discovery, connection, and printing in one method
+- **Smart Connection**: Only connects if not already connected to target printer
+- **Connection Persistence**: Maintains connection between prints by default
+- **Format Auto-Detection**: Automatically detects ZPL/CPCL format
+- **Error Handling**: Comprehensive error reporting with Result pattern
+
+### Workflow
+
+1. **Discovery**: If no saved printer exists, discovers paired printers
+2. **Connection**: Ensures connection to target printer (checks if already connected)
+3. **Printing**: Prints data with proper format handling
+4. **Cleanup**: Optionally disconnects (default: maintains connection)
+
+This workflow is ideal for applications that need reliable, simple printing without managing connection state manually.
 
 ## Advanced Usage: Printer State Management
 

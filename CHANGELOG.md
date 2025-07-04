@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.32] - 2025-01-03
+
+### Documentation
+- **Comprehensive Documentation**: Updated all documentation to include `simplifiedPrint` method
+  - Added detailed examples in README.md with workflow explanation
+  - Updated API reference with complete method documentation
+  - Added usage examples for different scenarios (auto-detection, specific format, address)
+  - Updated best practices to recommend `simplifiedPrint` for simplest use cases
+  - Enhanced example app documentation to highlight new feature
+
+### Technical Details
+- No code changes - documentation updates only
+- All examples tested and verified
+- Maintains backward compatibility
+
 ## [2.0.31] - 2025-01-03
 
 ### Added

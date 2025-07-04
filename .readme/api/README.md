@@ -4,6 +4,19 @@ Complete API documentation for the Zebra Printer Plugin.
 
 ## Core Classes
 
+### Zebra (Static API)
+Simplified static API for common printer operations.
+
+**Key Methods:**
+- `simplifiedPrint(String data, ...)` - Single-call workflow: discovery, connection, and printing (v2.0.31+)
+- `discoverPrinters()` - Discover available printers
+- `connect(String address)` - Connect to printer by address
+- `print(String data, ...)` - Print data with format auto-detection
+- `autoPrint(String data, ...)` - Complete workflow: connect, print, disconnect
+- `disconnect()` - Disconnect from current printer
+- `isConnected()` - Check connection status
+- `runDiagnostics()` - Run comprehensive printer diagnostics
+
 ### ZebraPrinterService
 High-level service for printer operations with automatic connection management and retry logic.
 
@@ -155,6 +168,38 @@ if (!printResult.success) {
 await service.disconnect();
 ```
 
+### Simplified Print Workflow (v2.0.31+)
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+// Basic simplified print - auto-detects format
+final result = await Zebra.simplifiedPrint('^XA^FO50,50^FDHello World^FS^XZ');
+
+// With specific format
+final result = await Zebra.simplifiedPrint(
+  '! 0 200 200 210 1\r\nTEXT 4 0 0 0 Hello World\r\nFORM\r\nPRINT\r\n',
+  format: PrintFormat.cpcl,
+);
+
+// With specific printer address
+final result = await Zebra.simplifiedPrint(
+  '^XA^FO50,50^FDHello World^FS^XZ',
+  address: '192.168.1.100',
+);
+
+// Maintain connection for multiple prints
+final result = await Zebra.simplifiedPrint(
+  '^XA^FO50,50^FDHello World^FS^XZ',
+  disconnectAfter: false, // Keep connection for next print
+);
+
+if (result.success) {
+  print('Simplified print successful');
+} else {
+  print('Simplified print failed: ${result.error!.message}');
+}
+```
+
 ### Auto-Print Workflow
 ```dart
 final service = ZebraPrinterService();
@@ -232,4 +277,5 @@ See the [Error Handling Guide](../guides/error-handling.md) for complete details
 2. Use `ZebraPrinterService` for production apps
 3. Handle discovery timeouts gracefully
 4. Dispose of resources when done
-5. Use `autoPrint` for simple use cases 
+5. Use `Zebra.simplifiedPrint()` for the simplest use cases (v2.0.31+)
+6. Use `autoPrint` for simple use cases with more control 
