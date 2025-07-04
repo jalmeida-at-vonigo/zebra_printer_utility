@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
+import 'internal/commands/command_factory.dart';
 
 /// Service for managing Zebra printer operations
 ///
@@ -81,8 +82,6 @@ class ZebraPrinterService {
   void _onControllerChanged() {
     _connectionStreamController?.add(connectedPrinter);
   }
-
-
 
   /// Connect to a printer by address
   /// Returns Result indicating success or failure with error details
@@ -177,6 +176,10 @@ class ZebraPrinterService {
       );
     }
 
+    // Detect format if not specified
+    format ??= ZebraSGDCommands.detectDataLanguage(data);
+    final isCPCL = format == PrintFormat.cpcl;
+
     try {
       // Use new readiness manager if options are provided or clearBufferFirst is true
       if (readinessOptions != null || clearBufferFirst) {
@@ -191,6 +194,7 @@ class ZebraPrinterService {
         
         // Perform pre-print corrections using new manager
         final correctionResult = await _printer!.prepareForPrint(
+          format: format!,
           options: effectiveOptions,
         );
 
@@ -207,10 +211,6 @@ class ZebraPrinterService {
 
       // Prepare data based on format
       String preparedData = data;
-
-      // Detect format if not specified
-      final isCPCL =
-          format == PrintFormat.cpcl || ZebraSGDCommands.isCPCLData(data);
 
       if (isCPCL) {
         _logger.info('Service: Detected CPCL format, preparing data');
@@ -254,7 +254,8 @@ class ZebraPrinterService {
         if (isCPCL) {
           _logger.info('Service: Sending CPCL termination command');
           _statusStreamController?.add('Sending CPCL termination command...');
-          _printer!.sendCommand('\x03'); // ETX character
+          await CommandFactory.createSendCpclFlushBufferCommand(_printer!)
+              .execute();
           await Future.delayed(const Duration(milliseconds: 100));
         }
 
@@ -581,6 +582,7 @@ class ZebraPrinterService {
 
   /// Prepare printer for printing with specified options
   Future<Result<ReadinessResult>> prepareForPrint({
+    required PrintFormat format,
     ReadinessOptions? options,
   }) async {
     await _ensureInitialized();
@@ -590,7 +592,7 @@ class ZebraPrinterService {
       return Result.error('No printer instance available');
     }
 
-    return await _printer!.prepareForPrint(options: options);
+    return await _printer!.prepareForPrint(format: format, options: options);
   }
 
   /// Get detailed status of the printer
@@ -856,7 +858,8 @@ class ZebraPrinterService {
 
       if (printResult.success) {
         // 6. Send ETX as a command to ensure proper termination
-        _printer!.sendCommand('\x03'); // ETX character
+        await CommandFactory.createSendCpclFlushBufferCommand(_printer!)
+            .execute();
         await Future.delayed(const Duration(milliseconds: 100));
 
         // 7. Use fixed delay of 2500ms for CPCL
@@ -983,7 +986,8 @@ class ZebraPrinterService {
       clearBuffer: true,
     );
     
-    final result = await _printer!.prepareForPrint(options: options);
+    final result =
+        await _printer!.prepareForPrint(format: format, options: options);
     if (result.success) {
       return Result.success();
     } else {
@@ -996,7 +1000,7 @@ class ZebraPrinterService {
 
   /// Flush the printer's buffer to ensure all data is processed
   /// This is especially important for CPCL printing
-  Future<Result<void>> flushPrintBuffer() async {
+  Future<Result<void>> flushPrintBuffer(PrintFormat format) async {
     await _ensureInitialized();
 
     if (connectedPrinter == null) {
@@ -1016,7 +1020,8 @@ class ZebraPrinterService {
       flushBuffer: true,
     );
     
-    final result = await _printer!.prepareForPrint(options: options);
+    final result =
+        await _printer!.prepareForPrint(format: format, options: options);
     if (result.success) {
       return Result.success();
     } else {

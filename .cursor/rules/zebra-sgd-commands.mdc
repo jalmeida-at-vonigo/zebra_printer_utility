@@ -1,0 +1,98 @@
+---
+description: ZebraSGDCommands utility-only usage rules
+globs: lib/zebra_sgd_commands.dart
+alwaysApply: true
+---
+
+# ZEBRA SGD COMMANDS - UTILITY ONLY
+
+## Purpose
+[ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) should **ONLY** contain utility methods for:
+- Data format detection
+- Response parsing
+- Language matching
+- **NEVER command strings**
+
+## Allowed Methods (Utility Only)
+* `isZPLData(String data)` - Detect if data is ZPL format
+* `isCPCLData(String data)` - Detect if data is CPCL format  
+* `detectDataLanguage(String data)` - Determine print format from data
+* `parseResponse(String response)` - Parse SGD response to extract value
+* `isLanguageMatch(String current, String expected)` - Check language compatibility
+
+## Forbidden Methods (Command Strings)
+* `getCommand(String setting)` - ❌ Use CommandFactory instead
+* `setCommand(String setting, String value)` - ❌ Use CommandFactory instead
+* `doCommand(String action, String value)` - ❌ Use CommandFactory instead
+* `setZPLMode()` - ❌ Use CommandFactory instead
+* `setCPCLMode()` - ❌ Use CommandFactory instead
+* `resetPrinter()` - ❌ Use CommandFactory instead
+* `unpausePrinter()` - ❌ Use CommandFactory instead
+* `resumePrinter()` - ❌ Use CommandFactory instead
+* `clearAlerts()` - ❌ Use CommandFactory instead
+* `cpclClearBuffer()` - ❌ Use CommandFactory instead
+* `cpclFlushBuffer()` - ❌ Use CommandFactory instead
+* `cpclClearErrors()` - ❌ Use CommandFactory instead
+* `zplResume()` - ❌ Use CommandFactory instead
+* `zplClearErrors()` - ❌ Use CommandFactory instead
+* `zplClearBuffer()` - ❌ Use CommandFactory instead
+* `zplFlushBuffer()` - ❌ Use CommandFactory instead
+
+## Usage Examples
+
+### ✅ CORRECT - Utility Methods Only
+```dart
+// Data format detection
+if (ZebraSGDCommands.isZPLData(data)) {
+  // Handle ZPL data
+}
+
+// Language detection
+final format = ZebraSGDCommands.detectDataLanguage(data);
+
+// Response parsing
+final value = ZebraSGDCommands.parseResponse(response);
+
+// Language matching
+if (ZebraSGDCommands.isLanguageMatch(currentLang, 'zpl')) {
+  // Handle ZPL language
+}
+```
+
+### ❌ WRONG - Using for Commands
+```dart
+// ❌ DON'T DO THIS - Using ZebraSGDCommands for command strings
+final command = ZebraSGDCommands.zplClearErrors();
+_printer!.sendCommand(command);
+
+// ❌ DON'T DO THIS - Using ZebraSGDCommands for SGD commands
+final sgdCommand = ZebraSGDCommands.getCommand('device.languages');
+_printer!.sendCommand(sgdCommand);
+
+// ❌ DON'T DO THIS - Using ZebraSGDCommands for buffer operations
+final bufferCommand = ZebraSGDCommands.cpclClearBuffer();
+_printer!.sendCommand(bufferCommand);
+```
+
+## Migration Requirements
+* **Remove all command string methods from ZebraSGDCommands**
+* **Move command strings to their respective command classes**
+* **Keep only utility methods for data detection and parsing**
+* **Update all imports to use CommandFactory for commands**
+
+## File Structure
+The file should only contain:
+```dart
+class ZebraSGDCommands {
+  // ✅ UTILITY METHODS ONLY
+  static bool isZPLData(String data) { ... }
+  static bool isCPCLData(String data) { ... }
+  static PrintFormat? detectDataLanguage(String data) { ... }
+  static String? parseResponse(String response) { ... }
+  static bool isLanguageMatch(String current, String expected) { ... }
+  
+  // ❌ NO COMMAND METHODS
+  // static String getCommand(String setting) { ... } - REMOVE
+  // static String zplClearErrors() { ... } - REMOVE
+  // static String cpclClearBuffer() { ... } - REMOVE
+}

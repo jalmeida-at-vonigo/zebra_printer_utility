@@ -15,6 +15,7 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 - **[Auto-Correction System v2.0](.readme/architecture/auto-correction-v2.md)**: Configurable automatic issue resolution
 - **Printer discovery**: Scan for available printers
 - **Connection management**: Connect, disconnect, and monitor connection status
+- **Format-Specific Commands**: ZPL and CPCL commands are properly separated and automatically selected based on printer format
 - **Auto-Correction Capabilities** (v2.0+):
   - Configurable auto-correction with `ReadinessOptions`
   - **Auto-unpause**: Automatically unpause paused printers
@@ -89,6 +90,25 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 
 ## Architecture
 
+### Command Architecture (v2.2.0+)
+
+The plugin now uses a clean command architecture that ensures format-specific operations are handled correctly:
+
+- **One Command Per File**: Each command class is in its own file with a descriptive name
+- **Format-Specific Commands**: ZPL and CPCL commands are properly separated (e.g., `SendZplClearBufferCommand`, `SendCpclClearBufferCommand`)
+- **CommandFactory Pattern**: All commands are created through `CommandFactory` to ensure proper instantiation
+- **Automatic Format Selection**: Commands are automatically selected based on detected printer format
+- **Utility-Only ZebraSGDCommands**: The `ZebraSGDCommands` class now only contains utility methods for format detection and parsing
+
+```dart
+// The system automatically selects the correct command for the format
+if (format == PrintFormat.zpl) {
+  await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+} else if (format == PrintFormat.cpcl) {
+  await CommandFactory.createSendCpclClearBufferCommand(printer).execute();
+}
+```
+
 ### Callback-Based Operations (v2.1.0+)
 
 All native operations in this plugin use a callback-based architecture that ensures operations complete based on actual device state rather than arbitrary delays:
@@ -123,6 +143,12 @@ Benefits:
 - **Faster**: Operations complete as soon as verified, not after fixed delays
 - **Smarter**: Skips operations if already in desired state
 - **Reliable**: Retries with exponential backoff if needed
+
+## What's New in v2.2
+
+- **Command Architecture**: Clean separation of ZPL and CPCL commands with automatic format selection
+- **CommandFactory Pattern**: Centralized command creation for better maintainability
+- **Utility-Only ZebraSGDCommands**: Simplified utility class focused on format detection and parsing
 
 ## What's New in v2.0
 

@@ -1,3 +1,5 @@
+import 'package:zebrautil/models/print_enums.dart';
+
 /// SGD (Set Get Do) command builder for Zebra printers
 class ZebraSGDCommands {
   /// Get a printer setting value
@@ -39,9 +41,9 @@ class ZebraSGDCommands {
   }
 
   /// Determine printer language from data
-  static String? detectDataLanguage(String data) {
-    if (isZPLData(data)) return 'zpl';
-    if (isCPCLData(data)) return 'cpcl';
+  static PrintFormat? detectDataLanguage(String data) {
+    if (isZPLData(data)) return PrintFormat.zpl;
+    if (isCPCLData(data)) return PrintFormat.cpcl;
     return null;
   }
 
@@ -85,7 +87,18 @@ class ZebraSGDCommands {
   /// Clear errors - using SGD commands instead of ZPL
   static String clearAlerts() => setCommand('alerts.clear', 'ALL');
 
+  /// CPCL-specific commands
+  static String cpclClearBuffer() =>
+      '\x18'; // CAN character for CPCL buffer clearing
+  static String cpclFlushBuffer() =>
+      '\x03'; // ETX character for CPCL buffer flushing
+  static String cpclClearErrors() => setCommand('alerts.clear', 'ALL');
+
   /// Legacy ZPL-specific commands (use only when in ZPL mode)
   static String zplResume() => '~PS\r\n';
   static String zplClearErrors() => '~JR\r\n';
+  static String zplClearBuffer() =>
+      '\x18'; // CAN character for ZPL buffer clearing
+  static String zplFlushBuffer() =>
+      '\x03'; // ETX character for ZPL buffer flushing
 }

@@ -3,10 +3,12 @@ import 'models/readiness_options.dart';
 import 'models/readiness_result.dart';
 import 'models/result.dart';
 import 'models/printer_readiness.dart';
+import 'models/print_enums.dart';
 import 'internal/commands/command_factory.dart';
 import 'internal/parser_util.dart';
 import 'internal/logger.dart';
 import 'zebra_printer.dart';
+import 'zebra_sgd_commands.dart';
 
 /// Manager for printer readiness operations using command pattern
 class PrinterReadinessManager {
@@ -34,10 +36,11 @@ class PrinterReadinessManager {
   
   /// Prepare printer for printing with specified options
   Future<Result<ReadinessResult>> prepareForPrint(
+    PrintFormat format,
     ReadinessOptions options,
   ) async {
     final stopwatch = Stopwatch()..start();
-    _log('Starting printer preparation for print...');
+    _log('Starting printer preparation for print (format: ${format.name})...');
     
     try {
       final appliedFixes = <String>[];
@@ -64,23 +67,25 @@ class PrinterReadinessManager {
         await _checkAndFixPause(appliedFixes, failedFixes, fixErrors, options);
       }
       
-      // 5. Check and fix errors
+      // 5. Check and fix errors (format-specific)
       if (options.checkErrors) {
-        await _checkAndFixErrors(appliedFixes, failedFixes, fixErrors, options);
+        await _checkAndFixErrors(
+            appliedFixes, failedFixes, fixErrors, options, format);
       }
       
-      // 6. Check and fix language
+      // 6. Check and fix language (format-specific)
       if (options.checkLanguage) {
-        await _checkAndFixLanguage(appliedFixes, failedFixes, fixErrors);
+        await _checkAndFixLanguage(
+            appliedFixes, failedFixes, fixErrors, format);
       }
       
-      // 7. Handle buffer operations
+      // 7. Handle buffer operations (format-specific)
       if (options.clearBuffer) {
-        await _checkAndFixBuffer(appliedFixes, failedFixes, fixErrors);
+        await _checkAndFixBuffer(appliedFixes, failedFixes, fixErrors, format);
       }
       
       if (options.flushBuffer) {
-        await _checkAndFixFlush(appliedFixes, failedFixes, fixErrors);
+        await _checkAndFixFlush(appliedFixes, failedFixes, fixErrors, format);
       }
       
       // 8. Create readiness result
@@ -323,23 +328,45 @@ class PrinterReadinessManager {
     List<String> failedFixes,
     Map<String, String> fixErrors,
     ReadinessOptions options,
+    PrintFormat format,
   ) async {
     final command = CommandFactory.createGetHostStatusCommand(_printer);
     final result = await command.execute();
     
     if (result.success && result.data != null) {
       if (!ParserUtil.isStatusOk(result.data)) {
-        // Try to clear errors
+        // Try to clear errors using format-specific commands
         if (options.fixPrinterErrors) {
-          final clearCommand = CommandFactory.createSendClearErrorsCommand(_printer);
-          final clearResult = await clearCommand.execute();
+          Result clearResult;
+
+          switch (format) {
+            case PrintFormat.zpl:
+              // Use ZPL-specific clear errors command
+              final zplClearCommand =
+                  CommandFactory.createSendZplClearErrorsCommand(_printer);
+              clearResult = await zplClearCommand.execute();
+              break;
+            case PrintFormat.cpcl:
+              // Use CPCL-specific clear errors command
+              final cpclClearCommand =
+                  CommandFactory.createSendCpclClearErrorsCommand(_printer);
+              clearResult = await cpclClearCommand.execute();
+              break;
+            default:
+              // Use clear alerts command as fallback
+              final fallbackClearCommand =
+                  CommandFactory.createSendClearAlertsCommand(_printer);
+              clearResult = await fallbackClearCommand.execute();
+              break;
+          }
           
           if (clearResult.success) {
             appliedFixes.add('clearErrors');
-            _log('Printer errors cleared');
+            _log('Printer errors cleared using ${format.name} command');
           } else {
             failedFixes.add('clearErrors');
-            fixErrors['clearErrors'] = clearResult.error?.message ?? 'Error clearing failed';
+            fixErrors['clearErrors'] =
+                clearResult.error?.message ?? 'Error clearing failed';
             _log('Error clearing failed: ${fixErrors['clearErrors']}');
           }
         } else {
@@ -362,14 +389,49 @@ class PrinterReadinessManager {
     List<String> appliedFixes,
     List<String> failedFixes,
     Map<String, String> fixErrors,
+    PrintFormat format,
   ) async {
     final command = CommandFactory.createGetLanguageCommand(_printer);
     final result = await command.execute();
     
     if (result.success && result.data != null) {
-      _log('Current printer language: ${result.data}');
-      // Language switching would need data context, so we log but don't apply fixes
-      // This would be handled in prepareForPrint with actual data context
+      final currentLanguage = result.data!;
+      _log('Current printer language: $currentLanguage');
+
+      // Check if current language matches expected format
+      bool languageMatches = false;
+      String expectedLanguage = '';
+
+      switch (format) {
+        case PrintFormat.zpl:
+          expectedLanguage = 'zpl';
+          languageMatches = ZebraSGDCommands.isLanguageMatch(
+              currentLanguage, expectedLanguage);
+          break;
+        case PrintFormat.cpcl:
+          expectedLanguage = 'line_print';
+          languageMatches = ZebraSGDCommands.isLanguageMatch(
+              currentLanguage, expectedLanguage);
+          break;
+        default:
+          // For unknown formats, assume language is acceptable
+          languageMatches = true;
+          break;
+      }
+
+      if (!languageMatches) {
+        _log(
+            'Language mismatch: current=$currentLanguage, expected=$expectedLanguage');
+        // Note: Language switching would require additional context and careful handling
+        // For now, we log the mismatch but don't automatically switch
+        // This prevents issues with partial data or incorrect format detection
+        failedFixes.add('language');
+        fixErrors['language'] =
+            'Language mismatch: current=$currentLanguage, expected=$expectedLanguage';
+        _log('Language check failed: ${fixErrors['language']}');
+      } else {
+        _log('Language check passed for ${format.name}');
+      }
     } else {
       failedFixes.add('language');
       fixErrors['language'] = result.error?.message ?? 'Language check failed';
@@ -381,13 +443,33 @@ class PrinterReadinessManager {
     List<String> appliedFixes,
     List<String> failedFixes,
     Map<String, String> fixErrors,
+    PrintFormat format,
   ) async {
-    final command = CommandFactory.createSendClearBufferCommand(_printer);
-    final result = await command.execute();
+    Result result;
+
+    switch (format) {
+      case PrintFormat.zpl:
+        // Use ZPL-specific buffer clear command
+        final command =
+            CommandFactory.createSendZplClearBufferCommand(_printer);
+        result = await command.execute();
+        break;
+      case PrintFormat.cpcl:
+        // For CPCL, use CPCL-specific buffer clear command
+        final cpclCommand =
+            CommandFactory.createSendCpclClearBufferCommand(_printer);
+        result = await cpclCommand.execute();
+        break;
+      default:
+        // Use generic buffer clear as fallback
+        final command = CommandFactory.createSendClearBufferCommand(_printer);
+        result = await command.execute();
+        break;
+    }
     
     if (result.success) {
       appliedFixes.add('clearBuffer');
-      _log('Buffer cleared');
+      _log('Buffer cleared using ${format.name} command');
     } else {
       failedFixes.add('clearBuffer');
       fixErrors['clearBuffer'] = result.error?.message ?? 'Buffer clear failed';
@@ -399,13 +481,33 @@ class PrinterReadinessManager {
     List<String> appliedFixes,
     List<String> failedFixes,
     Map<String, String> fixErrors,
+    PrintFormat format,
   ) async {
-    final command = CommandFactory.createSendFlushBufferCommand(_printer);
-    final result = await command.execute();
+    Result result;
+
+    switch (format) {
+      case PrintFormat.zpl:
+        // Use ZPL-specific buffer flush command
+        final command =
+            CommandFactory.createSendZplFlushBufferCommand(_printer);
+        result = await command.execute();
+        break;
+      case PrintFormat.cpcl:
+        // Use CPCL-specific buffer flush command
+        final cpclCommand =
+            CommandFactory.createSendCpclFlushBufferCommand(_printer);
+        result = await cpclCommand.execute();
+        break;
+      default:
+        // Use generic buffer flush as fallback
+        final command = CommandFactory.createSendFlushBufferCommand(_printer);
+        result = await command.execute();
+        break;
+    }
     
     if (result.success) {
       appliedFixes.add('flushBuffer');
-      _log('Buffer flushed');
+      _log('Buffer flushed using ${format.name} command');
     } else {
       failedFixes.add('flushBuffer');
       fixErrors['flushBuffer'] = result.error?.message ?? 'Buffer flush failed';

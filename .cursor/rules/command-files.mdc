@@ -1,0 +1,97 @@
+---
+description: Command file architecture and command string definition rules
+globs: lib/internal/commands/*.dart
+alwaysApply: true
+---
+
+# COMMAND FILE ARCHITECTURE
+
+## One Command Per File Rule
+* **Each file must contain exactly ONE command class**
+* **File name must match the class name** (snake_case format)
+* **Example:** `SendZplClearBufferCommand` class → `send_zpl_clear_buffer_command.dart` file
+
+## Command String Definition
+* **All command strings must be defined as constants within the command class**
+* **NEVER import or use ZebraSGDCommands for command strings**
+* **Each command class should define its own command string**
+
+## File Structure Template
+```dart
+import '../../zebra_printer.dart';
+import 'send_command_command.dart';
+
+/// Command to send [specific operation] to the printer ([language]-specific)
+class [CommandClassName] extends SendCommandCommand {
+  /// Constructor
+  [CommandClassName](ZebraPrinter printer) : super(printer, [COMMAND_STRING]);
+  
+  @override
+  String get operationName => 'Send [Specific Operation] Command';
+}
+```
+
+## Examples
+
+### ✅ CORRECT - ZPL Clear Buffer Command
+```dart
+// File: send_zpl_clear_buffer_command.dart
+import '../../zebra_printer.dart';
+import 'send_command_command.dart';
+
+/// Command to send ZPL clear buffer command to the printer
+class SendZplClearBufferCommand extends SendCommandCommand {
+  /// Constructor
+  SendZplClearBufferCommand(ZebraPrinter printer) : super(printer, '\x18'); // CAN character
+  
+  @override
+  String get operationName => 'Send ZPL Clear Buffer Command';
+}
+```
+
+### ✅ CORRECT - CPCL Clear Errors Command
+```dart
+// File: send_cpcl_clear_errors_command.dart
+import '../../zebra_printer.dart';
+import 'send_command_command.dart';
+
+/// Command to send CPCL clear errors command to the printer
+class SendCpclClearErrorsCommand extends SendCommandCommand {
+  /// Constructor
+  SendCpclClearErrorsCommand(ZebraPrinter printer) : super(printer, '! U1 setvar "alerts.clear" "ALL"\r\n');
+  
+  @override
+  String get operationName => 'Send CPCL Clear Errors Command';
+}
+```
+
+## Forbidden Patterns
+```dart
+// ❌ WRONG - Multiple commands in one file
+class SendZplClearBufferCommand extends SendCommandCommand { ... }
+class SendCpclClearBufferCommand extends SendCommandCommand { ... }
+
+// ❌ WRONG - Using ZebraSGDCommands for command strings
+import '../../zebra_sgd_commands.dart';
+SendZplClearBufferCommand(ZebraPrinter printer) : super(printer, ZebraSGDCommands.zplClearBuffer());
+
+// ❌ WRONG - File name doesn't match class name
+// File: clear_buffer_commands.dart (should be send_zpl_clear_buffer_command.dart)
+class SendZplClearBufferCommand extends SendCommandCommand { ... }
+```
+
+## Command String Constants
+* **Define command strings as constants when they are complex**
+* **Use clear comments explaining what the command does**
+* **Include language-specific information in comments**
+
+```dart
+class SendZplClearErrorsCommand extends SendCommandCommand {
+  // ZPL command to clear all printer errors
+  static const String _COMMAND = '~JA';
+  
+  SendZplClearErrorsCommand(ZebraPrinter printer) : super(printer, _COMMAND);
+  
+  @override
+  String get operationName => 'Send ZPL Clear Errors Command';
+}

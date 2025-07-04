@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.0.30] - 2025-01-03
+
+### Added
+- **Command Architecture**: Implemented clean command architecture with format-specific commands
+  - One command per file with descriptive naming (e.g., `SendZplClearBufferCommand`, `SendCpclClearBufferCommand`)
+  - `CommandFactory` pattern for centralized command creation
+  - Automatic format selection based on detected printer language
+- **Format-Specific Commands**: Properly separated ZPL and CPCL commands
+  - `SendZplClearBufferCommand` / `SendCpclClearBufferCommand`
+  - `SendZplClearErrorsCommand` / `SendCpclClearErrorsCommand`
+  - `SendZplFlushBufferCommand` / `SendCpclFlushBufferCommand`
+  - `SendSetZplModeCommand` / `SendSetCpclModeCommand`
+  - `SendClearAlertsCommand` for generic alert clearing
+- **Comprehensive Unit Tests**: Added unit tests for all command classes
+  - Tests for CommandFactory and all format-specific commands
+  - Proper test structure with `TestWidgetsFlutterBinding.ensureInitialized()`
+  - Coverage for command strings and operation names
+
+### Changed
+- **ZebraSGDCommands Refactoring**: Converted to utility-only class
+  - Removed all command string methods (`getCommand`, `setCommand`, `doCommand`, etc.)
+  - Kept only utility methods: `isZPLData`, `isCPCLData`, `detectDataLanguage`, `parseResponse`, `isLanguageMatch`
+  - Updated all usages to use CommandFactory instead
+- **Command Pattern Enforcement**: Updated all printer operations to use CommandFactory
+  - Replaced direct ZebraSGDCommands usage with proper command instances
+  - Updated `zebra_printer.dart` to use CommandFactory for mode setting
+  - Updated `zebra_printer_readiness_manager.dart` to use format-specific commands
+- **Cursor Rules**: Added comprehensive development rules
+  - Command file architecture rules (one command per file)
+  - ZebraSGDCommands utility-only usage rules
+  - Format-specific command naming and usage rules
+
+### Technical Details
+- All commands now follow the one-command-per-file pattern
+- Command strings are defined within their respective command classes
+- CommandFactory serves as the single source for command creation
+- Automatic format detection ensures correct command selection
+- No breaking changes to public API - all changes are internal architecture improvements
+
 ## [2.0.29] - 2025-07-03
 ### Changed
 - **Major Refactoring**: Renamed `AutoCorrectionOptions` to `ReadinessOptions` for better semantic clarity

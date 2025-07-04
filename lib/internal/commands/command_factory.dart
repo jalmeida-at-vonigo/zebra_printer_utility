@@ -12,6 +12,15 @@ import 'send_clear_errors_command.dart';
 import 'send_command_command.dart';
 import 'send_flush_buffer_command.dart';
 import 'send_unpause_command.dart';
+import 'send_zpl_clear_buffer_command.dart';
+import 'send_cpcl_clear_buffer_command.dart';
+import 'send_zpl_clear_errors_command.dart';
+import 'send_cpcl_clear_errors_command.dart';
+import 'send_zpl_flush_buffer_command.dart';
+import 'send_cpcl_flush_buffer_command.dart';
+import 'send_set_zpl_mode_command.dart';
+import 'send_set_cpcl_mode_command.dart';
+import 'send_clear_alerts_command.dart';
 
 /// Factory class for creating printer command instances
 class CommandFactory {
@@ -62,23 +71,77 @@ class CommandFactory {
     ZebraPrinter printer,
   ) => SendUnpauseCommand(printer);
   
-  /// Creates a SendClearErrorsCommand for clearing printer errors
+  /// Creates a SendClearErrorsCommand for clearing printer errors (generic)
   static SendClearErrorsCommand createSendClearErrorsCommand(
     ZebraPrinter printer,
   ) => SendClearErrorsCommand(printer);
+
+  /// Creates a SendZplClearErrorsCommand for clearing printer errors (ZPL-specific)
+  static SendZplClearErrorsCommand createSendZplClearErrorsCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendZplClearErrorsCommand(printer);
+
+  /// Creates a SendCpclClearErrorsCommand for clearing printer errors (CPCL-specific)
+  static SendCpclClearErrorsCommand createSendCpclClearErrorsCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendCpclClearErrorsCommand(printer);
   
   /// Creates a SendCalibrationCommand for calibrating the printer
   static SendCalibrationCommand createSendCalibrationCommand(
     ZebraPrinter printer,
   ) => SendCalibrationCommand(printer);
   
-  /// Creates a SendClearBufferCommand for clearing the print buffer
+  /// Creates a SendClearBufferCommand for clearing the print buffer (generic)
   static SendClearBufferCommand createSendClearBufferCommand(
     ZebraPrinter printer,
   ) => SendClearBufferCommand(printer);
   
-  /// Creates a SendFlushBufferCommand for flushing the print buffer
+  /// Creates a SendZplClearBufferCommand for clearing the print buffer (ZPL-specific)
+  static SendZplClearBufferCommand createSendZplClearBufferCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendZplClearBufferCommand(printer);
+
+  /// Creates a SendCpclClearBufferCommand for clearing the print buffer (CPCL-specific)
+  static SendCpclClearBufferCommand createSendCpclClearBufferCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendCpclClearBufferCommand(printer);
+
+  /// Creates a SendFlushBufferCommand for flushing the print buffer (generic)
   static SendFlushBufferCommand createSendFlushBufferCommand(
     ZebraPrinter printer,
   ) => SendFlushBufferCommand(printer);
+  
+  /// Creates a SendZplFlushBufferCommand for flushing the print buffer (ZPL-specific)
+  static SendZplFlushBufferCommand createSendZplFlushBufferCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendZplFlushBufferCommand(printer);
+
+  /// Creates a SendCpclFlushBufferCommand for flushing the print buffer (CPCL-specific)
+  static SendCpclFlushBufferCommand createSendCpclFlushBufferCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendCpclFlushBufferCommand(printer);
+
+  /// Creates a SendSetZplModeCommand for setting printer to ZPL mode
+  static SendSetZplModeCommand createSendSetZplModeCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendSetZplModeCommand(printer);
+
+  /// Creates a SendSetCpclModeCommand for setting printer to CPCL mode
+  static SendSetCpclModeCommand createSendSetCpclModeCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendSetCpclModeCommand(printer);
+
+  /// Creates a SendClearAlertsCommand for clearing all printer alerts
+  static SendClearAlertsCommand createSendClearAlertsCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendClearAlertsCommand(printer);
 } 

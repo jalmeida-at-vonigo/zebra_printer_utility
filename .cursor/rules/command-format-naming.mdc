@@ -1,0 +1,41 @@
+# PRINTER FORMAT-SPECIFIC COMMAND NAMING & USAGE
+
+## Naming Rule
+* If a command is specific to a printer format (e.g., ZPL or CPCL), its class and file name **MUST** include the format in the name.
+    - **Example:**
+        - ZPL: `SendZplClearBufferCommand` in `send_zpl_clear_buffer_command.dart`
+        - CPCL: `SendCpclClearErrorsCommand` in `send_cpcl_clear_errors_command.dart`
+* Generic commands (not format-specific) **MUST NOT** include a format in the name.
+
+## Usage Rule
+* When calling a format-specific command, **ALWAYS** use the correct command for the detected or intended printer language.
+    - **Example:**
+        - If printing in ZPL, use `SendZplClearBufferCommand`
+        - If printing in CPCL, use `SendCpclClearBufferCommand`
+* **NEVER** use a ZPL command for CPCL data, or vice versa.
+* When the format is determined at runtime, use a conditional to select the correct command.
+
+## Migration/Refactor Requirements
+* Review all command files and usages:
+    - Ensure all format-specific commands are named and filed correctly
+    - Ensure all invocations use the correct command for the printer language
+* Update any ambiguous or incorrectly named commands to follow this rule
+* Update all usages in the codebase to call the correct command for the format
+
+## Examples
+```dart
+// ✅ CORRECT
+if (format == PrintFormat.zpl) {
+  await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+} else if (format == PrintFormat.cpcl) {
+  await CommandFactory.createSendCpclClearBufferCommand(printer).execute();
+}
+
+// ❌ WRONG
+await CommandFactory.createSendZplClearBufferCommand(printer).execute(); // Used for CPCL data
+await CommandFactory.createSendClearBufferCommand(printer).execute(); // Ambiguous for format-specific operation
+```
+description:
+globs:
+alwaysApply: false
+---

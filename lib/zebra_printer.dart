@@ -11,8 +11,8 @@ import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/internal/logger.dart';
-import 'zebra_sgd_commands.dart';
 import 'zebra_printer_readiness_manager.dart';
+import 'internal/commands/command_factory.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
@@ -633,8 +633,8 @@ class ZebraPrinter {
     );
 
     final command = mode == PrinterMode.zpl
-        ? ZebraSGDCommands.setZPLMode()
-        : ZebraSGDCommands.setCPCLMode();
+        ? CommandFactory.createSendSetZplModeCommand(this).command
+        : CommandFactory.createSendSetCpclModeCommand(this).command;
 
     final desiredValue = mode == PrinterMode.zpl ? 'zpl' : 'line_print';
 
@@ -657,10 +657,11 @@ class ZebraPrinter {
 
   /// Prepare printer for printing with specified options
   Future<Result<ReadinessResult>> prepareForPrint({
+    required PrintFormat format,
     ReadinessOptions? options,
   }) async {
     final opts = options ?? ReadinessOptions.forPrinting();
-    return await _readinessManager.prepareForPrint(opts);
+    return await _readinessManager.prepareForPrint(format, opts);
   }
 
   /// Run comprehensive diagnostics on the printer
