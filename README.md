@@ -16,7 +16,7 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 - **Printer discovery**: Scan for available printers
 - **Connection management**: Connect, disconnect, and monitor connection status
 - **Auto-Correction Capabilities** (v2.0+):
-  - Configurable auto-correction with `AutoCorrectionOptions`
+  - Configurable auto-correction with `ReadinessOptions`
   - **Auto-unpause**: Automatically unpause paused printers
   - **Clear errors**: Clear recoverable printer errors
   - **Connection recovery**: Reconnect on connection loss
@@ -25,28 +25,26 @@ This plugin provides a unified API for discovering, connecting to, and printing 
   - **Buffer clearing**: Clear printer buffer before printing (v2.0.20+)
   ```dart
   // Use optimized defaults for regular printing (v2.0.20+)
-  await Zebra.print(data); // Automatically uses AutoCorrectionOptions.print()
+  await Zebra.print(data); // Automatically uses ReadinessOptions.forPrinting()
   
   // Use safe defaults for autoPrint (v2.0.20+)
-  await Zebra.autoPrint(data); // Automatically uses AutoCorrectionOptions.autoPrint()
+  await Zebra.autoPrint(data); // Automatically uses ReadinessOptions.comprehensive()
   
   // Or customize corrections
   await Zebra.print(data,
-    autoCorrectionOptions: AutoCorrectionOptions(
-      enableUnpause: true,
-      enableClearErrors: true,
-      enableReconnect: false,
-      enableLanguageSwitch: true,
-      enableCalibration: false,
-      enableBufferClear: true,
+    readinessOptions: ReadinessOptions(
+      fixPausedPrinter: true,
+      fixPrinterErrors: true,
+      fixLanguageMismatch: true,
+      clearBuffer: true,
     ));
   
   // Factory constructors for common scenarios
-  AutoCorrectionOptions.none()      // No corrections
-  AutoCorrectionOptions.safe()      // Basic corrections (unpause, clear errors, reconnect)
-  AutoCorrectionOptions.all()       // All corrections enabled
-  AutoCorrectionOptions.print()     // Optimized for print() - includes buffer clearing
-  AutoCorrectionOptions.autoPrint() // Optimized for autoPrint() - all safety features
+  ReadinessOptions.none()           // No corrections
+  ReadinessOptions.basic()          // Basic corrections (unpause, clear errors)
+  ReadinessOptions.comprehensive()  // All corrections enabled
+  ReadinessOptions.forPrinting()    // Optimized for print() - includes buffer clearing
+  ReadinessOptions.forAutoPrint()   // Optimized for autoPrint() - all safety features
   ```
 - **Advanced Printer Control** (v2.0.18+):
   - **SGD Commands**: Send raw SGD (Set/Get/Do) commands to the printer
@@ -184,19 +182,18 @@ result
 
 ## Advanced Usage: Printer State Management
 
-For advanced control over printer state, readiness, and buffer management, use the `PrinterStateManager` class. This is now available directly from the root of the package as `zebra_printer_state_manager.dart` and is re-exported by `zebrautil.dart`:
+For advanced control over printer state, readiness, and buffer management, use the `PrinterReadinessManager` class. This is now available directly from the root of the package as `zebra_printer_readiness_manager.dart` and is re-exported by `zebrautil.dart`:
 
 ```dart
 import 'package:zebrautil/zebrautil.dart';
 
-final stateManager = PrinterStateManager(
+final readinessManager = PrinterReadinessManager(
   printer: myPrinter,
-  options: AutoCorrectionOptions.all(),
   statusCallback: (msg) => print(msg),
 );
 
 // Example: Pre-print correction
-final result = await stateManager.correctForPrinting(
+final result = await readinessManager.correctForPrinting(
   data: '^XA^FDTest^FS^XZ',
   format: PrintFormat.zpl,
 );
@@ -205,10 +202,10 @@ if (result.success) {
 }
 
 // Example: Clear buffer
-await stateManager.clearPrinterBuffer();
+await readinessManager.clearPrinterBuffer();
 
 // Example: Flush buffer (for CPCL)
-await stateManager.flushPrintBuffer();
+await readinessManager.flushPrintBuffer();
 ```
 
 This class provides fine-grained control for advanced scenarios, such as custom auto-correction flows, buffer management, and language switching. See the API docs for details.
