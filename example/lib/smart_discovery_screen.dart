@@ -697,12 +697,12 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
           ),
           if (_isDiscovering && !_isPrinting)
             IconButton(
-              icon: const Icon(Icons.stop, color: Colors.white, size: 24),
+              icon: Icon(Icons.stop, color: Colors.white, size: 24),
               onPressed: _stopDiscovery,
               tooltip: 'Stop Discovery',
             ),
           IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 24),
+            icon: Icon(Icons.close, color: Colors.white, size: 24),
             onPressed: _isPrinting ? _cancelPrinting : _closePopup,
             tooltip: 'Close',
           ),
@@ -1038,7 +1038,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
               ),
               child: Row(
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(
