@@ -195,7 +195,7 @@ void main() {
 
         final json = device.toJson();
 
-        expect(json['ipAddress'], equals('192.168.1.100'));
+        expect(json['address'], equals('192.168.1.100'));
         expect(json['name'], equals('Test Printer'));
         expect(json['isWifi'], isTrue);
         expect(json['status'], equals('Ready'));

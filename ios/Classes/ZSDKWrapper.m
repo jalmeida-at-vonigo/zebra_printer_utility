@@ -30,21 +30,64 @@
                 NSMutableArray *printerInfo = [NSMutableArray array];
                 for (id printer in printers) {
                     NSMutableDictionary *info = [NSMutableDictionary dictionary];
+                    NSString *printerAddress = nil;
+                    NSString *printerName = nil;
                     
                     if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
                         DiscoveredPrinterNetwork *networkPrinter = (DiscoveredPrinterNetwork *)printer;
-                        info[@"address"] = networkPrinter.address ?: @"";
-                        info[@"port"] = @(networkPrinter.port);
-                        info[@"name"] = networkPrinter.dnsName ?: networkPrinter.address ?: @"Unknown";
-                        info[@"isWifi"] = @YES;
+                        printerAddress = networkPrinter.address;
+                        printerName = networkPrinter.dnsName ?: networkPrinter.address;
+                        
+                        if (printerAddress && printerAddress.length > 0) {
+                            info[@"address"] = printerAddress;
+                            info[@"port"] = @(networkPrinter.port);
+                            info[@"name"] = printerName ?: @"Unknown";
+                            info[@"isWifi"] = @YES;
+                            info[@"isBluetooth"] = @NO;
+                            info[@"connectionType"] = @"Network";
+                            
+                            // Add Zebra branding information
+                            info[@"brand"] = @"Zebra";
+                            info[@"displayName"] = [NSString stringWithFormat:@"Zebra Printer - %@", printerName ?: @"Unknown"];
+                            
+                            // Try to get printer model information via SGD
+                            @try {
+                                TcpPrinterConnection *tempConnection = [[TcpPrinterConnection alloc] initWithAddress:printerAddress andWithPort:networkPrinter.port];
+                                if ([tempConnection open]) {
+                                    NSString *model = [SGD GET:@"appl.name" withPrinterConnection:tempConnection error:nil];
+                                    if (model && model.length > 0) {
+                                        info[@"model"] = model;
+                                        info[@"displayName"] = [NSString stringWithFormat:@"Zebra %@ - %@", model, printerName ?: @"Unknown"];
+                                    }
+                                    [tempConnection close];
+                                }
+                            } @catch (NSException *exception) {
+                                // Ignore errors when trying to get model info
+                            }
+                        }
+                        
                     } else if ([printer isKindOfClass:[DiscoveredPrinter class]]) {
                         DiscoveredPrinter *discoveredPrinter = (DiscoveredPrinter *)printer;
-                        info[@"address"] = discoveredPrinter.address ?: @"";
-                        info[@"name"] = discoveredPrinter.address ?: @"Unknown";
-                        info[@"isWifi"] = @YES;
+                        printerAddress = discoveredPrinter.address;
+                        printerName = discoveredPrinter.address;
+                        
+                        if (printerAddress && printerAddress.length > 0) {
+                            info[@"address"] = printerAddress;
+                            info[@"name"] = printerName ?: @"Unknown";
+                            info[@"isWifi"] = @YES;
+                            info[@"isBluetooth"] = @NO;
+                            info[@"connectionType"] = @"Network";
+                            
+                            // Add Zebra branding information
+                            info[@"brand"] = @"Zebra";
+                            info[@"displayName"] = [NSString stringWithFormat:@"Zebra Printer - %@", printerName ?: @"Unknown"];
+                        }
                     }
                     
-                    [printerInfo addObject:info];
+                    // Only add printer if it has a valid address
+                    if (printerAddress && printerAddress.length > 0) {
+                        [printerInfo addObject:info];
+                    }
                 }
                 
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -59,22 +102,42 @@
     });
 }
 
-+ (void)startBluetoothDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error {
++ (void)startMfiBluetoothDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
-            // Use EAAccessoryManager to find connected Bluetooth accessories
+            NSMutableArray *printerInfo = [NSMutableArray array];
+            
+            // Find Zebra Bluetooth Accessories using External Accessory framework
             EAAccessoryManager *accessoryManager = [EAAccessoryManager sharedAccessoryManager];
             NSArray *connectedAccessories = [accessoryManager connectedAccessories];
             
-            NSMutableArray *printerInfo = [NSMutableArray array];
-            
             for (EAAccessory *accessory in connectedAccessories) {
-                NSMutableDictionary *info = [NSMutableDictionary dictionary];
-                info[@"address"] = accessory.serialNumber ?: @"";
-                info[@"name"] = accessory.name ?: accessory.serialNumber ?: @"Unknown Printer";
-                info[@"isBluetooth"] = @YES;
-                
-                [printerInfo addObject:info];
+                // Check if this is a Zebra printer (has the Zebra protocol)
+                if ([accessory.protocolStrings indexOfObject:@"com.zebra.rawport"] != NSNotFound) {
+                    NSString *serialNumber = accessory.serialNumber;
+                    NSString *name = accessory.name;
+                    
+                    // Only add printer if it has a valid serial number
+                    if (serialNumber && serialNumber.length > 0) {
+                        NSMutableDictionary *info = [NSMutableDictionary dictionary];
+                        info[@"address"] = serialNumber;
+                        info[@"name"] = name ?: @"Zebra Printer";
+                        info[@"model"] = accessory.modelNumber ?: @"Unknown Model";
+                        info[@"manufacturer"] = accessory.manufacturer ?: @"Zebra";
+                        info[@"firmwareRevision"] = accessory.firmwareRevision ?: @"";
+                        info[@"hardwareRevision"] = accessory.hardwareRevision ?: @"";
+                        info[@"status"] = @"Connected";
+                        info[@"isWifi"] = @NO;
+                        info[@"isBluetooth"] = @YES;
+                        info[@"connectionType"] = @"MFi Bluetooth";
+                        
+                        // Add Zebra branding information
+                        info[@"brand"] = @"Zebra";
+                        info[@"displayName"] = [NSString stringWithFormat:@"%@ %@", name ?: @"Zebra Printer", accessory.modelNumber ?: @""];
+                        
+                        [printerInfo addObject:info];
+                    }
+                }
             }
             
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -99,8 +162,10 @@
     id<ZebraPrinterConnection,NSObject> connection = nil;
     
     if (isBluetooth) {
+        // MFi Bluetooth connection
         connection = [[MfiBtPrinterConnection alloc] initWithSerialNumber:address];
     } else {
+        // Network connection
         // Default port for Zebra printers
         NSInteger port = 9100;
         
@@ -350,7 +415,5 @@
         return nil;
     }
 }
-
-
 
 @end 

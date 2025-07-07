@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
 
+
 /// Handles printer discovery and scanning operations
 class ZebraPrinterDiscovery {
   ZebraPrinter? _printer;
@@ -56,8 +57,10 @@ class ZebraPrinterDiscovery {
           _statusStreamController?.add('Discovery error: $message');
         },
         onPermissionDenied: () {
-          _logger.warning('Bluetooth permission denied during discovery');
-          _statusStreamController?.add('Permission denied');
+          _logger.warning(
+              'Bluetooth permission denied, continuing with network discovery only');
+          _statusStreamController
+              ?.add('Bluetooth permission denied, using network discovery');
         },
       );
     }

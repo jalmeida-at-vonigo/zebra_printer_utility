@@ -13,6 +13,7 @@ import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/internal/logger.dart';
 import 'zebra_printer_readiness_manager.dart';
 import 'internal/commands/command_factory.dart';
+import 'internal/permission_manager.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
@@ -51,13 +52,33 @@ class ZebraPrinter {
       final address = call.arguments?['Address'] ?? '';
       final name = call.arguments?['Name'] ?? 'Unknown Printer';
       final status = call.arguments?['Status'] ?? 'Found';
-      final isWifi = call.arguments?['IsWifi'] == 'true';
+      final isWifi = call.arguments?['IsWifi'] == true ||
+          call.arguments?['IsWifi'] == 'true';
+
+      // Extract additional metadata
+      final brand = call.arguments?['brand'];
+      final model = call.arguments?['model'];
+      final displayName = call.arguments?['displayName'];
+      final manufacturer = call.arguments?['manufacturer'];
+      final firmwareRevision = call.arguments?['firmwareRevision'];
+      final hardwareRevision = call.arguments?['hardwareRevision'];
+      final connectionType = call.arguments?['connectionType'];
+      final isBluetooth = call.arguments?['isBluetooth'] == true ||
+          call.arguments?['isBluetooth'] == 'true';
       
       this.controller.addPrinter(ZebraDevice(
             address: address,
             name: name,
             status: status,
             isWifi: isWifi,
+            brand: brand,
+            model: model,
+            displayName: displayName,
+            manufacturer: manufacturer,
+            firmwareRevision: firmwareRevision,
+            hardwareRevision: hardwareRevision,
+            connectionType: connectionType,
+            isBluetooth: isBluetooth,
           ));
     });
     
@@ -96,30 +117,30 @@ class ZebraPrinter {
     controller.cleanAll();
     
     try {
+      // Check Bluetooth permissions first
       _logger.info('Checking Bluetooth permissions');
-      // Check permission using operation manager
-      final isGrantPermissionResult = await _operationManager.execute<bool>(
-        method: 'checkPermission',
-        arguments: {},
-        timeout: const Duration(seconds: 5),
-      );
-      final isGrantPermission = isGrantPermissionResult.success &&
-          (isGrantPermissionResult.data ?? false);
-      
-      if (isGrantPermission) {
-        _logger.info('Permission granted, starting printer scan');
-        // Start scan using operation manager
-        await _operationManager.execute<bool>(
-          method: 'startScan',
-          arguments: {},
-          timeout: const Duration(seconds: 30),
-        );
-        _logger.info('Printer scan initiated successfully');
+      final hasPermission = await PermissionManager.checkBluetoothPermission();
+
+      if (!hasPermission) {
+        _logger.warning('Bluetooth permission permanently denied');
+        if (onPermissionDenied != null) {
+          onPermissionDenied!();
+        }
+        // Continue with network discovery only
+        _logger.info('Continuing with network discovery only');
       } else {
-        _logger.warning('Permission denied for Bluetooth access');
-        isScanning = false;
-        if (onPermissionDenied != null) onPermissionDenied!();
+        _logger
+            .info('Bluetooth permission available, will request when scanning');
       }
+      
+      // Start scan using operation manager
+      _logger.info('Starting printer scan');
+      await _operationManager.execute<bool>(
+        method: 'startScan',
+        arguments: {},
+        timeout: const Duration(seconds: 30),
+      );
+      _logger.info('Printer scan initiated successfully');
     } catch (e) {
       _logger.error('Failed to start printer discovery', e);
       isScanning = false;

@@ -1,5 +1,107 @@
 # Changelog
 
+## [2.0.34] - 2025-01-05
+
+### Added
+- **Official ZSDK MFi Bluetooth Implementation**: Complete MFi Bluetooth support using official ZSDK
+  - MFi Bluetooth discovery using ExternalAccessory framework and ZSDK
+  - Network discovery using ZSDK NetworkDiscoverer for enhanced reliability
+  - Enhanced Zebra branding with rich printer information
+  - Model information, manufacturer details, firmware and hardware revision
+  - Connection type identification (MFi Bluetooth vs Network)
+- **Enhanced Printer Information**: Rich printer discovery data
+  - Zebra brand identification and display names
+  - Model information for better printer identification
+  - Manufacturer details and firmware version information
+  - Hardware revision and connection type details
+  - Improved printer selection UI with enhanced information display
+
+### Changed
+- **iOS Native Implementation**: Refactored to use only official ZSDK APIs
+  - Removed all CoreBluetooth usage in favor of ZSDK MFi Bluetooth
+  - Updated `ZSDKWrapper` to include MFi Bluetooth discovery methods
+  - Enhanced network discovery using ZSDK NetworkDiscoverer
+  - Improved printer information extraction and formatting
+- **Printer Discovery**: Enhanced discovery with rich Zebra information
+  - Network printers now include Zebra branding and model information
+  - MFi Bluetooth printers include comprehensive device details
+  - Better printer identification and user experience
+- **UI Enhancements**: Updated printer selection popup with enhanced information
+  - Display Zebra brand and model information prominently
+  - Show connection type (MFi Bluetooth vs Network)
+  - Improved visual hierarchy and information presentation
+
+### Fixed
+- **iOS Build Issues**: Resolved all Swift compiler errors and warnings
+  - Fixed method signature issues in ZSDKWrapper
+  - Resolved availability annotation problems
+  - All iOS builds pass without errors or warnings
+- **Lint and Analysis**: Fixed all lint errors and analysis warnings
+  - Updated ZebraDevice model to include new properties
+  - Fixed all Flutter analysis warnings
+  - All tests pass with no warnings or errors
+
+### Technical Details
+- MFi Bluetooth discovery uses ExternalAccessory framework with ZSDK integration
+- Network discovery enhanced with ZSDK NetworkDiscoverer for better reliability
+- Rich printer information includes brand, model, manufacturer, firmware, and hardware details
+- All changes maintain backward compatibility while providing enhanced user experience
+- iOS implementation now uses only official ZSDK APIs for maximum compatibility
+
+## [2.0.33] - 2025-01-05
+
+### Added
+- **Smart Device Discovery and Selection**: Implemented intelligent printer discovery and selection system
+  - `SmartDeviceSelector` class for optimal printer selection based on multiple criteria
+  - Prioritizes previously selected printers, WiFi over BLE, and higher model priority
+  - Connection success history tracking for reliability-based selection
+  - Persistent storage of printer preferences and connection history
+- **Enhanced Printer Selection Popup**: Completely redesigned popup-based printing workflow
+  - Visual hierarchy with previously selected printer prominently displayed
+  - Compact layout with other printers as boxes and expandable list
+  - One-tap printing with immediate feedback and status updates
+  - Real-time connection and print status with animated progress indicators
+  - Clear success/failure feedback with visual cues and error messages
+  - Smooth animations and transitions for enhanced user experience
+- **Printer Preferences System**: Added persistent storage for printer selection and connection history
+  - `PrinterPreferences` class for managing last selected printer and connection success counts
+  - Automatic saving of successful printer selections for future use
+  - Connection history tracking to improve reliability-based selection
+  - Configurable preference for WiFi vs BLE connections
+
+### Changed
+- **iOS Native Code**: Removed all MFi (Made for iPhone) dependencies
+  - Eliminated Bluetooth Classic and ExternalAccessory framework usage
+  - Implemented BLE and WiFi-only discovery and connection
+  - Fixed Swift compiler error with `NWInterface.address` property
+  - Updated network discovery to use service name-based addressing
+- **Printing Workflow**: Popup-based printing is now the only print flow
+  - Removed fallback to `simplifiedPrint` method
+  - All printing goes through the enhanced popup interface
+  - Improved error handling and user feedback
+  - Smart printer saving only when selection changes
+- **ZebraPrinterService**: Updated to use new popup-based workflow
+  - `print()` method now requires BuildContext for popup display
+  - Removed automatic fallback mechanisms
+  - Enhanced error handling and status reporting
+
+### Fixed
+- **iOS Build Issues**: Fixed Swift compiler error in network discovery
+  - Replaced invalid `NWInterface.address` usage with service name-based addressing
+  - Updated network discovery logic to work with mDNS/Bonjour services
+- **Lint and Analysis**: Fixed all lint errors and analysis warnings
+  - Removed unnecessary braces in string interpolation
+  - Fixed unreachable switch default cases in readiness manager
+  - Updated super parameter usage in example code
+  - All tests pass with no warnings or errors
+
+### Technical Details
+- Smart device selection uses scoring algorithm based on connection type, history, and model priority
+- Printer preferences are stored using SharedPreferences for persistence across app sessions
+- Popup provides comprehensive visual feedback with connection status, print progress, and error handling
+- iOS native code now supports only BLE and WiFi connections, avoiding MFi requirements
+- All changes maintain backward compatibility while providing enhanced user experience
+
 ## [2.0.32] - 2025-01-03
 
 ### Documentation

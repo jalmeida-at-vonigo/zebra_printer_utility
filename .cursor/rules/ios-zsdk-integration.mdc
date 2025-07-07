@@ -1,0 +1,166 @@
+# iOS ZSDK Integration and Update Guide
+
+## Current Project Structure
+```
+zebra_printer_utility/
+├── ios/
+│   ├── Classes/                    # All ZSDK headers and Swift/ObjC code
+│   │   ├── ZSDKWrapper.h/m         # Objective-C wrapper for ZSDK APIs
+│   │   ├── ZebraPrinterInstance.swift  # Swift implementation
+│   │   ├── ZebrautilPlugin.swift   # Main plugin registration
+│   │   └── [All ZSDK headers].h    # Extracted from xcframework
+│   ├── libZSDK_API.a              # Static library (extracted from xcframework)
+│   ├── ZSDK_API.xcframework.backup/  # Original xcframework (backup)
+│   └── zebrautil.podspec          # CocoaPods configuration
+└── lib/                           # Dart/Flutter library code
+    ├── zebra.dart                 # Main API entry point
+    ├── zebra_printer.dart         # Printer instance management
+    ├── zebra_printer_service.dart # High-level service API
+    └── internal/                  # Internal implementation
+```
+
+## Step-by-Step ZSDK Update Process
+
+### Step 1: Prepare for Update
+1. **Backup current implementation:**
+   ```bash
+   cd ios/Classes
+   cp -r . ../Classes_backup_$(date +%Y%m%d)
+   cd ..
+   cp libZSDK_API.a libZSDK_API_backup_$(date +%Y%m%d).a
+   ```
+
+2. **Download new ZSDK xcframework** from Zebra's official distribution.
+
+### Step 2: Extract Static Library
+1. **Navigate to the new xcframework:**
+   ```bash
+   cd /path/to/new/ZSDK_API.xcframework/ios-arm64/
+   ```
+
+2. **Copy the static library:**
+   ```bash
+   cp ZSDK_API.a /path/to/zebra_printer_utility/ios/libZSDK_API.a
+   ```
+
+3. **Verify the library:**
+   ```bash
+   cd /path/to/zebra_printer_utility/ios
+   lipo -info libZSDK_API.a
+   # Should show: arm64
+   ```
+
+### Step 3: Extract Headers
+1. **Copy all headers from xcframework:**
+   ```bash
+   cp /path/to/new/ZSDK_API.xcframework/ios-arm64/Headers/*.h ios/Classes/
+   ```
+
+2. **Verify header extraction:**
+   ```bash
+   ls ios/Classes/*.h | wc -l
+   # Should match the count from the new xcframework
+   ```
+
+### Step 4: Update Objective-C Wrapper
+1. **Review ZSDKWrapper.h/m** for any API changes:
+   ```objc
+   // Check if any new methods need to be added
+   // Check if any method signatures have changed
+   // Update wrapper methods to match new ZSDK API
+   ```
+
+2. **Test wrapper compilation:**
+   ```bash
+   cd ios/Classes
+   clang -c ZSDKWrapper.m -I. -o /dev/null
+   ```
+
+### Step 5: Update Podspec (if needed)
+1. **Check if framework dependencies changed:**
+   ```ruby
+   # In zebrautil.podspec, verify:
+   s.frameworks = 'CoreBluetooth', 'QuartzCore'  # Update if needed
+   s.libraries = 'z'                            # Update if needed
+   ```
+
+2. **Verify static library reference:**
+   ```ruby
+   s.vendored_libraries = 'libZSDK_API.a'
+   s.preserve_paths = 'libZSDK_API.a'
+   ```
+
+### Step 6: Clean and Rebuild
+1. **Clean the project:**
+   ```bash
+   cd /path/to/zebra_printer_utility
+   flutter clean
+   cd example/ios
+   rm -rf Pods Podfile.lock
+   ```
+
+2. **Reinstall pods:**
+   ```bash
+   pod install
+   cd ../..
+   ```
+
+3. **Build for device:**
+   ```bash
+   flutter build ios --no-codesign
+   ```
+
+### Step 7: Test Integration
+1. **Verify Swift can access ZSDK:**
+   ```swift
+   // In ZebraPrinterInstance.swift, verify:
+   let connection = ZSDKWrapper.connect(toPrinter: address, isBluetoothConnection: false)
+   // Should compile without errors
+   ```
+
+2. **Test basic functionality:**
+   - Run the example app on a device
+   - Test printer discovery
+   - Test basic connection
+   - Test simple print operation
+
+### Step 8: Update Documentation
+1. **Update version in pubspec.yaml:**
+   ```yaml
+   version: 2.0.XX  # Increment version
+   ```
+
+2. **Update CHANGELOG.md:**
+   ```markdown
+   ## [2.0.XX] - YYYY-MM-DD
+   ### Changed
+   - Updated ZSDK to version X.X.X
+   - [List any breaking changes or new features]
+   ```
+
+## Umbrella Header Policy
+
+- **Umbrella headers (e.g., `zebrautil-umbrella.h`) are NOT used in this project.**
+- **Reason:** The plugin does not bundle ZSDK as a framework, and all required headers are directly available in `ios/Classes/` after extraction from the xcframework.
+- CocoaPods automatically generates a module map for the plugin, and the combination of `s.source_files` and `s.public_header_files` in the podspec is sufficient for Swift/Objective-C bridging.
+- The Objective-C wrapper pattern (with all ZSDK headers present in `ios/Classes/`) ensures that Swift code can access the necessary APIs without a custom umbrella header.
+- If you ever encounter Swift/Objective-C bridging issues, consider adding an umbrella header as a troubleshooting step, but it is not required for the current architecture.
+
+## Troubleshooting
+
+### Build Errors
+- **"Library 'ZSDK_API' not found"**: Verify `libZSDK_API.a` is in `ios/` directory and `s.vendored_libraries` is set correctly.
+- **"Cannot find 'ClassName' in scope"**: Check that all required headers are in `ios/Classes/` and imported in `ZSDKWrapper.m`.
+- **"Undefined symbols"**: Verify the static library architecture matches your build target.
+
+### Runtime Errors
+- **"No such module 'ZSDK_API'"**: You're trying to import ZSDK directly in Swift. Use the Objective-C wrapper.
+- **"Method not found"**: Check if ZSDK API has changed and update `ZSDKWrapper.h/m` accordingly.
+
+## Best Practices
+
+- Always backup before updating ZSDK
+- Test on a real device after updates
+- Keep the Objective-C wrapper minimal and focused on bridging
+- Document any API changes in the changelog
+- Verify all headers are properly extracted and accessible

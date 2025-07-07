@@ -24,12 +24,12 @@ A new Flutter plugin project.
   s.preserve_paths = 'libZSDK_API.a'
   
   # Required frameworks
-  s.frameworks = 'ExternalAccessory', 'CoreBluetooth', 'QuartzCore'
+  s.frameworks = 'CoreBluetooth', 'QuartzCore'
   s.libraries = 'z'
   
   # Linker flags
   s.xcconfig = { 
-    'OTHER_LDFLAGS' => '-framework ExternalAccessory -framework CoreBluetooth -framework QuartzCore -lz'
+    'OTHER_LDFLAGS' => '-framework CoreBluetooth -framework QuartzCore -lz'
   }
   
   # Flutter.framework does not contain a i386 slice.
@@ -41,4 +41,12 @@ A new Flutter plugin project.
   # plugin's privacy impact, and then uncomment this line. For more information,
   # see https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
   # s.resource_bundles = {'zebrautil_privacy' => ['Resources/PrivacyInfo.xcprivacy']}
+  
+  # Add Info.plist configuration for Bluetooth permissions
+  s.info_plist = {
+    'NSBluetoothAlwaysUsageDescription' => 'This app uses Bluetooth to discover and connect to Zebra printers for printing labels and receipts.',
+    'NSBluetoothPeripheralUsageDescription' => 'This app uses Bluetooth to discover and connect to Zebra printers for printing labels and receipts.',
+    'NSLocalNetworkUsageDescription' => 'This app uses the local network to discover and connect to Zebra printers on your network.',
+    'NSBonjourServices' => ['_ipp._tcp', '_printer._tcp']
+  }
 end

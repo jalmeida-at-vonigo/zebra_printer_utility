@@ -3,6 +3,7 @@ import 'cpcl_screen.dart';
 import 'legacy_screen.dart';
 import 'simplified_screen.dart';
 import 'result_based_screen.dart';
+import 'smart_discovery_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -72,6 +73,10 @@ class _HomeScreenState extends State<HomeScreen>
               icon: Icon(Icons.analytics),
               text: 'Result-Based',
             ),
+            Tab(
+              icon: Icon(Icons.explore),
+              text: 'Smart Discovery',
+            ),
           ],
         ),
       ),
@@ -82,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen>
           LegacyScreen(),
           SimplifiedScreen(),
           ResultBasedScreen(),
+          SmartDiscoveryScreen(),
         ],
       ),
     );

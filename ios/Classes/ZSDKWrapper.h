@@ -1,49 +1,43 @@
 #import <Foundation/Foundation.h>
 
-NS_ASSUME_NONNULL_BEGIN
-
-// Forward declarations to avoid exposing ZSDK types in the header
 @class ZebraPrinter;
 @class ZebraPrinterConnection;
-@class NetworkDiscoverer;
-@class MfiBtPrinterConnection;
+@class ZebraPrinterFactory;
 @class TcpPrinterConnection;
+@class NetworkDiscoverer;
 @class DiscoveredPrinter;
 @class DiscoveredPrinterNetwork;
-@class PrinterStatus;
 @class SGD;
 
 @interface ZSDKWrapper : NSObject
 
-// Discovery
-+ (void)startNetworkDiscovery:(void (^)(NSArray *printers))success
-                        error:(void (^)(NSString *error))error;
+#pragma mark - Discovery
 
-+ (void)startBluetoothDiscovery:(void (^)(NSArray *printers))success
-                          error:(void (^)(NSString *error))error;
-
++ (void)startNetworkDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error;
++ (void)startMfiBluetoothDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error;
 + (void)stopDiscovery;
 
-// Connection
-+ (nullable id)connectToPrinter:(NSString *)address isBluetoothConnection:(BOOL)isBluetooth;
-+ (void)disconnect:(id)connection;
-+ (BOOL)isConnected:(nullable id)connection;
+#pragma mark - Connection
 
-// Printing
++ (id)connectToPrinter:(NSString *)address isBluetoothConnection:(BOOL)isBluetooth;
++ (void)disconnect:(id)connection;
++ (BOOL)isConnected:(id)connection;
 + (BOOL)sendData:(NSData *)data toConnection:(id)connection;
 
-// Settings
+#pragma mark - Printer Operations
+
++ (id)getPrinter:(id)connection;
+
+#pragma mark - Settings
+
 + (NSString *)getSetting:(NSString *)setting fromConnection:(id)connection;
 + (BOOL)setSetting:(NSString *)setting value:(NSString *)value onConnection:(id)connection;
++ (NSString *)sendAndReadResponse:(NSString *)data toConnection:(id)connection withTimeout:(NSInteger)timeout;
 
-// Bi-directional communication
-+ (nullable NSString *)sendAndReadResponse:(NSString *)data toConnection:(id)connection withTimeout:(NSInteger)timeout;
+#pragma mark - Printer Language
 
-// Add printer language detection
 + (NSString *)getPrinterLanguage:(id)connection;
 + (id)getPrinterInstance:(id)connection;
 + (id)getPrinterInstanceWithLanguage:(id)connection language:(NSString *)language;
 
 @end
-
-NS_ASSUME_NONNULL_END

@@ -18,21 +18,39 @@ class ZebraDevice {
   final bool isWifi;
   final Color color;
   final bool isConnected;
+  
+  // Zebra branding properties
+  final String? brand;
+  final String? model;
+  final String? displayName;
+  final String? manufacturer;
+  final String? firmwareRevision;
+  final String? hardwareRevision;
+  final String? connectionType;
+  final bool? isBluetooth;
 
-  ZebraDevice(
-      {required this.address,
+  ZebraDevice({
+    required this.address,
       required this.name,
       required this.isWifi,
       required this.status,
       this.isConnected = false,
       this.color = const Color.fromARGB(255, 255, 0, 0),
+    this.brand,
+    this.model,
+    this.displayName,
+    this.manufacturer,
+    this.firmwareRevision,
+    this.hardwareRevision,
+    this.connectionType,
+    this.isBluetooth,
       });
       
   factory ZebraDevice.empty() =>
       ZebraDevice(address: "", name: "", isWifi: false, status: '');
 
   factory ZebraDevice.fromJson(Map<String, dynamic> json) => ZebraDevice(
-      address: json["ipAddress"] ?? json["macAddress"] ?? "",
+      address: json["address"] ?? json["ipAddress"] ?? json["macAddress"] ?? "",
       name: json["name"] ?? "",
       isWifi: json["isWifi"] == null 
           ? false 
@@ -47,15 +65,35 @@ class ZebraDevice {
       status: json["status"] ?? "",
       color: json["color"] != null
           ? Color(json["color"] as int)
-          : const Color.fromARGB(255, 255, 0, 0));
+          : const Color.fromARGB(255, 255, 0, 0),
+      brand: json["brand"],
+      model: json["model"],
+      displayName: json["displayName"],
+      manufacturer: json["manufacturer"],
+      firmwareRevision: json["firmwareRevision"],
+      hardwareRevision: json["hardwareRevision"],
+      connectionType: json["connectionType"],
+      isBluetooth: json["isBluetooth"] == null
+          ? null
+          : (json["isBluetooth"] is bool
+              ? json["isBluetooth"]
+              : json["isBluetooth"].toString() == "true"));
 
   Map<String, dynamic> toJson() => {
-        "ipAddress": address,
+        "address": address,
         "name": name,
         "isWifi": isWifi,
         "status": status,
         "isConnected": isConnected,
-        "color": color.toARGB32()
+        "color": color.toARGB32(),
+        "brand": brand,
+        "model": model,
+        "displayName": displayName,
+        "manufacturer": manufacturer,
+        "firmwareRevision": firmwareRevision,
+        "hardwareRevision": hardwareRevision,
+        "connectionType": connectionType,
+        "isBluetooth": isBluetooth,
       };
 
   @override
@@ -78,6 +116,14 @@ class ZebraDevice {
     String? status,
     bool? isConnected,
     Color? color,
+    String? brand,
+    String? model,
+    String? displayName,
+    String? manufacturer,
+    String? firmwareRevision,
+    String? hardwareRevision,
+    String? connectionType,
+    bool? isBluetooth,
   }) {
     return ZebraDevice(
         address: address ?? this.address,
@@ -85,6 +131,14 @@ class ZebraDevice {
         isWifi: isWifi ?? this.isWifi,
         status: status ?? this.status,
         isConnected: isConnected ?? this.isConnected,
-        color: color ?? this.color);
+        color: color ?? this.color,
+        brand: brand ?? this.brand,
+        model: model ?? this.model,
+        displayName: displayName ?? this.displayName,
+        manufacturer: manufacturer ?? this.manufacturer,
+        firmwareRevision: firmwareRevision ?? this.firmwareRevision,
+        hardwareRevision: hardwareRevision ?? this.hardwareRevision,
+        connectionType: connectionType ?? this.connectionType,
+        isBluetooth: isBluetooth ?? this.isBluetooth);
   }
 }

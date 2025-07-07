@@ -352,12 +352,6 @@ class PrinterReadinessManager {
                   CommandFactory.createSendCpclClearErrorsCommand(_printer);
               clearResult = await cpclClearCommand.execute();
               break;
-            default:
-              // Use clear alerts command as fallback
-              final fallbackClearCommand =
-                  CommandFactory.createSendClearAlertsCommand(_printer);
-              clearResult = await fallbackClearCommand.execute();
-              break;
           }
           
           if (clearResult.success) {
@@ -413,10 +407,6 @@ class PrinterReadinessManager {
           languageMatches = ZebraSGDCommands.isLanguageMatch(
               currentLanguage, expectedLanguage);
           break;
-        default:
-          // For unknown formats, assume language is acceptable
-          languageMatches = true;
-          break;
       }
 
       if (!languageMatches) {
@@ -460,11 +450,6 @@ class PrinterReadinessManager {
             CommandFactory.createSendCpclClearBufferCommand(_printer);
         result = await cpclCommand.execute();
         break;
-      default:
-        // Use generic buffer clear as fallback
-        final command = CommandFactory.createSendClearBufferCommand(_printer);
-        result = await command.execute();
-        break;
     }
     
     if (result.success) {
@@ -497,11 +482,6 @@ class PrinterReadinessManager {
         final cpclCommand =
             CommandFactory.createSendCpclFlushBufferCommand(_printer);
         result = await cpclCommand.execute();
-        break;
-      default:
-        // Use generic buffer flush as fallback
-        final command = CommandFactory.createSendFlushBufferCommand(_printer);
-        result = await command.execute();
         break;
     }
     

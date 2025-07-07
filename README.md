@@ -9,8 +9,9 @@ This plugin provides a unified API for discovering, connecting to, and printing 
 ## Features
 
 - **Cross-platform support**: iOS and Android
-- **Multiple connection types**: Bluetooth (MFi), Network (TCP/IP)
+- **Multiple connection types**: MFi Bluetooth, Network (TCP/IP)
 - **Printing formats**: ZPL, CPCL, and raw text
+- **Enhanced Zebra Branding**: Rich printer information including model, manufacturer, firmware version
 - **[Automatic language detection](.readme/guides/auto-detection.md)**: Detects ZPL/CPCL format and switches printer mode
 - **[Auto-Correction System v2.0](.readme/architecture/auto-correction-v2.md)**: Configurable automatic issue resolution
 - **Printer discovery**: Scan for available printers
@@ -143,6 +144,23 @@ Benefits:
 - **Faster**: Operations complete as soon as verified, not after fixed delays
 - **Smarter**: Skips operations if already in desired state
 - **Reliable**: Retries with exponential backoff if needed
+
+## What's New in v2.0.33
+
+- **Smart Device Discovery and Selection**: Intelligent printer discovery with optimal selection
+  - Prioritizes previously selected printers, WiFi over MFi Bluetooth, and connection history
+  - Persistent storage of printer preferences and connection success tracking
+  - Enhanced user experience with visual printer selection popup
+- **Enhanced Popup-Based Printing**: Completely redesigned printing workflow
+  - Visual hierarchy with previously selected printer prominently displayed
+  - One-tap printing with real-time status feedback and animated progress
+  - Clear success/failure feedback with visual cues and error messages
+  - Smooth animations and transitions for enhanced user experience
+- **Official ZSDK MFi Bluetooth Implementation**: Complete MFi Bluetooth support using official ZSDK
+  - MFi Bluetooth discovery and connection using ExternalAccessory framework
+  - Network discovery using ZSDK NetworkDiscoverer
+  - Enhanced Zebra branding with model information and display names
+  - Proper Zebra printer identification and connection management
 
 ## What's New in v2.0.31
 

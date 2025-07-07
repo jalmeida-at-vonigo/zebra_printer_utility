@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
 import 'internal/commands/command_factory.dart';
+import 'internal/smart_device_selector.dart';
+import 'internal/printer_preferences.dart';
+
 
 /// Service for managing Zebra printer operations
 ///
@@ -72,8 +75,10 @@ class ZebraPrinterService {
         _statusStreamController?.add('Discovery error: $message');
       },
       onPermissionDenied: () {
-        _logger.warning('Bluetooth permission denied');
-        _statusStreamController?.add('Permission denied');
+        _logger.warning(
+            'Bluetooth permission denied, continuing with network discovery only');
+        _statusStreamController
+            ?.add('Bluetooth permission denied, using network discovery');
       },
     );
     _logger.info('ZebraPrinterService initialization completed');
@@ -83,27 +88,77 @@ class ZebraPrinterService {
     _connectionStreamController?.add(connectedPrinter);
   }
 
-  /// Connect to a printer by address
+  /// Smart discovery with automatic printer selection
+  /// Returns a stream of discovery results with smart selection
+  Stream<SmartDiscoveryResult> smartDiscoveryStream({
+    Duration timeout = const Duration(seconds: 10),
+    bool? preferWiFi,
+    ZebraDevice? previouslySelected,
+  }) {
+    _logger.info('Starting smart discovery stream');
+    return SmartDeviceSelector.smartDiscoveryStream(
+      discovery: discovery,
+      timeout: timeout,
+      preferWiFi: preferWiFi,
+      previouslySelected: previouslySelected ?? connectedPrinter,
+    );
+  }
+
+  /// Connect to a printer by address or device
   /// Returns Result indicating success or failure with error details
-  Future<Result<void>> connect(String? address) async {
+  Future<Result<void>> connect(dynamic printerIdentifier) async {
+    String? address;
+    ZebraDevice? device;
+
+    if (printerIdentifier is ZebraDevice) {
+      device = printerIdentifier;
+      address = device.address;
+    } else if (printerIdentifier is String) {
+      address = printerIdentifier;
+    } else {
+      address = connectedPrinter?.address;
+    }
+    
     _logger.info('Service: Initiating connection to printer: $address');
     await _ensureInitialized();
-    address ??= connectedPrinter?.address;
 
     try {
       _statusStreamController?.add('Connecting to $address...');
 
       // Call printer directly - callback-based completion ensures sequencing
       final result = await _printer!.connectToPrinter(address!);
-
+      
       if (result.success) {
         _logger.info('Service: Successfully connected to printer: $address');
         _statusStreamController?.add('Connected to $address');
+        
+        // Record successful connection for smart selection
+        await SmartDeviceSelector.recordSuccessfulConnection(address);
+
+        // Use the provided device or find it in the controller's list
+        ZebraDevice? deviceToSave = device ??
+            _controller?.printers.firstWhere(
+          (p) => p.address == address,
+          orElse: () => ZebraDevice(
+              address: address ?? '',
+              name: 'Unknown Printer',
+              status: 'Connected',
+              isWifi: (address ?? '').contains('.')),
+        );
+
+        if (deviceToSave != null) {
+          await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
+        }
+        
         return result;
       } else {
         _logger.error(
             'Service: Failed to connect to printer: $address - ${result.error?.message}');
         _statusStreamController?.add('Failed to connect to $address');
+        
+        // Record failed connection
+        await SmartDeviceSelector.recordFailedConnection(address);
+        
         return result;
       }
     } catch (e, stack) {
