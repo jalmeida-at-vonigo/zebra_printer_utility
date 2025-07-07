@@ -1,0 +1,231 @@
+# Error Handling Pattern for Zebra Printer Plugin
+
+## Overview
+The Zebra Printer Plugin uses a comprehensive error handling pattern that ensures all errors are properly captured, enriched with context, and never propagate as unhandled exceptions to the Dart layer.
+
+## Native Layer Error Enrichment
+
+### iOS Error Enrichment Pattern
+All native iOS error callbacks must use the `createEnrichedError` helper method to include:
+
+```swift
+private func createEnrichedError(
+    message: String,
+    code: String,
+    operationId: String?,
+    nativeError: Error? = nil,
+    additionalContext: [String: Any]? = nil
+) -> [String: Any]
+```
+
+**Required Error Information:**
+- `message`: Human-readable error description
+- `code`: Error code (e.g., "CONNECTION_ERROR", "PRINT_ERROR")
+- `timestamp`: ISO8601 formatted timestamp
+- `nativeStackTrace`: Full native stack trace
+- `operationId`: Operation identifier for tracking
+- `instanceId`: Printer instance identifier
+- `queue`: Thread context (main/background)
+
+**Optional Error Information:**
+- `nativeError`: Original native error details
+- `nativeErrorCode`: Native error code
+- `nativeErrorDomain`: Native error domain
+- `nativeErrorUserInfo`: Native error user info
+- `context`: Additional operation-specific context
+
+### Error Callback Pattern
+All error callbacks must follow this pattern:
+
+```swift
+// ✅ CORRECT - Enriched error callback
+if let operationId = operationId {
+    let enrichedError = self.createEnrichedError(
+        message: "Failed to connect to printer",
+        code: "CONNECTION_ERROR",
+        operationId: operationId,
+        nativeError: nativeError,
+        additionalContext: ["operation": "connect", "address": address]
+    )
+    self.channel.invokeMethod("onConnectError", arguments: enrichedError)
+}
+result(false) // Never return FlutterError with callbacks
+```
+
+**❌ FORBIDDEN:**
+```swift
+// ❌ WRONG - Basic error without enrichment
+self.channel.invokeMethod("onConnectError", arguments: [
+    "operationId": operationId,
+    "error": "Connection failed"
+])
+
+// ❌ WRONG - Returning FlutterError with callbacks
+result(FlutterError(code: "ERROR", message: "Failed", details: nil))
+```
+
+## Dart Layer Error Handling
+
+### Result Pattern
+All operations must return a `Result<T>` object that encapsulates success or failure:
+
+```dart
+class Result<T> {
+  final bool success;
+  final T? data;
+  final ErrorInfo? error;
+}
+```
+
+### ErrorInfo Structure
+```dart
+class ErrorInfo {
+  String message;          // Human-readable message
+  String? code;           // Error code
+  int? errorNumber;       // Native error number
+  dynamic nativeError;    // Platform-specific error
+  StackTrace? dartStackTrace;
+  String? nativeStackTrace;
+  DateTime timestamp;
+  Map<String, dynamic>? context; // Additional context
+}
+```
+
+### Operation Manager Pattern
+The `OperationManager` handles all native method calls and converts errors to `Result` objects:
+
+```dart
+// ✅ CORRECT - Operation manager handles errors
+final result = await _operationManager.execute<bool>(
+  method: 'connectToPrinter',
+  arguments: {'Address': address},
+  timeout: const Duration(seconds: 10),
+);
+
+if (result.success) {
+  // Handle success
+} else {
+  // Handle error with full context
+  logger.error('Connection failed: ${result.error?.message}');
+  logger.debug('Native stack: ${result.error?.nativeStackTrace}');
+  logger.debug('Context: ${result.error?.context}');
+}
+```
+
+### Callback Handler Pattern
+The `OperationCallbackHandler` processes enriched error events:
+
+```dart
+// ✅ CORRECT - Enriched error handling
+case 'onConnectError':
+  final error = call.arguments?['message'] ?? 'Connection failed';
+  final code = call.arguments?['code'] ?? 'UNKNOWN_ERROR';
+  final nativeStackTrace = call.arguments?['nativeStackTrace'];
+  final context = call.arguments?['context'] as Map<String, dynamic>?;
+  
+  manager.failOperation(operationId, error, code: code, 
+    nativeStackTrace: nativeStackTrace, context: context);
+  break;
+```
+
+## Error Context Guidelines
+
+### Connection Errors
+Include connection-specific context:
+```swift
+additionalContext: [
+    "operation": "connect",
+    "address": address,
+    "connectionType": isNetworkDevice ? "network" : "bluetooth",
+    "timeout": timeout
+]
+```
+
+### Print Errors
+Include print-specific context:
+```swift
+additionalContext: [
+    "operation": "print",
+    "dataLength": data.count,
+    "dataPreview": String(data.prefix(100)),
+    "format": data.hasPrefix("^XA") ? "ZPL" : "CPCL"
+]
+```
+
+### Settings Errors
+Include settings-specific context:
+```swift
+additionalContext: [
+    "operation": "setSettings",
+    "command": command,
+    "commandType": command.contains("=") ? "keyValue" : "raw"
+]
+```
+
+## Error Logging and Debugging
+
+### Native Logging
+Use `LogUtil` for consistent native logging:
+```swift
+LogUtil.error("Connection failed to \(address): \(error.localizedDescription)")
+LogUtil.debug("Stack trace: \(Thread.callStackSymbols.joined(separator: "\n"))")
+```
+
+### Dart Logging
+Use structured logging with error context:
+```dart
+logger.error('Operation failed', result.error?.toException(), result.error?.dartStackTrace);
+logger.debug('Native error: ${result.error?.nativeError}');
+logger.debug('Error context: ${result.error?.context}');
+```
+
+## Testing Error Scenarios
+
+### Error Simulation
+Test error scenarios by simulating failures:
+```dart
+// Test connection timeout
+final result = await printer.connectToPrinter('invalid.address');
+expect(result.success, false);
+expect(result.error?.code, 'CONNECTION_TIMEOUT');
+expect(result.error?.context?['address'], 'invalid.address');
+```
+
+### Error Recovery
+Test error recovery mechanisms:
+```dart
+// Test retry logic
+final result = await printerService.autoPrint(data, maxRetries: 3);
+expect(result.success, true); // Should succeed after retries
+```
+
+## Migration Requirements
+
+### From Basic Errors
+- Replace simple error strings with enriched error objects
+- Add operation context to all error callbacks
+- Include native stack traces in all error responses
+- Never return `FlutterError` when using callback pattern
+
+### From Exception Propagation
+- Convert all native exceptions to enriched error callbacks
+- Ensure Dart layer never receives unhandled exceptions
+- Wrap all errors in `Result` objects
+- Provide comprehensive error context for debugging
+
+## Compliance Checklist
+
+- [ ] All native error callbacks use `createEnrichedError`
+- [ ] All error callbacks include stack traces and timestamps
+- [ ] All error callbacks include operation-specific context
+- [ ] No `FlutterError` returns with callback pattern
+- [ ] All Dart operations return `Result<T>` objects
+- [ ] All errors include proper error codes
+- [ ] All errors include native error details when available
+- [ ] Error logging includes full context for debugging
+- [ ] Error recovery mechanisms are tested
+- [ ] No unhandled exceptions propagate to Dart layer
+description:
+globs:
+alwaysApply: false
+---

@@ -42,6 +42,39 @@ class ZebraPrinterInstance: NSObject {
         self.channel.setMethodCallHandler(self.handle)
     }
     
+    // MARK: - Error Enrichment Helper
+    
+    private func createEnrichedError(
+        message: String,
+        code: String,
+        operationId: String?,
+        nativeError: Error? = nil,
+        additionalContext: [String: Any]? = nil
+    ) -> [String: Any] {
+        var errorInfo: [String: Any] = [
+            "message": message,
+            "code": code,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "nativeStackTrace": Thread.callStackSymbols.joined(separator: "\n"),
+            "operationId": operationId ?? "unknown",
+            "instanceId": instanceId,
+            "queue": Thread.isMainThread ? "main" : "background"
+        ]
+        
+        if let nativeError = nativeError {
+            errorInfo["nativeError"] = nativeError.localizedDescription
+            errorInfo["nativeErrorCode"] = (nativeError as NSError).code
+            errorInfo["nativeErrorDomain"] = (nativeError as NSError).domain
+            errorInfo["nativeErrorUserInfo"] = (nativeError as NSError).userInfo
+        }
+        
+        if let additionalContext = additionalContext {
+            errorInfo["context"] = additionalContext
+        }
+        
+        return errorInfo
+    }
+    
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         // Extract operationId if present
         let args = call.arguments as? [String: Any]
@@ -345,13 +378,16 @@ class ZebraPrinterInstance: NSObject {
             guard let self = self, let connection = self.connection else {
                 DispatchQueue.main.async {
                     if let operationId = operationId {
-                        self?.channel.invokeMethod("onPrintError", arguments: [
-                            "operationId": operationId,
-                            "error": "Not connected to printer",
-                            "ErrorText": "Not connected to printer"
-                        ])
+                        let enrichedError = self?.createEnrichedError(
+                            message: "Not connected to printer",
+                            code: "PRINT_ERROR",
+                            operationId: operationId,
+                            additionalContext: ["operation": "print", "dataLength": data.count]
+                        )
+                        self?.channel.invokeMethod("onPrintError", arguments: enrichedError ?? [:])
                     }
-                    result(FlutterError(code: "PRINT_ERROR", message: "Not connected to printer", details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
                 return
             }
@@ -389,30 +425,36 @@ class ZebraPrinterInstance: NSObject {
                     let errorMsg = "Failed to send data to printer"
                     DispatchQueue.main.async {
                         if let operationId = operationId {
-                            self.channel.invokeMethod("onPrintError", arguments: [
-                                "operationId": operationId,
-                                "error": errorMsg,
-                                "ErrorText": errorMsg
-                            ])
+                            let enrichedError = self.createEnrichedError(
+                                message: errorMsg,
+                                code: "PRINT_ERROR",
+                                operationId: operationId,
+                                additionalContext: ["operation": "print", "dataLength": data.count, "dataPreview": String(data.prefix(100))]
+                            )
+                            self.channel.invokeMethod("onPrintError", arguments: enrichedError)
                         }
                         self.channel.invokeMethod("changePrinterStatus", arguments: [
                             "Status": "Print Error: \(errorMsg)",
                             "Color": "R"
                         ])
-                        result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                        // Don't return FlutterError when using callback pattern - let the callback handle the error
+                        result(false)
                     }
                 }
             } else {
                 let errorMsg = "Invalid data encoding"
                 DispatchQueue.main.async {
                     if let operationId = operationId {
-                        self.channel.invokeMethod("onPrintError", arguments: [
-                            "operationId": operationId,
-                            "error": errorMsg,
-                            "ErrorText": errorMsg
-                        ])
+                        let enrichedError = self.createEnrichedError(
+                            message: errorMsg,
+                            code: "PRINT_ERROR",
+                            operationId: operationId,
+                            additionalContext: ["operation": "print", "dataLength": data.count, "encodingIssue": true]
+                        )
+                        self.channel.invokeMethod("onPrintError", arguments: enrichedError)
                     }
-                    result(FlutterError(code: "PRINT_ERROR", message: errorMsg, details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
             }
         }
@@ -430,7 +472,8 @@ class ZebraPrinterInstance: NSObject {
                             "error": "Not connected to printer"
                         ])
                     }
-                    result(FlutterError(code: "SETTINGS_ERROR", message: "Not connected to printer", details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
                 return
             }
@@ -458,12 +501,16 @@ class ZebraPrinterInstance: NSObject {
                     result(true)
                 } else {
                     if let operationId = operationId {
-                        self.channel.invokeMethod("onSettingsError", arguments: [
-                            "operationId": operationId,
-                            "error": "Failed to set printer settings"
-                        ])
+                        let enrichedError = self.createEnrichedError(
+                            message: "Failed to set printer settings",
+                            code: "SETTINGS_ERROR",
+                            operationId: operationId,
+                            additionalContext: ["operation": "setSettings", "command": command, "commandType": command.contains("=") ? "keyValue" : "raw"]
+                        )
+                        self.channel.invokeMethod("onSettingsError", arguments: enrichedError)
                     }
-                    result(FlutterError(code: "SETTINGS_ERROR", message: "Failed to set printer settings", details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
             }
         }
@@ -492,7 +539,8 @@ class ZebraPrinterInstance: NSObject {
                             "error": "Not connected to printer"
                         ])
                     }
-                    result(FlutterError(code: "GET_VALUE_ERROR", message: "Not connected to printer", details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
                 return
             }
@@ -520,7 +568,8 @@ class ZebraPrinterInstance: NSObject {
                             "error": "Not connected to printer"
                         ])
                     }
-                    result(FlutterError(code: "NOT_CONNECTED", message: "Not connected to printer", details: nil))
+                    // Don't return FlutterError when using callback pattern - let the callback handle the error
+                    result(false)
                 }
                 return
             }
@@ -574,15 +623,20 @@ class ZebraPrinterInstance: NSObject {
         }
     }
     
-    private func sendConnectionError(operationId: String?, result: @escaping FlutterResult) {
+    private func sendConnectionError(operationId: String?, result: @escaping FlutterResult, nativeError: Error? = nil, context: [String: Any]? = nil) {
         DispatchQueue.main.async {
             if let operationId = operationId {
-                self.channel.invokeMethod("onConnectError", arguments: [
-                    "operationId": operationId,
-                    "error": "Failed to connect to printer"
-                ])
+                let enrichedError = self.createEnrichedError(
+                    message: "Failed to connect to printer",
+                    code: "CONNECTION_ERROR",
+                    operationId: operationId,
+                    nativeError: nativeError,
+                    additionalContext: context
+                )
+                self.channel.invokeMethod("onConnectError", arguments: enrichedError)
             }
-            result(FlutterError(code: "CONNECTION_ERROR", message: "Failed to connect to printer", details: nil))
+            // Don't return FlutterError when using callback pattern - let the callback handle the error
+            result(false)
         }
     }
 }

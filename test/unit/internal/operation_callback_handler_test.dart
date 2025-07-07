@@ -52,8 +52,19 @@ void main() {
       expect(mockManager.calls, contains('complete:1:true'));
       await handler.handleMethodCall(
           const MethodCall(
-          'onConnectError', {'operationId': '2', 'error': 'fail'}));
-      expect(mockManager.calls, contains('fail:2:fail'));
+          'onConnectError', {
+        'operationId': '2',
+        'message': 'fail',
+        'code': 'CONNECTION_ERROR',
+        'timestamp': '2023-01-01T00:00:00Z',
+        'nativeStackTrace': 'stack trace',
+        'instanceId': 'test',
+        'queue': 'main'
+      }));
+      expect(
+          mockManager.calls,
+          contains(
+              'fail:2:fail | Code: CONNECTION_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
     });
 
     test('routes disconnect callbacks', () async {
@@ -61,8 +72,19 @@ void main() {
           const MethodCall('onDisconnectComplete', {'operationId': '1'}));
       expect(mockManager.calls, contains('complete:1:true'));
       await handler.handleMethodCall(const MethodCall(
-          'onDisconnectError', {'operationId': '2', 'error': 'fail'}));
-      expect(mockManager.calls, contains('fail:2:fail'));
+          'onDisconnectError', {
+        'operationId': '2',
+        'message': 'fail',
+        'code': 'DISCONNECT_ERROR',
+        'timestamp': '2023-01-01T00:00:00Z',
+        'nativeStackTrace': 'stack trace',
+        'instanceId': 'test',
+        'queue': 'main'
+      }));
+      expect(
+          mockManager.calls,
+          contains(
+              'fail:2:fail | Code: DISCONNECT_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
     });
 
     test('routes print callbacks', () async {
@@ -71,8 +93,20 @@ void main() {
       expect(mockManager.calls, contains('complete:1:true'));
       await handler.handleMethodCall(
           const MethodCall(
-          'onPrintError', {'operationId': '2', 'error': 'fail'}));
-      expect(mockManager.calls, contains('fail:2:fail'));
+          'onPrintError', {
+        'operationId': '2',
+        'message': 'fail',
+        'code': 'PRINT_ERROR',
+        'timestamp': '2023-01-01T00:00:00Z',
+        'nativeStackTrace': 'stack trace',
+        'instanceId': 'test',
+        'queue': 'main',
+        'context': {'operation': 'print', 'dataLength': 100}
+      }));
+      expect(
+          mockManager.calls,
+          contains(
+              'fail:2:fail | Code: PRINT_ERROR | Context: {operation: print, dataLength: 100} | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
     });
 
     test('routes settings callbacks', () async {
@@ -85,8 +119,20 @@ void main() {
       expect(mockManager.calls, contains('complete:2:42'));
       await handler.handleMethodCall(
           const MethodCall(
-          'onSettingsError', {'operationId': '3', 'error': 'fail'}));
-      expect(mockManager.calls, contains('fail:3:fail'));
+          'onSettingsError', {
+        'operationId': '3',
+        'message': 'fail',
+        'code': 'SETTINGS_ERROR',
+        'timestamp': '2023-01-01T00:00:00Z',
+        'nativeStackTrace': 'stack trace',
+        'instanceId': 'test',
+        'queue': 'main',
+        'context': {'operation': 'setSettings', 'command': 'test=value'}
+      }));
+      expect(
+          mockManager.calls,
+          contains(
+              'fail:3:fail | Code: SETTINGS_ERROR | Context: {operation: setSettings, command: test=value} | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
     });
 
     test('routes discovery and permission callbacks', () async {
@@ -108,8 +154,19 @@ void main() {
       expect(mockManager.calls, contains('complete:1:OK'));
       await handler.handleMethodCall(
           const MethodCall(
-          'onStatusError', {'operationId': '2', 'error': 'fail'}));
-      expect(mockManager.calls, contains('fail:2:fail'));
+          'onStatusError', {
+        'operationId': '2',
+        'message': 'fail',
+        'code': 'STATUS_ERROR',
+        'timestamp': '2023-01-01T00:00:00Z',
+        'nativeStackTrace': 'stack trace',
+        'instanceId': 'test',
+        'queue': 'main'
+      }));
+      expect(
+          mockManager.calls,
+          contains(
+              'fail:2:fail | Code: STATUS_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
       await handler.handleMethodCall(const MethodCall(
           'onConnectionStatusResult', {'operationId': '3', 'connected': true}));
       expect(mockManager.calls, contains('complete:3:true'));
@@ -136,6 +193,12 @@ void main() {
           .handleMethodCall(
           const MethodCall('printerFound', {'address': 'abc'}));
       expect(called, isNull);
+    });
+
+    test('handles legacy error format gracefully', () async {
+      await handler.handleMethodCall(const MethodCall(
+          'onConnectError', {'operationId': '1', 'error': 'legacy error'}));
+      expect(mockManager.calls, contains('fail:1:legacy error'));
     });
   });
 }

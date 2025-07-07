@@ -17,7 +17,6 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
   ZebraDevice? _selectedPrinter;
   ZebraDevice? _recommendedPrinter;
   bool _isDiscovering = false;
-  String _status = '';
   
   @override
   void initState() {
@@ -28,13 +27,10 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
   Future<void> _initializeService() async {
     try {
       await _service.initialize();
-      setState(() {
-        _status = 'Service initialized';
-      });
     } catch (e) {
-      setState(() {
-        _status = 'Initialization error: $e';
-      });
+      // setState(() {
+      //   _status = 'Initialization error: $e';
+      // });
     }
   }
   
@@ -44,7 +40,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
       _printers.clear();
       _selectedPrinter = null;
       _recommendedPrinter = null;
-      _status = 'Starting smart discovery...';
+      // _status = 'Starting smart discovery...';
     });
     
     _discoverySubscription?.cancel();
@@ -60,16 +56,16 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
           
           if (result.isComplete) {
             _isDiscovering = false;
-            _status = 'Discovery complete. Found ${_printers.length} printer(s)';
+            // _status = 'Discovery complete. Found ${_printers.length} printer(s)';
           } else {
-            _status = 'Discovering... Found ${_printers.length} printer(s)';
+            // _status = 'Discovering... Found ${_printers.length} printer(s)';
           }
         });
       },
       onError: (error) {
         setState(() {
           _isDiscovering = false;
-          _status = 'Discovery error: $error';
+          // _status = 'Discovery error: $error';
         });
       },
     );
@@ -109,7 +105,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
     if (result != null) {
       setState(() {
         _selectedPrinter = result;
-        _status = 'Print completed successfully with ${result.name}';
+        // _status = 'Print completed successfully with ${result.name}';
       });
     }
   }
@@ -135,7 +131,8 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
             padding: const EdgeInsets.all(16),
             color: Colors.grey[200],
             child: Text(
-              _status,
+              // _status,
+              'Service initialized',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
@@ -361,7 +358,6 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
   bool _isPrinting = false;
   bool _printSuccess = false;
   bool _printFailed = false;
-  String _status = '';
   String _printStatus = '';
 
   // Animation controllers
@@ -377,7 +373,6 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
   bool _manualEntryCompleted = false;
   final _manualIpController = TextEditingController();
   final _manualNameController = TextEditingController();
-  String? _manualError;
 
   @override
   void initState() {
@@ -420,7 +415,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
   void _startDiscovery() {
     setState(() {
       _isDiscovering = true;
-      _status = 'Discovering printers...';
+      _printStatus = 'Discovering printers...';
     });
 
     _discoverySubscription = Zebra.discovery
@@ -437,7 +432,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
             if (_selectedPrinter == null && printers.isNotEmpty) {
               _selectedPrinter = printers.first;
             }
-            _status = 'Found ${_printers.length} printers';
+            _printStatus = 'Found ${_printers.length} printers';
           });
         }
       },
@@ -445,7 +440,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
         if (mounted) {
           setState(() {
             _isDiscovering = false;
-            _status = 'Discovery error: $error';
+            _printStatus = 'Discovery error: $error';
           });
         }
       },
@@ -458,7 +453,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
     if (mounted) {
       setState(() {
         _isDiscovering = false;
-        _status = 'Discovery stopped. Found ${_printers.length} printers.';
+        _printStatus = 'Discovery stopped. Found ${_printers.length} printers.';
       });
     }
   }
@@ -667,7 +662,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withAlpha(51),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -735,10 +730,10 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
+        color: statusColor.withAlpha(25),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: statusColor.withOpacity(0.3),
+          color: statusColor.withAlpha(76),
           width: 1,
         ),
       ),
@@ -782,10 +777,10 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: _printSuccess
-                        ? Colors.green.withOpacity(0.1)
+                        ? Colors.green.withAlpha(25)
                         : _printFailed
-                            ? Colors.red.withOpacity(0.1)
-                            : Colors.blue.withOpacity(0.1),
+                            ? Colors.red.withAlpha(25)
+                            : Colors.blue.withAlpha(25),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(
@@ -822,7 +817,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
                         : _printFailed
                             ? Colors.red
                             : Colors.blue),
-                    backgroundColor: Colors.grey.withOpacity(0.2),
+                    backgroundColor: Colors.grey.withAlpha(51),
                     minHeight: 6,
                   ),
                 );
@@ -902,10 +897,8 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
               onPressed: () async {
                 final ip = _manualIpController.text.trim();
                 if (ip.isEmpty || !_validateIp(ip)) {
-                  setState(() => _manualError = 'Enter a valid IP address');
                   return;
                 }
-                setState(() => _manualError = null);
 
                 // Create manual printer device
                 final device = ZebraDevice(
@@ -1038,10 +1031,10 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+                color: Colors.blue.withAlpha(25),
                 borderRadius: BorderRadius.circular(8),
                 border:
-                    Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+                    Border.all(color: Colors.blue.withAlpha(76), width: 1),
               ),
               child: Row(
                 children: [
@@ -1066,14 +1059,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
                   ),
                   TextButton(
                     onPressed: _stopDiscovery,
-                    child: Text(
-                      'Stop',
-                      style: TextStyle(
-                        color: Colors.blue[700],
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: const Text('Stop'),
                   ),
                 ],
               ),
@@ -1131,17 +1117,17 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
             vertical: prominent ? 20 : 8,
           ),
           decoration: BoxDecoration(
-            color: prominent ? Colors.blue.withOpacity(0.1) : Colors.white,
+            color: prominent ? Colors.blue.withAlpha(25) : Colors.white,
             borderRadius: BorderRadius.circular(prominent ? 16 : 10),
             border: Border.all(
               color:
-                  prominent ? Colors.blue.withOpacity(0.3) : Colors.grey[300]!,
+                  prominent ? Colors.blue.withAlpha(76) : Colors.grey[300]!,
               width: prominent ? 2 : 1,
             ),
             boxShadow: [
               if (!prominent)
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withAlpha(5),
                   blurRadius: 1,
                   offset: const Offset(0, 1),
                 ),
@@ -1156,7 +1142,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
                   Container(
                     padding: EdgeInsets.all(prominent ? 12 : 7),
                     decoration: BoxDecoration(
-                      color: connColor.withOpacity(0.13),
+                      color: connColor.withAlpha(33),
                       borderRadius: BorderRadius.circular(prominent ? 12 : 7),
                     ),
                     child: Icon(connIcon,
@@ -1180,7 +1166,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
                               vertical: prominent ? 4 : 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.15),
+                              color: Colors.blue.withAlpha(37),
                               borderRadius:
                                   BorderRadius.circular(prominent ? 8 : 7),
                             ),
@@ -1292,7 +1278,7 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
         vertical: small ? 2 : 4,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withAlpha(25),
         borderRadius: BorderRadius.circular(small ? 8 : 12),
       ),
       child: Row(

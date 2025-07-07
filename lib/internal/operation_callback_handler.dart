@@ -1,6 +1,5 @@
 import 'package:flutter/services.dart';
 import 'operation_manager.dart';
-import '../models/result.dart';
 
 /// Handles method calls from native side and routes them to appropriate operations
 class OperationCallbackHandler {
@@ -24,8 +23,8 @@ class OperationCallbackHandler {
             manager.completeOperation(operationId, true);
             break;
           case 'onConnectError':
-            final error = call.arguments?['error'] ?? 'Connection failed';
-            manager.failOperation(operationId, error);
+            _handleEnrichedError(
+                operationId, call.arguments, 'Connection failed');
             break;
 
           // Disconnect callbacks
@@ -33,8 +32,8 @@ class OperationCallbackHandler {
             manager.completeOperation(operationId, true);
             break;
           case 'onDisconnectError':
-            final error = call.arguments?['error'] ?? 'Disconnect failed';
-            manager.failOperation(operationId, error);
+            _handleEnrichedError(
+                operationId, call.arguments, 'Disconnect failed');
             break;
 
           // Print callbacks
@@ -42,8 +41,7 @@ class OperationCallbackHandler {
             manager.completeOperation(operationId, true);
             break;
           case 'onPrintError':
-            final error = call.arguments?['error'] ?? 'Print failed';
-            manager.failOperation(operationId, error);
+            _handleEnrichedError(operationId, call.arguments, 'Print failed');
             break;
 
           // Settings callbacks
@@ -55,9 +53,8 @@ class OperationCallbackHandler {
             manager.completeOperation(operationId, value);
             break;
           case 'onSettingsError':
-            final error =
-                call.arguments?['error'] ?? 'Settings operation failed';
-            manager.failOperation(operationId, error);
+            _handleEnrichedError(
+                operationId, call.arguments, 'Settings operation failed');
             break;
 
           // Discovery callbacks
@@ -80,8 +77,8 @@ class OperationCallbackHandler {
             manager.completeOperation(operationId, status);
             break;
           case 'onStatusError':
-            final error = call.arguments?['error'] ?? 'Status check failed';
-            manager.failOperation(operationId, error);
+            _handleEnrichedError(
+                operationId, call.arguments, 'Status check failed');
             break;
 
           // Connection status callback
@@ -105,25 +102,77 @@ class OperationCallbackHandler {
           handler(call);
         } catch (e) {
           // Log error but don't let it crash the app
-          print('Error in event handler for ${call.method}: $e');
         }
       }
-    } catch (e, stack) {
+    } catch (e) {
       // Log the error but don't let it propagate as an unhandled exception
-      print(
-          'Error in OperationCallbackHandler.handleMethodCall for method ${call.method}: $e');
-      print('Stack trace: $stack');
-
-      // If this was an operation callback, try to fail the operation gracefully
-      final operationId = call.arguments?['operationId'] as String?;
-      if (operationId != null) {
-        try {
-          manager.failOperation(operationId, 'Internal error: $e');
-        } catch (failError) {
-          print('Error failing operation $operationId: $failError');
-        }
-      }
     }
+  }
+
+  /// Handle enriched error information from native side
+  void _handleEnrichedError(String operationId, Map<String, dynamic>? arguments, String defaultMessage) {
+    final message = arguments?['message'] ?? arguments?['error'] ?? defaultMessage;
+    final code = arguments?['code'] ?? 'UNKNOWN_ERROR';
+    final nativeStackTrace = arguments?['nativeStackTrace'] as String?;
+    final context = arguments?['context'] as Map<String, dynamic>?;
+    final timestamp = arguments?['timestamp'] as String?;
+    final nativeError = arguments?['nativeError'] as String?;
+    final nativeErrorCode = arguments?['nativeErrorCode'] as int?;
+    final nativeErrorDomain = arguments?['nativeErrorDomain'] as String?;
+    
+    // Create enriched error string with context
+    final enrichedError = _createEnrichedErrorString(
+      message, code, nativeStackTrace, context, 
+      timestamp, nativeError, nativeErrorCode, nativeErrorDomain
+    );
+    
+    manager.failOperation(operationId, enrichedError);
+  }
+
+  /// Create enriched error string with all available context
+  String _createEnrichedErrorString(
+    String message,
+    String code,
+    String? nativeStackTrace,
+    Map<String, dynamic>? context,
+    String? timestamp,
+    String? nativeError,
+    int? nativeErrorCode,
+    String? nativeErrorDomain,
+  ) {
+    final parts = <String>[message];
+
+    if (code != 'UNKNOWN_ERROR') {
+      parts.add('Code: $code');
+    }
+
+    if (nativeError != null) {
+      parts.add('Native: $nativeError');
+    }
+
+    if (nativeErrorCode != null) {
+      parts.add('Native Code: $nativeErrorCode');
+    }
+
+    if (nativeErrorDomain != null) {
+      parts.add('Native Domain: $nativeErrorDomain');
+    }
+    
+    if (context != null && context.isNotEmpty) {
+      final contextStr =
+          context.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+      parts.add('Context: {$contextStr}');
+    }
+    
+    if (timestamp != null) {
+      parts.add('Time: $timestamp');
+    }
+    
+    if (nativeStackTrace != null) {
+      parts.add('Native Stack: $nativeStackTrace');
+    }
+    
+    return parts.join(' | ');
   }
 
   /// Register an event handler for non-operation callbacks
