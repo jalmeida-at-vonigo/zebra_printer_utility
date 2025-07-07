@@ -74,7 +74,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
       },
     );
   }
-
+  
   Future<void> _showPrintPopup() async {
     final testData = '''
 ^XA
@@ -88,7 +88,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
 ^FS
 ^XZ
 ''';
-
+    
     final result = await showDialog<ZebraDevice>(
       context: context,
       barrierDismissible: false,
@@ -234,7 +234,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
                       return Card(
                         color: isConnected
                             ? Colors.green[50]
-                            : isSelected
+                            : isSelected 
                                 ? Colors.blue[100]
                                 : null,
                         child: ListTile(
