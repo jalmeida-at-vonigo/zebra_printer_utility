@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.0.35] - 2025-01-07
+
+### Fixed
+- **Printer Name Display**: Fixed "Unknown Printer" issue in example apps
+  - Corrected key name mismatch between native iOS code and Dart side
+  - Updated ZSDKWrapper to send correct uppercase keys (`Address`, `Name`, `Status`, `IsWifi`)
+  - Fixed network discovery to use proper key names
+  - Restored printer name display functionality to match version 2.0.32
+- **Connection Logic**: Restored simple connection logic to match version 2.0.32
+  - Removed complex printer lookup logic that was causing connection issues
+  - Fixed address parsing logic to properly distinguish between network and Bluetooth addresses
+  - Network addresses contain "." (IP address), Bluetooth addresses contain ":" but no "."
+  - Native iOS code now correctly determines connection type based on address format
+
+### Technical Details
+- Root cause was key name mismatch: Dart expected `Address`, `Name`, `Status`, `IsWifi` but native code sent `address`, `name`, `status`, `isWifi`
+- Connection logic restored to simple approach that was working in version 2.0.32
+- Address parsing logic fixed to properly identify network vs Bluetooth connections
+- All changes maintain backward compatibility while restoring working functionality
+
 ## [2.0.34] - 2025-01-05
 
 ### Added

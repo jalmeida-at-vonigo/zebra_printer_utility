@@ -72,7 +72,7 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
   }
   
   Future<void> _showPrintPopup() async {
-    final testData = '''
+    const testData = '''
 ^XA
 ^FO50,50
 ^ADN,36,20
@@ -130,10 +130,10 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             color: Colors.grey[200],
-            child: Text(
+            child: const Text(
               // _status,
               'Service initialized',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
           
