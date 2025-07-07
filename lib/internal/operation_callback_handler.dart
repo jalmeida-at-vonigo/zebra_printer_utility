@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'operation_manager.dart';
+import '../models/result.dart';
 
 /// Handles method calls from native side and routes them to appropriate operations
 class OperationCallbackHandler {
@@ -12,93 +13,116 @@ class OperationCallbackHandler {
 
   /// Handle a method call from native side
   Future<void> handleMethodCall(MethodCall call) async {
-    final operationId = call.arguments?['operationId'] as String?;
+    try {
+      final operationId = call.arguments?['operationId'] as String?;
 
-    // Handle operation-specific callbacks
-    if (operationId != null) {
-      switch (call.method) {
-        // Connection callbacks
-        case 'onConnectComplete':
-          manager.completeOperation(operationId, true);
-          break;
-        case 'onConnectError':
-          final error = call.arguments?['error'] ?? 'Connection failed';
-          manager.failOperation(operationId, error);
-          break;
+      // Handle operation-specific callbacks
+      if (operationId != null) {
+        switch (call.method) {
+          // Connection callbacks
+          case 'onConnectComplete':
+            manager.completeOperation(operationId, true);
+            break;
+          case 'onConnectError':
+            final error = call.arguments?['error'] ?? 'Connection failed';
+            manager.failOperation(operationId, error);
+            break;
 
-        // Disconnect callbacks
-        case 'onDisconnectComplete':
-          manager.completeOperation(operationId, true);
-          break;
-        case 'onDisconnectError':
-          final error = call.arguments?['error'] ?? 'Disconnect failed';
-          manager.failOperation(operationId, error);
-          break;
+          // Disconnect callbacks
+          case 'onDisconnectComplete':
+            manager.completeOperation(operationId, true);
+            break;
+          case 'onDisconnectError':
+            final error = call.arguments?['error'] ?? 'Disconnect failed';
+            manager.failOperation(operationId, error);
+            break;
 
-        // Print callbacks
-        case 'onPrintComplete':
-          manager.completeOperation(operationId, true);
-          break;
-        case 'onPrintError':
-          final error = call.arguments?['error'] ?? 'Print failed';
-          manager.failOperation(operationId, error);
-          break;
+          // Print callbacks
+          case 'onPrintComplete':
+            manager.completeOperation(operationId, true);
+            break;
+          case 'onPrintError':
+            final error = call.arguments?['error'] ?? 'Print failed';
+            manager.failOperation(operationId, error);
+            break;
 
-        // Settings callbacks
-        case 'onSettingsComplete':
-          manager.completeOperation(operationId, true);
-          break;
-        case 'onSettingsResult':
-          final value = call.arguments?['value'];
-          manager.completeOperation(operationId, value);
-          break;
-        case 'onSettingsError':
-          final error = call.arguments?['error'] ?? 'Settings operation failed';
-          manager.failOperation(operationId, error);
-          break;
+          // Settings callbacks
+          case 'onSettingsComplete':
+            manager.completeOperation(operationId, true);
+            break;
+          case 'onSettingsResult':
+            final value = call.arguments?['value'];
+            manager.completeOperation(operationId, value);
+            break;
+          case 'onSettingsError':
+            final error =
+                call.arguments?['error'] ?? 'Settings operation failed';
+            manager.failOperation(operationId, error);
+            break;
 
-        // Discovery callbacks
-        case 'onDiscoveryDone':
-          manager.completeOperation(operationId, true);
-          break;
-        case 'onStopScanComplete':
-          manager.completeOperation(operationId, true);
-          break;
+          // Discovery callbacks
+          case 'onDiscoveryDone':
+            manager.completeOperation(operationId, true);
+            break;
+          case 'onStopScanComplete':
+            manager.completeOperation(operationId, true);
+            break;
 
-        // Permission callbacks
-        case 'onPermissionResult':
-          final granted = call.arguments?['granted'] ?? false;
-          manager.completeOperation(operationId, granted);
-          break;
+          // Permission callbacks
+          case 'onPermissionResult':
+            final granted = call.arguments?['granted'] ?? false;
+            manager.completeOperation(operationId, granted);
+            break;
 
-        // Status callbacks
-        case 'onStatusResult':
-          final status = call.arguments?['status'];
-          manager.completeOperation(operationId, status);
-          break;
-        case 'onStatusError':
-          final error = call.arguments?['error'] ?? 'Status check failed';
-          manager.failOperation(operationId, error);
-          break;
+          // Status callbacks
+          case 'onStatusResult':
+            final status = call.arguments?['status'];
+            manager.completeOperation(operationId, status);
+            break;
+          case 'onStatusError':
+            final error = call.arguments?['error'] ?? 'Status check failed';
+            manager.failOperation(operationId, error);
+            break;
 
-        // Connection status callback
-        case 'onConnectionStatusResult':
-          final isConnected = call.arguments?['connected'] ?? false;
-          manager.completeOperation(operationId, isConnected);
-          break;
+          // Connection status callback
+          case 'onConnectionStatusResult':
+            final isConnected = call.arguments?['connected'] ?? false;
+            manager.completeOperation(operationId, isConnected);
+            break;
 
-        // Locate value callback
-        case 'onLocateValueResult':
-          final value = call.arguments?['value'] ?? '';
-          manager.completeOperation(operationId, value);
-          break;
+          // Locate value callback
+          case 'onLocateValueResult':
+            final value = call.arguments?['value'] ?? '';
+            manager.completeOperation(operationId, value);
+            break;
+        }
       }
-    }
 
-    // Handle non-operation events (like printer discovery events)
-    final handler = eventHandlers[call.method];
-    if (handler != null) {
-      handler(call);
+      // Handle non-operation events (like printer discovery events)
+      final handler = eventHandlers[call.method];
+      if (handler != null) {
+        try {
+          handler(call);
+        } catch (e) {
+          // Log error but don't let it crash the app
+          print('Error in event handler for ${call.method}: $e');
+        }
+      }
+    } catch (e, stack) {
+      // Log the error but don't let it propagate as an unhandled exception
+      print(
+          'Error in OperationCallbackHandler.handleMethodCall for method ${call.method}: $e');
+      print('Stack trace: $stack');
+
+      // If this was an operation callback, try to fail the operation gracefully
+      final operationId = call.arguments?['operationId'] as String?;
+      if (operationId != null) {
+        try {
+          manager.failOperation(operationId, 'Internal error: $e');
+        } catch (failError) {
+          print('Error failing operation $operationId: $failError');
+        }
+      }
     }
   }
 

@@ -27,8 +27,16 @@ class Zebra {
 
   static Future<void> _ensureInitialized() async {
     if (!_initialized) {
-      await _service.initialize();
-      _initialized = true;
+      try {
+        await _service.initialize();
+        _initialized = true;
+      } catch (e, stack) {
+        // Log the error but don't let it propagate as an unhandled exception
+        print('Error initializing Zebra service: $e');
+        print('Stack trace: $stack');
+        // Re-throw as a Result.error to be handled by the calling code
+        throw Exception('Failed to initialize Zebra service: $e');
+      }
     }
   }
 

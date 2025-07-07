@@ -631,16 +631,41 @@ class ZebraPrinter {
   }
 
   Future<void> nativeMethodCallHandler(MethodCall methodCall) async {
-    // First try to handle through the callback handler
-    await _callbackHandler.handleMethodCall(methodCall);
+    try {
+      // First try to handle through the callback handler
+      await _callbackHandler.handleMethodCall(methodCall);
 
-    // Handle special cases that need additional processing
-    if (methodCall.method == "onDiscoveryDone") {
-      if (shouldSync) {
-        _getLocateValue(key: "connected").then((connectedString) {
-          controller.synchronizePrinter(connectedString);
-          shouldSync = false;
-        });
+      // Handle special cases that need additional processing
+      if (methodCall.method == "onDiscoveryDone") {
+        if (shouldSync) {
+          try {
+            final connectedString = await _getLocateValue(key: "connected");
+            controller.synchronizePrinter(connectedString);
+            shouldSync = false;
+          } catch (e) {
+            _logger
+                .error('Error synchronizing printer after discovery done: $e');
+          }
+        }
+      }
+    } catch (e, stack) {
+      // Log the error but don't let it propagate as an unhandled exception
+      _logger.error(
+          'Error in nativeMethodCallHandler for method ${methodCall.method}: $e',
+          null,
+          stack);
+
+      // Try to handle the error gracefully based on the method
+      try {
+        final operationId = methodCall.arguments?['operationId'] as String?;
+        if (operationId != null) {
+          // If this was an operation callback, try to fail it gracefully
+          _operationManager.failOperation(
+              operationId, 'Native method call error: $e');
+        }
+      } catch (failError) {
+        _logger.error(
+            'Error failing operation after native method call error: $failError');
       }
     }
   }
