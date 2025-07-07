@@ -120,14 +120,14 @@
                     // Only add printer if it has a valid serial number
                     if (serialNumber && serialNumber.length > 0) {
                         NSMutableDictionary *info = [NSMutableDictionary dictionary];
-                        info[@"address"] = serialNumber;
-                        info[@"name"] = name ?: @"Zebra Printer";
+                        info[@"Address"] = serialNumber;
+                        info[@"Name"] = name ?: @"Zebra Printer";
                         info[@"model"] = accessory.modelNumber ?: @"Unknown Model";
                         info[@"manufacturer"] = accessory.manufacturer ?: @"Zebra";
                         info[@"firmwareRevision"] = accessory.firmwareRevision ?: @"";
                         info[@"hardwareRevision"] = accessory.hardwareRevision ?: @"";
-                        info[@"status"] = @"Connected";
-                        info[@"isWifi"] = @NO;
+                        info[@"Status"] = @"Connected";
+                        info[@"IsWifi"] = @NO;
                         info[@"isBluetooth"] = @YES;
                         info[@"connectionType"] = @"MFi Bluetooth";
                         

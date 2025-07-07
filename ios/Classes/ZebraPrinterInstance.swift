@@ -234,10 +234,10 @@ class ZebraPrinterInstance: NSObject {
                 // For network discovery, use the service name as address or extract from endpoint
                 let address = name.contains(":") ? name : "\(name).local"
                 let printerInfo: [String: Any] = [
-                    "address": address,
-                    "name": name,
-                    "status": "Found",
-                    "isWifi": true,
+                    "Address": address,
+                    "Name": name,
+                    "Status": "Found",
+                    "IsWifi": true,
                     "type": type,
                     "domain": domain ?? ""
                 ]
@@ -303,7 +303,8 @@ class ZebraPrinterInstance: NSObject {
             self.disconnectInternal()
             
             // Determine if it's network based on address format
-            let isNetworkDevice = address.contains(".") || address.contains(":")
+            // Network addresses contain "." (IP address), Bluetooth addresses contain ":" but no "."
+            let isNetworkDevice = address.contains(".")
             
             LogUtil.info("Connecting to printer: \(address), isNetwork: \(isNetworkDevice)")
             
