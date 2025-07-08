@@ -196,14 +196,6 @@ class Zebra {
     return await _manager.getDetailedPrinterStatus();
   }
 
-  /// Wait for print completion with timeout
-  static Future<Result<bool>> waitForPrintCompletion(
-      {int timeoutSeconds = 30}) async {
-    await _ensureInitialized();
-    return await _manager.waitForPrintCompletion(
-        timeoutSeconds: timeoutSeconds);
-  }
-
   /// Get a printer setting
   static Future<String?> getSetting(String setting) async {
     await _ensureInitialized();

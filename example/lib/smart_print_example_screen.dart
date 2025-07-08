@@ -132,6 +132,9 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       case PrintEventType.statusUpdate:
         _handleStatusUpdate(event);
         break;
+      case PrintEventType.realTimeStatusUpdate:
+        _handleRealTimeStatusUpdate(event);
+        break;
       case PrintEventType.completed:
         _handleCompletion();
         break;
@@ -183,6 +186,28 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   void _handleStatusUpdate(PrintEvent event) {
     // Handle status updates (printer status changes, etc.)
     _addLog('Status', 'info', 'Status update: ${event.metadata}');
+  }
+
+  void _handleRealTimeStatusUpdate(PrintEvent event) {
+    // Handle real-time status updates from printer polling
+    final status = event.metadata['status'] as Map<String, dynamic>?;
+    final issues = event.metadata['issues'] as List<String>?;
+    final canAutoResume = event.metadata['canAutoResume'] as bool?;
+
+    if (status != null) {
+      final isCompleted = status['isCompleted'] as bool? ?? false;
+      final hasIssues = status['hasIssues'] as bool? ?? false;
+
+      if (isCompleted) {
+        _addLog('Status', 'success', 'Print completed successfully!');
+      } else if (hasIssues && issues != null && issues.isNotEmpty) {
+        _addLog('Status', 'warning', 'Issues detected: ${issues.join(', ')}');
+      } else if (canAutoResume == true) {
+        _addLog('Status', 'info', 'Printer can be auto-resumed');
+      } else {
+        _addLog('Status', 'info', 'Waiting for print completion...');
+      }
+    }
   }
 
   void _handleCompletion() {

@@ -501,59 +501,7 @@
     }
 }
 
-+ (BOOL)waitForPrintCompletion:(id)connection timeout:(NSInteger)timeoutSeconds {
-    if (!connection) return NO;
-    
-    NSDate *startTime = [NSDate date];
-    NSInteger timeoutMs = timeoutSeconds * 1000;
-    NSInteger checkIntervalMs = 500; // Check every 500ms
-    
-    while ([[NSDate date] timeIntervalSinceDate:startTime] * 1000 < timeoutMs) {
-        @try {
-            NSDictionary *status = [self getPrinterStatus:connection];
-            
-            // Check if there are any blocking issues
-            BOOL isHeadOpen = [status[@"isHeadOpen"] boolValue];
-            BOOL isPaperOut = [status[@"isPaperOut"] boolValue];
-            BOOL isPaused = [status[@"isPaused"] boolValue];
-            BOOL isRibbonOut = [status[@"isRibbonOut"] boolValue];
-            BOOL isPartialFormatInProgress = [status[@"isPartialFormatInProgress"] boolValue];
-            
-            // If there are hardware issues, return NO (print failed)
-            if (isHeadOpen || isPaperOut || isRibbonOut) {
-                return NO;
-            }
-            
-            // If printer is paused, wait for it to resume
-            if (isPaused) {
-                [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
-                continue;
-            }
-            
-            // For ZPL printers, check if partial format is in progress
-            if (isPartialFormatInProgress) {
-                [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
-                continue;
-            }
-            
-            // Check if ready to print (indicating previous job completed)
-            BOOL isReadyToPrint = [status[@"isReadyToPrint"] boolValue];
-            if (isReadyToPrint) {
-                return YES;
-            }
-            
-            // Wait before next check
-            [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
-            
-        } @catch (NSException *exception) {
-            NSLog(@"Error checking print completion: %@", [exception reason]);
-            return NO;
-        }
-    }
-    
-    // Timeout reached
-    return NO;
-}
+
 
 + (NSDictionary *)getDetailedPrinterStatus:(id)connection {
     NSDictionary *basicStatus = [self getPrinterStatus:connection];

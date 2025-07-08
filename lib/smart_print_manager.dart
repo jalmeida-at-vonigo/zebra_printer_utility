@@ -35,6 +35,7 @@ enum PrintEventType {
   statusUpdate,
   completed,
   cancelled,
+  realTimeStatusUpdate, // New event type for real-time status updates
 }
 
 /// Print step information
@@ -520,24 +521,76 @@ class SmartPrintManager {
         PrintStep.waitingForCompletion, 'Waiting for print completion');
 
     try {
-      final completionResult =
-          await _printerManager.waitForPrintCompletion(timeoutSeconds: 30);
-      if (completionResult.success) {
-        final success = completionResult.data ?? false;
-        if (success) {
-          return Result.success();
-        } else {
-          return Result.errorCode(
-            ErrorCodes.printError,
-            formatArgs: ['Print completion failed - hardware issues detected'],
-          );
+      // Use the new status polling approach for better UX
+      bool isCompleted = false;
+      bool hasAutoResumed = false;
+
+      await for (final status in _printerManager.startStatusPolling(
+        interval: const Duration(milliseconds: 500),
+        timeout: const Duration(seconds: 30),
+      )) {
+        if (_isCancelled) {
+          return Result.errorCode(ErrorCodes.operationCancelled);
         }
+
+        // Emit real-time status update event
+        _emitStatusUpdate(status);
+
+        // Check for completion
+        if (status['isCompleted'] == true) {
+          isCompleted = true;
+          break;
+        }
+
+        // Check for auto-resume opportunities
+        if (status['canAutoResume'] == true && !hasAutoResumed) {
+          _logger.info('Auto-resuming paused printer');
+          await _updateStep(
+              PrintStep.waitingForCompletion, 'Auto-resuming printer...');
+
+          final resumeResult = await _printerManager.autoResumePrinter();
+          if (resumeResult.success) {
+            hasAutoResumed = true;
+            await _updateStep(PrintStep.waitingForCompletion,
+                'Printer resumed, waiting for completion...');
+          }
+        }
+
+        // Check for blocking issues
+        if (status['hasIssues'] == true) {
+          final issues = <String>[];
+          if (status['isHeadOpen'] == true) issues.add('head open');
+          if (status['isPaperOut'] == true) issues.add('out of paper');
+          if (status['isRibbonOut'] == true) issues.add('ribbon error');
+          if (status['isHeadCold'] == true) issues.add('head cold');
+          if (status['isHeadTooHot'] == true) issues.add('head too hot');
+
+          if (issues.isNotEmpty) {
+            await _updateStep(PrintStep.waitingForCompletion,
+                'Waiting for user to fix: ${issues.join(', ')}');
+          }
+        }
+
+        // Update status message based on current state
+        if (status['isPaused'] == true) {
+          await _updateStep(PrintStep.waitingForCompletion,
+              'Printer paused, waiting for resume...');
+        } else if (status['isPartialFormatInProgress'] == true) {
+          await _updateStep(
+              PrintStep.waitingForCompletion, 'Printing in progress...');
+        } else {
+          await _updateStep(PrintStep.waitingForCompletion,
+              'Waiting for print completion...');
+        }
+      }
+
+      if (isCompleted) {
+        _logger.info('Print completion successful via status polling');
+        return Result.success();
       } else {
         return Result.errorCode(
           ErrorCodes.printError,
-          formatArgs: [
-            completionResult.error?.message ?? 'Unknown completion error'
-          ],
+          formatArgs: ['Print completion timeout or failed'],
         );
       }
     } catch (e, stack) {
@@ -547,6 +600,42 @@ class SmartPrintManager {
         dartStackTrace: stack,
       );
     }
+  }
+
+  /// Emit real-time status update event
+  void _emitStatusUpdate(Map<String, dynamic> status) {
+    _eventController?.add(PrintEvent(
+      type: PrintEventType.realTimeStatusUpdate,
+      timestamp: DateTime.now(),
+      metadata: {
+        'status': status,
+        'isCompleted': status['isCompleted'] ?? false,
+        'hasIssues': status['hasIssues'] ?? false,
+        'canAutoResume': status['canAutoResume'] ?? false,
+        'issues': _extractIssues(status),
+        'autoResumeAction': _getAutoResumeAction(status),
+      },
+    ));
+  }
+
+  /// Extract issues from status for UI display
+  List<String> _extractIssues(Map<String, dynamic> status) {
+    final issues = <String>[];
+    if (status['isHeadOpen'] == true) issues.add('Printer head is open');
+    if (status['isPaperOut'] == true) issues.add('Out of paper');
+    if (status['isRibbonOut'] == true) issues.add('Ribbon error');
+    if (status['isHeadCold'] == true) issues.add('Print head is cold');
+    if (status['isHeadTooHot'] == true) issues.add('Print head is too hot');
+    if (status['isPaused'] == true) issues.add('Printer is paused');
+    return issues;
+  }
+
+  /// Get auto-resume action description
+  String? _getAutoResumeAction(Map<String, dynamic> status) {
+    if (status['canAutoResume'] == true) {
+      return 'Printer can be auto-resumed';
+    }
+    return null;
   }
 
   /// Update current step and emit event

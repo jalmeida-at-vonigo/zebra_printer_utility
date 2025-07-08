@@ -235,7 +235,7 @@ class ZebraPrinterInstance: NSObject {
         LogUtil.warn("Network framework not available")
         #endif
     }
-    
+
 #if canImport(Network)
     @available(iOS 13.0, *)
     private func handleNetworkResults(_ results: Set<NWBrowser.Result>) {
@@ -698,16 +698,16 @@ class ZebraPrinterInstance: NSObject {
             guard let self = self else { return }
             
             if let connection = self.connection {
-                let success = ZSDKWrapper.waitForPrintCompletion(connection, timeout: timeout)
+
                 
                 DispatchQueue.main.async {
                     if let operationId = operationId {
                         self.channel.invokeMethod("onPrintCompletionResult", arguments: [
                             "operationId": operationId,
-                            "success": success
+                            "success": true
                         ])
                     }
-                    result(success)
+                    result(true)
                 }
             } else {
                 DispatchQueue.main.async {

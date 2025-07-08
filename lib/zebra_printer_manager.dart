@@ -310,46 +310,143 @@ class ZebraPrinterManager {
     }
   }
 
-  /// Primitive: Wait for print completion with timeout
-  Future<Result<bool>> waitForPrintCompletion({int timeoutSeconds = 30}) async {
-    _logger.info(
-        'Manager: Waiting for print completion (timeout: ${timeoutSeconds}s)');
+  /// Real-time status polling stream for print completion monitoring
+  /// This provides continuous status updates for UI feedback
+  Stream<Map<String, dynamic>> startStatusPolling({
+    Duration interval = const Duration(milliseconds: 500),
+    Duration timeout = const Duration(seconds: 60),
+  }) async* {
+    _logger.info('Manager: Starting real-time status polling');
+    await _ensureInitialized();
+
+    if (_printer == null) {
+      _logger
+          .error('Manager: Cannot start status polling - no printer connected');
+      return;
+    }
+
+    final startTime = DateTime.now();
+    bool isCompleted = false;
+
+    while (!isCompleted && DateTime.now().difference(startTime) < timeout) {
+      try {
+        final statusResult = await getPrinterStatus();
+        if (statusResult.success && statusResult.data != null) {
+          final status = statusResult.data!;
+
+          // Add timestamp and completion status
+          status['timestamp'] = DateTime.now().millisecondsSinceEpoch;
+          status['isCompleted'] = _isPrintCompleted(status);
+          status['hasIssues'] = _hasPrintIssues(status);
+          status['canAutoResume'] = _canAutoResume(status);
+
+          yield status;
+
+          // Check if print is completed
+          if (status['isCompleted'] == true) {
+            isCompleted = true;
+            _logger
+                .info('Manager: Print completion detected via status polling');
+          }
+        } else {
+          _logger.warning('Manager: Failed to get status during polling');
+          yield {
+            'error': 'Failed to get printer status',
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+            'isCompleted': false,
+            'hasIssues': true,
+            'canAutoResume': false,
+          };
+        }
+      } catch (e) {
+        _logger.error('Manager: Error during status polling', e);
+        yield {
+          'error': 'Status polling error: $e',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'isCompleted': false,
+          'hasIssues': true,
+          'canAutoResume': false,
+        };
+      }
+
+      // Wait before next poll
+      await Future.delayed(interval);
+    }
+
+    if (!isCompleted) {
+      _logger.warning('Manager: Status polling timed out');
+      yield {
+        'error': 'Status polling timed out',
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'isCompleted': false,
+        'hasIssues': true,
+        'canAutoResume': false,
+      };
+    }
+  }
+
+  /// Check if print operation is completed based on status
+  bool _isPrintCompleted(Map<String, dynamic> status) {
+    // Print is completed when:
+    // 1. Ready to print (no active print job)
+    // 2. No partial format in progress
+    // 3. No blocking issues
+    final isReadyToPrint = status['isReadyToPrint'] == true;
+    final isPartialFormatInProgress =
+        status['isPartialFormatInProgress'] == true;
+    final hasBlockingIssues = _hasPrintIssues(status);
+
+    return isReadyToPrint && !isPartialFormatInProgress && !hasBlockingIssues;
+  }
+
+  /// Check if there are any print issues that need attention
+  bool _hasPrintIssues(Map<String, dynamic> status) {
+    return status['isHeadOpen'] == true ||
+        status['isPaperOut'] == true ||
+        status['isRibbonOut'] == true ||
+        status['isHeadCold'] == true ||
+        status['isHeadTooHot'] == true;
+  }
+
+  /// Check if the printer can auto-resume (e.g., was paused but can be unpaused)
+  bool _canAutoResume(Map<String, dynamic> status) {
+    // Can auto-resume if only paused (no hardware issues)
+    final isPaused = status['isPaused'] == true;
+    final hasHardwareIssues = status['isHeadOpen'] == true ||
+        status['isPaperOut'] == true ||
+        status['isRibbonOut'] == true ||
+        status['isHeadCold'] == true ||
+        status['isHeadTooHot'] == true;
+
+    return isPaused && !hasHardwareIssues;
+  }
+
+  /// Auto-resume printer if it's paused and can be resumed
+  Future<Result<void>> autoResumePrinter() async {
+    _logger.info('Manager: Attempting to auto-resume printer');
     await _ensureInitialized();
 
     try {
       if (_printer == null) {
-        return Result.errorCode(
-          ErrorCodes.notConnected,
-        );
+        return Result.errorCode(ErrorCodes.notConnected);
       }
 
-      final completionCommand =
-          CommandFactory.createWaitForPrintCompletionCommand(
-        _printer!,
-        timeoutSeconds: timeoutSeconds,
-      );
-      final result = await completionCommand.execute();
+      final unpauseCommand = CommandFactory.createSendUnpauseCommand(_printer!);
+      final result = await unpauseCommand.execute();
 
       if (result.success) {
-        final success = result.data ?? false;
-        if (success) {
-          _logger.info('Manager: Print completion successful');
-          return Result.success(true);
-        } else {
-          _logger.warning(
-              'Manager: Print completion failed - hardware issues detected');
-          return Result.success(false);
-        }
+        _logger.info('Manager: Printer auto-resumed successfully');
+        _statusStreamController?.add('Printer resumed automatically');
+        return Result.success();
       } else {
-        _logger.error(
-            'Manager: Failed to wait for print completion - ${result.error?.message}');
+        _logger.warning('Manager: Failed to auto-resume printer');
         return result.map((data) => data);
       }
     } catch (e, stack) {
-      _logger.error('Manager: Error waiting for print completion', e, stack);
+      _logger.error('Manager: Error auto-resuming printer', e, stack);
       return Result.errorCode(
         ErrorCodes.operationError,
-        formatArgs: ['Error waiting for print completion: $e'],
+        formatArgs: ['Error auto-resuming printer: $e'],
         dartStackTrace: stack,
       );
     }
