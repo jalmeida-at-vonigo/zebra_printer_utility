@@ -1,6 +1,67 @@
 # Changelog
 
-## [2.0.38] - 2025-01-08
+## [2.0.40] - 2024-12-19
+
+### Fixed
+- **Error Code Centralization**: Eliminated all hardcoded error and success strings throughout the codebase
+- **SmartPrintManager**: Replaced hardcoded error code comparisons with ErrorCodes constants
+- **ZebraPrinter**: Replaced hardcoded 'DISCOVERY_ERROR' and 'SCAN_ERROR' with ErrorCodes constants
+- **Mobile Service**: Replaced hardcoded error strings with centralized ErrorCodes constants
+- **Readiness Manager**: Replaced hardcoded 'OPERATION_ERROR' with ErrorCodes.operationError
+
+### Enhanced
+- **Code Quality**: All error and success codes now use centralized constants from result.dart
+- **Maintainability**: Single source of truth for all error and success codes
+- **Consistency**: Uniform error handling across all components
+- **Documentation**: Added comprehensive error-code-centralization.mdc Cursor rule
+
+### Technical
+- **Architecture**: Enforced centralized error code management pattern
+- **Standards**: All error/success strings must be defined in result.dart only
+- **Validation**: Analyzer confirms no hardcoded error strings remain
+- **Enforcement**: Cursor rule prevents future hardcoded error strings
+
+## [2.0.39] - 2024-12-19
+
+### Added
+- **Comprehensive Edge Case Error Handling**: Enhanced SmartPrintManager with robust error handling for all edge cases
+- **Enhanced Print Steps**: Added validation, status checking, and completion waiting steps
+- **Error Classification System**: Implemented ErrorRecoverability enum for better error categorization
+- **Recovery Hints**: Added user-friendly recovery instructions for different error types
+- **Data Validation**: Added comprehensive print data validation before sending
+- **Status Monitoring**: Enhanced printer status detection and monitoring
+- **Resource Management**: Improved cleanup and resource management
+- **Mobile UI Enhancements**: Enhanced error presentation with recovery guidance and user decision points
+- **New Cursor Rule**: Added edge-case-error-handling.mdc for comprehensive error handling architecture
+
+### Enhanced
+- **SmartPrintManager**: 
+  - Added data validation step with format and size checking
+  - Enhanced connection error classification and retry logic
+  - Added printer status checking before printing
+  - Implemented print completion waiting
+  - Added exponential backoff for retries
+  - Enhanced error information with recovery hints
+- **Mobile UI**:
+  - Enhanced error categorization using SmartPrintManager error info
+  - Added user decision points for non-recoverable errors
+  - Improved error presentation with recovery guidance
+  - Added action buttons for manual error resolution
+  - Enhanced status visualization and progress tracking
+
+### Fixed
+- **Error Handling**: Improved error classification and recovery strategies
+- **Resource Leaks**: Fixed potential resource leaks with proper cleanup
+- **Status Detection**: Enhanced printer status detection for hardware issues
+- **UI Responsiveness**: Improved UI responsiveness during error scenarios
+
+### Technical
+- **Architecture**: Clear separation of responsibilities between library and UI layers
+- **Error Recovery**: Auto-recovery for connection issues, manual guidance for hardware issues
+- **Status Monitoring**: Real-time status updates and change detection
+- **Testing**: Enhanced error scenario testing and validation
+
+## [2.0.38] - 2024-12-19
 
 ### Added
 - **Professional Documentation**: Complete rewrite of README.md with modern architecture overview

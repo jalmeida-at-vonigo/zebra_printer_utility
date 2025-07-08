@@ -208,7 +208,7 @@ class OperationManager {
       return Result<T>.error(
         'Operation "$method" (ID: $operationId) timed out after ${timeout.inSeconds}s on channel "${channel.name}". '
         'Arguments: ${arguments.toString()}',
-        code: 'OPERATION_TIMEOUT',
+        code: ErrorCodes.operationTimeout.code,
         dartStackTrace: StackTrace.current,
       );
     } catch (e) {
@@ -231,7 +231,7 @@ class OperationManager {
         'Operation "$method" (ID: $operationId) failed on channel "${channel.name}". '
         'Arguments: ${arguments.toString()}. '
         'Error: ${e.toString()}',
-        code: 'OPERATION_ERROR',
+        code: ErrorCodes.operationError.code,
         dartStackTrace: StackTrace.current,
       );
     } finally {

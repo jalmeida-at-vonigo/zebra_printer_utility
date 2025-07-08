@@ -105,7 +105,7 @@ class PrinterReadinessManager {
       _logger.error('Error during printer preparation', e);
       return Result.error(
         'Printer preparation failed: $e',
-        code: 'OPERATION_ERROR',
+        code: ErrorCodes.operationError.code,
         dartStackTrace: stack,
       );
     }
@@ -172,7 +172,7 @@ class PrinterReadinessManager {
       diagnostics['errors'].add('Diagnostic error: $e');
       return Result.error(
         'Failed to run diagnostics: $e',
-        code: 'OPERATION_ERROR',
+        code: ErrorCodes.operationError.code,
         dartStackTrace: stack,
       );
     }

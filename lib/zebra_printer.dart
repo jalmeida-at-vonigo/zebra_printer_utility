@@ -83,7 +83,7 @@ class ZebraPrinter {
     _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
       final errorText = call.arguments?['ErrorText'] ?? 'Unknown error';
       if (onDiscoveryError != null) {
-        onDiscoveryError!('DISCOVERY_ERROR', errorText);
+        onDiscoveryError!(ErrorCodes.discoveryError.code, errorText);
       }
     });
     _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
@@ -114,7 +114,7 @@ class ZebraPrinter {
       _logger.error('Failed to start printer discovery', e);
       isScanning = false;
       if (onDiscoveryError != null) {
-        onDiscoveryError!('SCAN_ERROR', e.toString());
+        onDiscoveryError!(ErrorCodes.discoveryError.code, e.toString());
       }
     }
   }

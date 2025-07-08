@@ -129,6 +129,9 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       case PrintEventType.progressUpdate:
         _handleProgress(event.progressInfo!);
         break;
+      case PrintEventType.statusUpdate:
+        _handleStatusUpdate(event);
+        break;
       case PrintEventType.completed:
         _handleCompletion();
         break;
@@ -175,6 +178,11 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       _progress = progressInfo.progress;
       _currentStatus = progressInfo.currentOperation;
     });
+  }
+
+  void _handleStatusUpdate(PrintEvent event) {
+    // Handle status updates (printer status changes, etc.)
+    _addLog('Status', 'info', 'Status update: ${event.metadata}');
   }
 
   void _handleCompletion() {
