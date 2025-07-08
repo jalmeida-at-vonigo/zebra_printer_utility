@@ -126,8 +126,23 @@ final eventStream = manager.smartPrint(
 );
 eventStream.listen((event) {
   // Handle PrintEvent: step changes, errors, progress, completion
+  switch (event.type) {
+    case PrintEventType.realTimeStatusUpdate:
+      // NEW in 2.0.45: Enhanced real-time status updates
+      final metadata = event.metadata;
+      if (metadata['hasIssues'] == true) {
+        final issueDetails = metadata['issueDetails'] as List;
+        final canAutoResume = metadata['canAutoResume'] as bool;
+        // Handle issues with recovery hints
+      }
+      break;
+    // ... other event types
+  }
 });
 ```
+
+// NEW in 2.0.45:
+// Enhanced real-time status updates with comprehensive metadata including issue details, progress hints, and auto-resume capabilities. The SmartPrintManager now provides richer status information for better UI feedback and error recovery.
 
 // NEW in 2.0.44:
 // The smart print workflow now automatically detects the print data format (CPCL or ZPL), checks the printer's current language, sets the correct mode if needed, and only sends data after all checks pass. This ensures robust, error-free printing for all supported Zebra printers.
@@ -276,7 +291,45 @@ final eventStream = smartManager.smartPrint(
 );
 eventStream.listen((event) {
   // Handle PrintEvent
+  switch (event.type) {
+    case PrintEventType.stepChanged:
+      print('Step: ${event.stepInfo?.message}');
+      break;
+    case PrintEventType.errorOccurred:
+      print('Error: ${event.errorInfo?.message}');
+      break;
+    case PrintEventType.realTimeStatusUpdate:
+      // Enhanced status with metadata
+      final hasIssues = event.metadata['hasIssues'];
+      final progressHint = event.metadata['progressHint'];
+      final canAutoResume = event.metadata['canAutoResume'];
+      break;
+    case PrintEventType.completed:
+      print('Print completed successfully');
+      break;
+  }
 });
+```
+
+### Real-Time Status Updates (v2.0.45+)
+
+The `realTimeStatusUpdate` event provides enhanced printer status information:
+
+```dart
+// Event metadata includes:
+{
+  'status': Map<String, dynamic>,      // Full printer status
+  'isCompleted': bool,                 // Print completion status
+  'hasIssues': bool,                   // Whether issues detected
+  'canAutoResume': bool,               // If auto-recovery possible
+  'issueDetails': List<dynamic>,       // Detailed issue information
+  'progressHint': String?,             // Human-readable progress hint
+  'autoResumeAction': String?,         // Suggested recovery action
+  'progress': double,                  // Overall progress (0.0-1.0)
+  'currentStep': String,               // Current workflow step
+  'consecutiveErrors': int?,           // Error count for stability tracking
+  'enhancedMetadata': true,            // Indicates enhanced status
+}
 ```
 
 ### Debugging and Monitoring

@@ -1,9 +1,13 @@
 import 'models/print_enums.dart';
 
-/// SGD (Set Get Do) command builder for Zebra printers - UTILITY ONLY
+/// SGD (Set Get Do) command builder for Zebra printers
+/// 
+/// This class contains ONLY utility methods for:
+/// - Data format detection
+/// - Response parsing
+/// - Language matching
 ///
-/// This class provides utility methods for data format detection and response parsing.
-/// For command generation, use CommandFactory instead.
+/// For command strings, use CommandFactory instead.
 class ZebraSGDCommands {
   /// Check if data is ZPL format
   static bool isZPLData(String data) {

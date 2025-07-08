@@ -1,3 +1,5 @@
+import '../zebra_printer_manager.dart';
+
 import 'communication_policy_event.dart';
 
 /// Options for configuring communication policy behavior
@@ -8,6 +10,7 @@ class CommunicationPolicyOptions {
     this.maxAttempts,
     this.timeout,
     this.onEvent,
+    this.cancellationToken,
   });
 
   final bool? skipConnectionCheck;
@@ -15,6 +18,7 @@ class CommunicationPolicyOptions {
   final int? maxAttempts;
   final Duration? timeout;
   final void Function(CommunicationPolicyEvent event)? onEvent;
+  final CancellationToken? cancellationToken;
 
   /// Returns a new options object where non-null values from [overrides] replace those in this instance
   CommunicationPolicyOptions mergeWith(CommunicationPolicyOptions? overrides) {
@@ -25,6 +29,7 @@ class CommunicationPolicyOptions {
       maxAttempts: overrides.maxAttempts ?? maxAttempts,
       timeout: overrides.timeout ?? timeout,
       onEvent: overrides.onEvent ?? onEvent,
+      cancellationToken: overrides.cancellationToken ?? cancellationToken,
     );
   }
 } 

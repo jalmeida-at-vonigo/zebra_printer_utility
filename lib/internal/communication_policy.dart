@@ -4,6 +4,7 @@ import '../../models/communication_policy_event.dart';
 import '../../models/communication_policy_options.dart';
 import '../../models/result.dart';
 import '../../zebra_printer.dart';
+import '../../zebra_printer_manager.dart';
 import 'logger.dart';
 import 'zebra_error_bridge.dart';
 
@@ -104,6 +105,7 @@ class CommunicationPolicy {
         timeout: finalTimeout,
         skipConnectionCheck: effectiveOptions.skipConnectionCheck ?? false,
         onEvent: effectiveOptions.onEvent,
+          cancellationToken: effectiveOptions.cancellationToken,
       );
     }
     } finally {
@@ -175,10 +177,27 @@ class CommunicationPolicy {
     Duration? timeout,
     bool skipConnectionCheck = false,
     void Function(CommunicationPolicyEvent event)? onEvent,
+    CancellationToken? cancellationToken,
   }) async {
     int attempt = 1;
     final opTimeout = timeout ?? _operationTimeout;
     while (attempt <= maxAttempts) {
+      // Check for cancellation before each attempt
+      if (cancellationToken?.isCancelled == true) {
+        _logger.info(
+            '[$operationName] Operation cancelled before attempt $attempt');
+        onEvent?.call(CommunicationPolicyEvent(
+          type: CommunicationPolicyEventType.failed,
+          attempt: attempt,
+          maxAttempts: maxAttempts,
+          message: '$operationName cancelled by token',
+        ));
+        return ZebraErrorBridge.fromError<T>(
+          Exception('$operationName cancelled'),
+          stackTrace: StackTrace.current,
+        );
+      }
+
       onEvent?.call(CommunicationPolicyEvent(
         type: CommunicationPolicyEventType.attempt,
         attempt: attempt,
@@ -245,7 +264,24 @@ class CommunicationPolicy {
         ));
         _logger.error('[$operationName] Error on attempt $attempt: $e');
       }
+      
       if (attempt < maxAttempts) {
+        // Check for cancellation before retry delay
+        if (cancellationToken?.isCancelled == true) {
+          _logger
+              .info('[$operationName] Operation cancelled during retry delay');
+          onEvent?.call(CommunicationPolicyEvent(
+            type: CommunicationPolicyEventType.failed,
+            attempt: attempt,
+            maxAttempts: maxAttempts,
+            message: '$operationName cancelled during retry',
+          ));
+          return ZebraErrorBridge.fromError<T>(
+            Exception('$operationName cancelled during retry'),
+            stackTrace: StackTrace.current,
+          );
+        }
+
         onEvent?.call(CommunicationPolicyEvent(
           type: CommunicationPolicyEventType.retry,
           attempt: attempt,

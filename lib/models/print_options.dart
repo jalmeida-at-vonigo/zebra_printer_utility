@@ -1,3 +1,5 @@
+import '../zebra_printer_manager.dart';
+
 import 'print_enums.dart';
 import 'readiness_options.dart';
 
@@ -7,6 +9,7 @@ class PrintOptions {
     this.waitForPrintCompletion,
     this.readinessOptions,
     this.format,
+    this.cancellationToken,
   });
 
   /// Default print options with completion waiting enabled
@@ -37,6 +40,9 @@ class PrintOptions {
   /// Print format to use (null for auto-detection)
   final PrintFormat? format;
 
+  /// Cancellation token for aborting operations
+  final CancellationToken? cancellationToken;
+
   /// Gets waitForPrintCompletion with default value
 
   bool get waitForPrintCompletionOrDefault => waitForPrintCompletion ?? true;
@@ -55,6 +61,7 @@ class PrintOptions {
           other?.waitForPrintCompletion ?? waitForPrintCompletion,
       readinessOptions: other?.readinessOptions ?? readinessOptions,
       format: other?.format ?? format,
+      cancellationToken: other?.cancellationToken ?? cancellationToken,
     );
   }
 } 
