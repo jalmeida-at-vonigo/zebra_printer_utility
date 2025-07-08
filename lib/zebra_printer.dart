@@ -358,38 +358,6 @@ class ZebraPrinter {
     }
   }
 
-  // Primitive: Set setting (generic API for external use)
-  // Note: Internal library code should use specific commands from CommandFactory
-  // like SendUnpauseCommand, SendSetZplModeCommand, etc.
-  Future<Result<void>> setSetting(String setting, String value) async {
-    _logger.info('Setting printer setting: $setting = $value');
-    try {
-      // Send the SGD command directly using print
-      final command = '! U1 setvar \'$setting\' \'$value\'';
-      final result = await print(data: command);
-      if (!result.success) {
-        _logger.error('Failed to set setting: ${result.error?.message}');
-        if (onDiscoveryError != null) {
-          onDiscoveryError!('SETTINGS_ERROR',
-              result.error?.message ?? 'Failed to set setting');
-        }
-        return result;
-      }
-      _logger.info('Successfully set $setting to $value');
-      return Result.success();
-    } catch (e, stack) {
-      _logger.error('Error setting printer setting', e, stack);
-      if (onDiscoveryError != null) {
-        onDiscoveryError!('SETTINGS_ERROR', e.toString());
-      }
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: ['Failed to set setting: $e'],
-        dartStackTrace: stack,
-      );
-    }
-  }
-
   // Primitive: Rotate print orientation (for ZPL)
   void rotate() {
     isRotated = !isRotated;

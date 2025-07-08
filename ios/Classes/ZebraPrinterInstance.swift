@@ -229,7 +229,7 @@ class ZebraPrinterInstance: NSObject {
         LogUtil.warn("Network framework not available")
         #endif
     }
-    
+
 #if canImport(Network)
     @available(iOS 13.0, *)
     private func handleNetworkResults(_ results: Set<NWBrowser.Result>) {

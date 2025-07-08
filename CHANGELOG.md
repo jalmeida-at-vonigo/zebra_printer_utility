@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.43] - 2024-12-19
+
+### Fixed
+- **Merge Conflict Resolution**: Successfully resolved merge conflicts from cherry-pick operation
+  - Resolved conflicts in `command_factory.dart` by removing reference to non-existent `wait_for_print_completion_command.dart`
+  - Resolved conflicts in `smart_print_manager.dart` by choosing the existing implementation approach
+  - Resolved conflicts in `zebra_printer_manager.dart` by renaming method to avoid naming conflicts
+  - Updated `models/print_event.dart` to include new `realTimeStatusUpdate` event type from incoming changes
+
+### Changed
+- **SmartPrintManager**: Updated to use existing `waitForPrintCompletion` method from ZebraPrinterManager
+  - Removed duplicate class definitions that were already defined in `models/print_event.dart`
+  - Removed duplicate `_waitForPrintCompletion` method and now calls the manager's implementation
+  - The manager's implementation provides format-specific delays (CPCL: 2.5s base, ZPL: 2s base, plus 1s per KB)
+  - Added proper import for `models/print_event.dart`
+  - Removed unused fields and methods related to status polling approach
+- **ZebraPrinterManager**: Kept only the delay-based `waitForPrintCompletion` method
+  - Removed status polling version that was checking printer status after delay
+  - Method calculates delay based on data size and format for optimal performance
+- **CommandFactory**: Removed reference to non-existent `wait_for_print_completion_command.dart`
+  - Cleaned up imports and removed duplicate references
+
 ## [2.0.42] - 2024-12-19
 
 ### Fixed

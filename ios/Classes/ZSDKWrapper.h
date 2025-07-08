@@ -31,7 +31,7 @@
 #pragma mark - Printer Status Detection
 
 + (NSDictionary *)getPrinterStatus:(id)connection;
-+ (BOOL)waitForPrintCompletion:(id)connection timeout:(NSInteger)timeoutSeconds;
+
 + (NSDictionary *)getDetailedPrinterStatus:(id)connection;
 
 #pragma mark - Settings

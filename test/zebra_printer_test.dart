@@ -182,11 +182,6 @@ void main() {
         expect(result, isA<Result<void>>());
       });
 
-      test('setSetting returns result', () async {
-        final result = await printer.setSetting('device.pause', 'false');
-        expect(result, isA<Result<void>>());
-      });
-
       test('getPrinterStatus returns result', () async {
         final result = await printer.getPrinterStatus();
         expect(result, isA<Result<Map<String, dynamic>>>());

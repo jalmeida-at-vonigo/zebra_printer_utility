@@ -10,6 +10,7 @@ enum PrintEventType {
   statusUpdate,
   completed,
   cancelled,
+  realTimeStatusUpdate, // New event type for real-time status updates
 }
 
 /// Print steps in the workflow

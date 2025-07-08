@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/services.dart';
+
 import 'internal/commands/command_factory.dart';
 import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
@@ -443,7 +445,7 @@ class ZebraPrinterManager {
     }
   }
 
-  /// Wait for print completion with format-specific delays and verification
+  /// Wait for print completion with format-specific delays
   Future<Result<bool>> waitForPrintCompletion(
       String data, PrintFormat? format) async {
     try {

@@ -35,8 +35,6 @@ class SmartPrintManager {
   PrintStep _currentStep = PrintStep.initializing;
   int _currentAttempt = 1;
   int _maxAttempts = 3;
-  String? _lastPrintData;
-  PrintFormat? _lastPrintFormat;
   
   // Synchronization lock for thread safety
   bool _isRunning = false;
@@ -76,8 +74,6 @@ class SmartPrintManager {
     _currentAttempt = 1;
     _maxAttempts = maxAttempts;
     _startTime = DateTime.now();
-    _lastPrintData = null;
-    _lastPrintFormat = null;
     
     // Create new event controller for this print operation
     await _eventController?.close();
@@ -239,7 +235,10 @@ class SmartPrintManager {
       
       // Step 6: Wait for completion (if enabled)
       if (waitForCompletion) {
-        final completionResult = await _waitForPrintCompletion();
+        await _updateStep(
+            PrintStep.waitingForCompletion, 'Waiting for print completion');
+        final completionResult =
+            await _printerManager.waitForPrintCompletion(data, detectedFormat);
         if (!completionResult.success) {
           _eventController?.add(PrintEvent(
             type: PrintEventType.errorOccurred,
@@ -389,9 +388,6 @@ class SmartPrintManager {
     return await _printerManager.communicationPolicy!.execute(
       () async {
         // Track the data and format for completion logic
-        _lastPrintData = data;
-        _lastPrintFormat = format;
-
         // Use simple print options since readiness is already handled
         final printOptions = PrintOptions.withoutCompletion().copyWith(
           format: format,
@@ -438,44 +434,6 @@ class SmartPrintManager {
         },
       ),
     );
-  }
-
-  /// Wait for print completion using the manager's sophisticated logic
-  Future<Result<void>> _waitForPrintCompletion() async {
-    await _updateStep(
-        PrintStep.waitingForCompletion, 'Waiting for print completion');
-
-    try {
-      // Use the manager's sophisticated completion logic with format-specific delays
-      // This provides better accuracy than a simple 3-second delay
-      final completionResult = await _printerManager.waitForPrintCompletion(
-        _lastPrintData ?? '', // We need to track the last print data
-        _lastPrintFormat, // We need to track the last print format
-      );
-
-      if (!completionResult.success) {
-        return Result.errorCode(
-          ErrorCodes.printError,
-          formatArgs: [completionResult.error?.message ?? 'Completion failed'],
-        );
-      }
-
-      final success = completionResult.data ?? false;
-      if (!success) {
-        return Result.errorCode(
-          ErrorCodes.printError,
-          formatArgs: ['Print completion failed - hardware issues detected'],
-        );
-      }
-
-      return Result.success();
-    } catch (e, stack) {
-      return Result.errorCode(
-        ErrorCodes.printError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
-      );
-    }
   }
 
   /// Update current step and emit event

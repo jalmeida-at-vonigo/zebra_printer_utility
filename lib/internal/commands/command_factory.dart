@@ -152,6 +152,7 @@ class CommandFactory {
     ZebraPrinter printer,
   ) =>
       GetPrinterStatusCommand(printer);
+
   /// Creates a GetDetailedPrinterStatusCommand for getting detailed printer status with recommendations
   static GetDetailedPrinterStatusCommand createGetDetailedPrinterStatusCommand(
     ZebraPrinter printer,
