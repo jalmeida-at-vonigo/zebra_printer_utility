@@ -1,31 +1,14 @@
 import 'package:zebrautil/models/print_enums.dart';
 
 /// SGD (Set Get Do) command builder for Zebra printers
+/// 
+/// This class contains ONLY utility methods for:
+/// - Data format detection
+/// - Response parsing
+/// - Language matching
+///
+/// For command strings, use CommandFactory instead.
 class ZebraSGDCommands {
-  /// Get a printer setting value
-  static String getCommand(String setting) {
-    return '! U1 getvar "$setting"\r\n';
-  }
-
-  /// Set a printer setting value
-  static String setCommand(String setting, String value) {
-    return '! U1 setvar "$setting" "$value"\r\n';
-  }
-
-  /// Execute a printer action
-  static String doCommand(String action, String value) {
-    return '! U1 do "$action" "$value"\r\n';
-  }
-
-  /// Set printer to ZPL mode
-  static String setZPLMode() => setCommand('device.languages', 'zpl');
-
-  /// Set printer to CPCL/Line Print mode
-  static String setCPCLMode() => setCommand('device.languages', 'line_print');
-
-  /// Reset the printer
-  static String resetPrinter() => doCommand('device.reset', '');
-
   /// Check if data is ZPL format
   static bool isZPLData(String data) {
     final trimmed = data.trim();
@@ -77,22 +60,4 @@ class ZebraSGDCommands {
 
     return false;
   }
-
-  /// Unpause/resume commands
-  static String unpausePrinter() => setCommand('device.pause', '0');
-  
-  /// Resume printer - language agnostic using SGD
-  static String resumePrinter() => doCommand('device.reset', '');
-
-  /// Clear errors - using SGD commands instead of ZPL
-  static String clearAlerts() => setCommand('alerts.clear', 'ALL');
-
-  /// CPCL-specific commands
-  static String cpclClearBuffer() =>
-      '\x18'; // CAN character for CPCL buffer clearing
-  static String cpclFlushBuffer() =>
-      '\x03'; // ETX character for CPCL buffer flushing
-  static String cpclClearErrors() => setCommand('alerts.clear', 'ALL');
-
-
 }

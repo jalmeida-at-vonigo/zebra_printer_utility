@@ -76,62 +76,66 @@ class CommandFactory {
     ZebraPrinter printer,
   ) => SendUnpauseCommand(printer);
   
-  /// Creates a SendClearErrorsCommand for clearing printer errors (generic)
-  static SendClearErrorsCommand createSendClearErrorsCommand(
-    ZebraPrinter printer,
-  ) => SendClearErrorsCommand(printer);
-
-  /// Creates a SendZplClearErrorsCommand for clearing printer errors (ZPL-specific)
-  static SendZplClearErrorsCommand createSendZplClearErrorsCommand(
+  /// Creates a SendClearBufferCommand for clearing printer buffer
+  static SendGenericClearBufferCommand createSendClearBufferCommand(
     ZebraPrinter printer,
   ) =>
-      SendZplClearErrorsCommand(printer);
+      SendGenericClearBufferCommand(printer);
 
-  /// Creates a SendCpclClearErrorsCommand for clearing printer errors (CPCL-specific)
-  static SendCpclClearErrorsCommand createSendCpclClearErrorsCommand(
-    ZebraPrinter printer,
-  ) =>
-      SendCpclClearErrorsCommand(printer);
-  
-  /// Creates a SendCalibrationCommand for calibrating the printer
-  static SendCalibrationCommand createSendCalibrationCommand(
-    ZebraPrinter printer,
-  ) => SendCalibrationCommand(printer);
-  
-  /// Creates a SendClearBufferCommand for clearing the print buffer (generic)
-  static SendClearBufferCommand createSendClearBufferCommand(
-    ZebraPrinter printer,
-  ) => SendClearBufferCommand(printer);
-  
-  /// Creates a SendZplClearBufferCommand for clearing the print buffer (ZPL-specific)
+  /// Creates a SendZplClearBufferCommand for clearing ZPL printer buffer
   static SendZplClearBufferCommand createSendZplClearBufferCommand(
     ZebraPrinter printer,
   ) =>
       SendZplClearBufferCommand(printer);
 
-  /// Creates a SendCpclClearBufferCommand for clearing the print buffer (CPCL-specific)
+  /// Creates a SendCpclClearBufferCommand for clearing CPCL printer buffer
   static SendCpclClearBufferCommand createSendCpclClearBufferCommand(
     ZebraPrinter printer,
   ) =>
       SendCpclClearBufferCommand(printer);
 
-  /// Creates a SendFlushBufferCommand for flushing the print buffer (generic)
-  static SendFlushBufferCommand createSendFlushBufferCommand(
+  /// Creates a SendClearErrorsCommand for clearing printer errors (generic)
+  static SendGenericClearErrorsCommand createSendClearErrorsCommand(
     ZebraPrinter printer,
-  ) => SendFlushBufferCommand(printer);
-  
-  /// Creates a SendZplFlushBufferCommand for flushing the print buffer (ZPL-specific)
+  ) =>
+      SendGenericClearErrorsCommand(printer);
+
+  /// Creates a SendZplClearErrorsCommand for clearing ZPL printer errors
+  static SendZplClearErrorsCommand createSendZplClearErrorsCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendZplClearErrorsCommand(printer);
+
+  /// Creates a SendCpclClearErrorsCommand for clearing CPCL printer errors
+  static SendCpclClearErrorsCommand createSendCpclClearErrorsCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendCpclClearErrorsCommand(printer);
+
+  /// Creates a SendFlushBufferCommand for flushing printer buffer
+  static SendGenericFlushBufferCommand createSendFlushBufferCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendGenericFlushBufferCommand(printer);
+
+  /// Creates a SendZplFlushBufferCommand for flushing ZPL printer buffer
   static SendZplFlushBufferCommand createSendZplFlushBufferCommand(
     ZebraPrinter printer,
   ) =>
       SendZplFlushBufferCommand(printer);
 
-  /// Creates a SendCpclFlushBufferCommand for flushing the print buffer (CPCL-specific)
+  /// Creates a SendCpclFlushBufferCommand for flushing CPCL printer buffer
   static SendCpclFlushBufferCommand createSendCpclFlushBufferCommand(
     ZebraPrinter printer,
   ) =>
       SendCpclFlushBufferCommand(printer);
-
+  
+  /// Creates a SendCalibrationCommand for calibrating the printer
+  static SendCalibrationCommand createSendCalibrationCommand(
+    ZebraPrinter printer,
+  ) =>
+      SendCalibrationCommand(printer);
+  
   /// Creates a SendSetZplModeCommand for setting printer to ZPL mode
   static SendSetZplModeCommand createSendSetZplModeCommand(
     ZebraPrinter printer,
@@ -176,7 +180,8 @@ class CommandFactory {
 
   /// Creates a SmartPrinterStatusWorkflow for comprehensive status analysis
   static SmartPrinterStatusWorkflow createSmartPrinterStatusWorkflow(
-    ZebraPrinter printer,
-  ) =>
-      SmartPrinterStatusWorkflow(printer);
+    ZebraPrinter printer, {
+    String? printData,
+  }) =>
+      SmartPrinterStatusWorkflow(printer, printData: printData);
 } 

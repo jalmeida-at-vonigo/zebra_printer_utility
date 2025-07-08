@@ -116,21 +116,46 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handlePrintEvent(PrintEvent event) {
+    // Update UI based on the simple status
+    setState(() {
+      _currentStatus = event.status.displayName;
+      if (event.message != null) {
+        _currentStatus += ': ${event.message}';
+      }
+
+      // Update progress based on status
+      switch (event.status) {
+        case PrintStatus.connecting:
+          _progress = 0.25;
+          break;
+        case PrintStatus.configuring:
+          _progress = 0.5;
+          break;
+        case PrintStatus.printing:
+          _progress = 0.75;
+          break;
+        case PrintStatus.done:
+          _progress = 1.0;
+          _isPrinting = false;
+          break;
+        case PrintStatus.failed:
+        case PrintStatus.cancelled:
+          _progress = 0.0;
+          _isPrinting = false;
+          break;
+      }
+    });
+
+    // Handle specific event types for logging
     switch (event.type) {
       case PrintEventType.stepChanged:
-        _handleStepChange(event.stepInfo!);
+        _handleStepChange(event);
         break;
       case PrintEventType.errorOccurred:
         _handleError(event.errorInfo!);
         break;
       case PrintEventType.retryAttempt:
-        _handleRetry(event.stepInfo!);
-        break;
-      case PrintEventType.progressUpdate:
-        _handleProgress(event.progressInfo!);
-        break;
-      case PrintEventType.statusUpdate:
-        _handleStatusUpdate(event);
+        _handleRetry(event);
         break;
       case PrintEventType.realTimeStatusUpdate:
         _handleRealTimeStatusUpdate(event);
@@ -141,21 +166,15 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       case PrintEventType.cancelled:
         _handleCancellation();
         break;
+      default:
+        // Handle other event types
+        break;
     }
   }
 
-  void _handleStepChange(PrintStepInfo stepInfo) {
-    setState(() {
-      _currentStatus = stepInfo.message;
-      _progress = stepInfo.progress;
-    });
-
-    _addLog('Step', 'info', '${stepInfo.step.name}: ${stepInfo.message}');
-
-    if (stepInfo.isRetry) {
-      _addLog('Retry', 'warning',
-          'Retry ${stepInfo.retryCount} of ${stepInfo.maxAttempts - 1}');
-    }
+  void _handleStepChange(PrintEvent event) {
+    _addLog(
+        'Step', 'info', '${event.status.displayName}: ${event.message ?? ''}');
   }
 
   void _handleError(PrintErrorInfo errorInfo) {
@@ -172,21 +191,11 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
     }
   }
 
-  void _handleRetry(PrintStepInfo stepInfo) {
-    _addLog('Retry', 'warning', 'Retry attempt ${stepInfo.retryCount}');
+  void _handleRetry(PrintEvent event) {
+    _addLog('Retry', 'warning', event.message ?? 'Retry attempt');
   }
 
-  void _handleProgress(PrintProgressInfo progressInfo) {
-    setState(() {
-      _progress = progressInfo.progress;
-      _currentStatus = progressInfo.currentOperation;
-    });
-  }
 
-  void _handleStatusUpdate(PrintEvent event) {
-    // Handle status updates (printer status changes, etc.)
-    _addLog('Status', 'info', 'Status update: ${event.metadata}');
-  }
 
   void _handleRealTimeStatusUpdate(PrintEvent event) {
     // Handle real-time status updates from printer polling

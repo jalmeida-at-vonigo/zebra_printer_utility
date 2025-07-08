@@ -5,6 +5,7 @@ import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
 import 'internal/logger.dart';
 import 'internal/commands/command_factory.dart';
+import 'internal/commands/printer_command.dart';
 import 'models/print_enums.dart';
 import 'zebra_sgd_commands.dart';
 
@@ -41,56 +42,7 @@ enum PrintEventType {
   realTimeStatusUpdate, // New event type for real-time status updates
 }
 
-/// Print step information
-class PrintStepInfo {
-  final PrintStep step;
-  final String message;
-  final int attempt;
-  final int maxAttempts;
-  final Duration elapsed;
-  final Map<String, dynamic> metadata;
-  final bool isCompleted;
 
-  const PrintStepInfo({
-    required this.step,
-    required this.message,
-    required this.attempt,
-    required this.maxAttempts,
-    required this.elapsed,
-    this.metadata = const {},
-    this.isCompleted = false,
-  });
-
-  bool get isRetry => attempt > 1;
-  int get retryCount => attempt > 1 ? attempt - 1 : 0;
-  bool get isFinalAttempt => attempt >= maxAttempts;
-  double get progress {
-    switch (step) {
-      case PrintStep.initializing:
-        return 0.0;
-      case PrintStep.validating:
-        return 0.1;
-      case PrintStep.connecting:
-        return 0.2;
-      case PrintStep.connected:
-        return 0.3;
-      case PrintStep.checkingStatus:
-        return 0.4;
-      case PrintStep.sending:
-        return 0.6;
-      case PrintStep.waitingForCompletion:
-        return 0.8;
-      case PrintStep.completed:
-        return 1.0;
-      case PrintStep.failed:
-      case PrintStep.cancelled:
-        return 0.0;
-    }
-  }
-  
-  @override
-  String toString() => 'PrintStepInfo($step: $message, attempt $attempt/$maxAttempts)';
-}
 
 /// Print error information
 class PrintErrorInfo {
@@ -116,46 +68,28 @@ class PrintErrorInfo {
   String toString() => 'PrintErrorInfo($recoverability: $message)';
 }
 
-/// Print progress information
-class PrintProgressInfo {
-  final double progress;
-  final String currentOperation;
-  final Duration elapsed;
-  final Duration estimatedRemaining;
-  final Map<String, dynamic> metadata;
 
-  const PrintProgressInfo({
-    required this.progress,
-    required this.currentOperation,
-    required this.elapsed,
-    required this.estimatedRemaining,
-    this.metadata = const {},
-  });
-  
-  @override
-  String toString() => 'PrintProgressInfo($progress: $currentOperation)';
-}
 
 /// Print event
 class PrintEvent {
   final PrintEventType type;
   final DateTime timestamp;
-  final PrintStepInfo? stepInfo;
+  final PrintStatus status; // Simple status for UI
+  final String? message; // Optional message for additional context
   final PrintErrorInfo? errorInfo;
-  final PrintProgressInfo? progressInfo;
   final Map<String, dynamic> metadata;
 
   const PrintEvent({
     required this.type,
     required this.timestamp,
-    this.stepInfo,
+    required this.status,
+    this.message,
     this.errorInfo,
-    this.progressInfo,
     this.metadata = const {},
   });
   
   @override
-  String toString() => 'PrintEvent($type at $timestamp)';
+  String toString() => 'PrintEvent($type: $status at $timestamp)';
 }
 
 /// Smart print manager for handling complex print workflows
@@ -169,7 +103,6 @@ class SmartPrintManager {
   PrintStep _currentStep = PrintStep.initializing;
   int _currentAttempt = 1;
   int _maxAttempts = 3;
-  DateTime? _startTime;
   bool _isCancelled = false;
   
   // Enhanced state tracking
@@ -177,7 +110,16 @@ class SmartPrintManager {
   Map<String, dynamic>? _lastPrinterStatus;
   Timer? _statusCheckTimer;
   Timer? _timeoutTimer;
-  
+  String? _currentPrintData; // Store current print data for status checks
+
+  // UI state tracking
+  PrintErrorInfo? _currentError;
+  String? _currentMessage;
+  List<String> _currentIssues = [];
+  bool _canAutoResumeState = false;
+  String? _autoResumeAction;
+  bool _isWaitingForUserFix = false;
+
   SmartPrintManager(this._printerManager);
 
   /// Get the event stream for monitoring print progress
@@ -199,9 +141,17 @@ class SmartPrintManager {
     _logger.info('Starting smart print operation');
     _maxAttempts = maxAttempts;
     _currentAttempt = 1;
-    _startTime = DateTime.now();
     _isCancelled = false;
     _isConnected = false;
+    _currentPrintData = data; // Store print data for status checks
+
+    // Clear previous state
+    _currentError = null;
+    _currentMessage = null;
+    _currentIssues.clear();
+    _canAutoResumeState = false;
+    _autoResumeAction = null;
+    _isWaitingForUserFix = false;
     
     _eventController = StreamController<PrintEvent>.broadcast();
     
@@ -239,13 +189,31 @@ class SmartPrintManager {
       }
       _logger.info('Detected print format: $format');
 
-      // Step 3: Connect to printer
+      // Step 3: Connect to printer FIRST
       final connectResult = await _connectToPrinter(device);
       if (!connectResult.success) {
         return connectResult;
       }
+
+      // Step 4: Verify and set printer language mode (now that we're connected)
+      await _updateStep(
+          PrintStep.checkingStatus, 'Configuring printer settings...');
+      final languageModeResult = await _verifyAndSetPrinterLanguageMode(format);
+      if (!languageModeResult.success) {
+        return languageModeResult;
+      }
+
+      // Step 5: Perform language-specific status checks (now that language is set)
+      await _updateStep(PrintStep.checkingStatus, 'Checking printer status...');
+      final languageSpecificResult =
+          await _performLanguageSpecificStatusChecks(format);
+      if (!languageSpecificResult.success) {
+        _logger.warning(
+            'Language-specific status checks failed: ${languageSpecificResult.error?.message}');
+        // Continue anyway as this is not critical
+      }
       
-      // Step 4: Check printer status (if enabled)
+      // Step 6: Check printer status (if enabled)
       if (checkStatusBeforePrint) {
         final statusResult = await _checkPrinterStatus();
         if (!statusResult.success) {
@@ -253,52 +221,13 @@ class SmartPrintManager {
         }
       }
 
-      // Step 4.5: Check the printer's current language/mode
-      final printer = _printerManager.printer;
-      if (printer == null) {
-        return Result.errorCode(
-          ErrorCodes.statusCheckFailed,
-          formatArgs: ['No printer instance available'],
-        );
-      }
-      final languageResult = await CommandFactory.createGetPrinterLanguageCommand(printer).execute();
-      if (!languageResult.success || languageResult.data == null) {
-        return Result.errorCode(
-          ErrorCodes.statusCheckFailed,
-          formatArgs: ['Failed to get printer language'],
-        );
-      }
-      final currentLanguage = languageResult.data!.toLowerCase();
-      _logger.info('Printer current language: $currentLanguage');
-
-      // Step 4.6: If the printer's language does not match the data format, set the printer to the correct mode
-      String expectedLanguage = format == PrintFormat.zpl ? 'zpl' : 'cpcl';
-      if ((expectedLanguage == 'zpl' && !currentLanguage.contains('zpl')) ||
-          (expectedLanguage == 'cpcl' && !currentLanguage.contains('cpcl') && !currentLanguage.contains('line_print'))) {
-        _logger.info('Setting printer language to $expectedLanguage');
-        Result<void> setLangResult;
-        if (expectedLanguage == 'zpl') {
-          setLangResult = await CommandFactory.createSendSetZplModeCommand(printer).execute();
-        } else {
-          setLangResult = await CommandFactory.createSendSetCpclModeCommand(printer).execute();
-        }
-        if (!setLangResult.success) {
-          return Result.errorCode(
-            ErrorCodes.statusCheckFailed,
-            formatArgs: ['Failed to set printer language to $expectedLanguage'],
-          );
-        }
-        // Give the printer a moment to switch modes
-        await Future.delayed(const Duration(seconds: 1));
-      }
-
-      // Step 5: Send print data
+      // Step 7: Send print data
       final printResult = await _sendPrintData(data, timeout);
       if (!printResult.success) {
         return printResult;
       }
       
-      // Step 6: Wait for completion (if enabled)
+      // Step 8: Wait for completion (if enabled)
       if (waitForCompletion) {
         final completionResult = await _waitForPrintCompletion();
         if (!completionResult.success) {
@@ -306,12 +235,17 @@ class SmartPrintManager {
         }
       }
 
-      // Step 7: Complete
+      // Step 9: Complete with artificial delay for better UX
       await _updateStep(PrintStep.completed, 'Print operation completed successfully');
+      _currentError = null; // Clear any previous errors
+      
+      // Add 1-second delay for better UX
+      await Future.delayed(const Duration(seconds: 1));
+      
       _eventController?.add(PrintEvent(
         type: PrintEventType.completed,
         timestamp: DateTime.now(),
-        stepInfo: _createStepInfo(PrintStep.completed, 'Print operation completed'),
+        status: PrintStatus.done,
       ));
       
       return Result.success();
@@ -342,7 +276,7 @@ class SmartPrintManager {
     _eventController?.add(PrintEvent(
       type: PrintEventType.cancelled,
       timestamp: DateTime.now(),
-      stepInfo: _createStepInfo(PrintStep.cancelled, 'Print operation cancelled'),
+      status: PrintStatus.cancelled,
     ));
   }
 
@@ -411,14 +345,22 @@ class SmartPrintManager {
   Future<Result<void>> _connectToPrinter(ZebraDevice? device) async {
     while (_currentAttempt <= _maxAttempts && !_isCancelled) {
       // Start connection with progress indicator
-      await _updateStep(PrintStep.connecting, 'Connecting to printer (attempt $_currentAttempt/$_maxAttempts)');
+      String connectionMessage = 'Connecting to printer';
+      if (_currentAttempt > 1) {
+        // Only show retry info on second attempt and beyond
+        final retryCount = _currentAttempt - 1;
+        final maxRetries = _maxAttempts - 1;
+        connectionMessage =
+            'Connecting to printer (Retry $retryCount/$maxRetries)';
+      }
+
+      await _updateStep(PrintStep.connecting, connectionMessage);
       
       // Emit progress event for UI animation
       _eventController?.add(PrintEvent(
         type: PrintEventType.stepChanged,
         timestamp: DateTime.now(),
-        stepInfo: _createStepInfo(PrintStep.connecting,
-            'Connecting to printer (attempt $_currentAttempt/$_maxAttempts)'),
+        status: PrintStatus.connecting,
       ));
       
       try {
@@ -442,17 +384,14 @@ class SmartPrintManager {
           _eventController?.add(PrintEvent(
             type: PrintEventType.progressUpdate,
             timestamp: DateTime.now(),
-            stepInfo: _createStepInfo(
-                PrintStep.connecting, 'Connection completed',
-                isCompleted: true),
+            status: PrintStatus.configuring,
           ));
 
           // Emit the connected step
           _eventController?.add(PrintEvent(
             type: PrintEventType.stepChanged,
             timestamp: DateTime.now(),
-            stepInfo: _createStepInfo(
-                PrintStep.connected, 'Successfully connected to printer'),
+            status: PrintStatus.configuring,
           ));
           
           return Result.success();
@@ -490,7 +429,8 @@ class SmartPrintManager {
     _eventController?.add(PrintEvent(
       type: PrintEventType.stepChanged,
       timestamp: DateTime.now(),
-      stepInfo: _createStepInfo(PrintStep.connecting, message),
+      status: PrintStatus.connecting,
+      message: message,
     ));
   }
 
@@ -528,8 +468,10 @@ class SmartPrintManager {
         );
       }
       final statusResult =
-          await CommandFactory.createSmartPrinterStatusWorkflow(printer)
-              .execute();
+          await CommandFactory.createSmartPrinterStatusWorkflow(
+        printer,
+        printData: _currentPrintData, // Pass print data for language detection
+      ).execute();
       if (statusResult.success) {
         _lastPrinterStatus = statusResult.data;
 
@@ -574,7 +516,7 @@ class SmartPrintManager {
         }
 
         await _updateStep(
-            PrintStep.checkingStatus, 'Printer is ready to print');
+            PrintStep.checkingStatus, 'Printer ready');
         return Result.success();
       } else {
         // Use the specific error code from the result
@@ -604,7 +546,15 @@ class SmartPrintManager {
   /// Send print data with retry logic
   Future<Result<void>> _sendPrintData(String data, Duration timeout) async {
     while (_currentAttempt <= _maxAttempts && !_isCancelled) {
-      await _updateStep(PrintStep.sending, 'Sending print data (attempt $_currentAttempt/$_maxAttempts)');
+      String sendingMessage = 'Sending print data';
+      if (_currentAttempt > 1) {
+        // Only show retry info on second attempt and beyond
+        final retryCount = _currentAttempt - 1;
+        final maxRetries = _maxAttempts - 1;
+        sendingMessage = 'Sending print data (Retry $retryCount/$maxRetries)';
+      }
+
+      await _updateStep(PrintStep.sending, sendingMessage);
       
       try {
         final result = await _printerManager.print(data);
@@ -666,67 +616,86 @@ class SmartPrintManager {
         PrintStep.waitingForCompletion, 'Waiting for print completion');
 
     try {
-      // Use the new status polling approach for better UX
+      // Simple status polling for completion
       bool isCompleted = false;
       bool hasAutoResumed = false;
+      final startTime = DateTime.now();
+      const timeout = Duration(seconds: 30);
+      const interval = Duration(milliseconds: 500);
 
-      await for (final status in _printerManager.startStatusPolling(
-        interval: const Duration(milliseconds: 500),
-        timeout: const Duration(seconds: 30),
-      )) {
+      while (!isCompleted && DateTime.now().difference(startTime) < timeout) {
         if (_isCancelled) {
           return Result.errorCode(ErrorCodes.operationCancelled);
         }
 
-        // Emit real-time status update event
-        _emitStatusUpdate(status);
+        try {
+          final statusResult = await _printerManager.getPrinterStatus();
+          if (statusResult.success && statusResult.data != null) {
+            final status = statusResult.data!;
+            
+            // Emit real-time status update event
+            _emitStatusUpdate(status);
 
-        // Check for completion
-        if (status['isCompleted'] == true) {
-          isCompleted = true;
-          break;
-        }
+            // Check for completion
+            final isReadyToPrint = status['isReadyToPrint'] == true;
+            final isPartialFormatInProgress =
+                status['isPartialFormatInProgress'] == true;
+            final hasBlockingIssues = _hasPrintIssues(status);
 
-        // Check for auto-resume opportunities
-        if (status['canAutoResume'] == true && !hasAutoResumed) {
-          _logger.info('Auto-resuming paused printer');
-          await _updateStep(
-              PrintStep.waitingForCompletion, 'Auto-resuming printer...');
+            if (isReadyToPrint &&
+                !isPartialFormatInProgress &&
+                !hasBlockingIssues) {
+              isCompleted = true;
+              break;
+            }
 
-          final resumeResult = await _printerManager.autoResumePrinter();
-          if (resumeResult.success) {
-            hasAutoResumed = true;
-            await _updateStep(PrintStep.waitingForCompletion,
-                'Printer resumed, waiting for completion...');
+            // Check for auto-resume opportunities
+            if (_canAutoResumeState && !hasAutoResumed) {
+              _logger.info('Auto-resuming paused printer');
+              await _updateStep(
+                  PrintStep.waitingForCompletion, 'Auto-resuming printer...');
+
+              final resumeResult = await _printerManager.autoResumePrinter();
+              if (resumeResult.success) {
+                hasAutoResumed = true;
+                await _updateStep(PrintStep.waitingForCompletion,
+                    'Printer resumed, waiting for completion...');
+              }
+            }
+
+            // Check for blocking issues
+            if (_hasPrintIssues(status)) {
+              final issues = <String>[];
+              if (status['isHeadOpen'] == true) issues.add('head open');
+              if (status['isPaperOut'] == true) issues.add('out of paper');
+              if (status['isRibbonOut'] == true) issues.add('ribbon error');
+              if (status['isHeadCold'] == true) issues.add('head cold');
+              if (status['isHeadTooHot'] == true) issues.add('head too hot');
+
+              if (issues.isNotEmpty) {
+                await _updateStep(PrintStep.waitingForCompletion,
+                    'Waiting for user to fix: ${issues.join(', ')}');
+              }
+            }
+
+            // Update status message based on current state
+            if (status['isPaused'] == true) {
+              await _updateStep(PrintStep.waitingForCompletion,
+                  'Printer paused, waiting for resume...');
+            } else if (status['isPartialFormatInProgress'] == true) {
+              await _updateStep(
+                  PrintStep.waitingForCompletion, 'Printing in progress...');
+            } else {
+              await _updateStep(PrintStep.waitingForCompletion,
+                  'Waiting for print completion...');
+            }
           }
+        } catch (e) {
+          _logger.error('Error during status polling', e);
         }
 
-        // Check for blocking issues
-        if (status['hasIssues'] == true) {
-          final issues = <String>[];
-          if (status['isHeadOpen'] == true) issues.add('head open');
-          if (status['isPaperOut'] == true) issues.add('out of paper');
-          if (status['isRibbonOut'] == true) issues.add('ribbon error');
-          if (status['isHeadCold'] == true) issues.add('head cold');
-          if (status['isHeadTooHot'] == true) issues.add('head too hot');
-
-          if (issues.isNotEmpty) {
-            await _updateStep(PrintStep.waitingForCompletion,
-                'Waiting for user to fix: ${issues.join(', ')}');
-          }
-        }
-
-        // Update status message based on current state
-        if (status['isPaused'] == true) {
-          await _updateStep(PrintStep.waitingForCompletion,
-              'Printer paused, waiting for resume...');
-        } else if (status['isPartialFormatInProgress'] == true) {
-          await _updateStep(
-              PrintStep.waitingForCompletion, 'Printing in progress...');
-        } else {
-          await _updateStep(PrintStep.waitingForCompletion,
-              'Waiting for print completion...');
-        }
+        // Wait before next poll
+        await Future.delayed(interval);
       }
 
       if (isCompleted) {
@@ -749,16 +718,23 @@ class SmartPrintManager {
 
   /// Emit real-time status update event
   void _emitStatusUpdate(Map<String, dynamic> status) {
+    // Update internal state
+    _currentIssues = _extractIssues(status);
+    _canAutoResumeState = _canAutoResume(status);
+    _autoResumeAction = _getAutoResumeAction(status);
+    _isWaitingForUserFix = _currentIssues.isNotEmpty;
+    
     _eventController?.add(PrintEvent(
       type: PrintEventType.realTimeStatusUpdate,
       timestamp: DateTime.now(),
+      status: PrintStatus.printing,
       metadata: {
         'status': status,
         'isCompleted': status['isCompleted'] ?? false,
         'hasIssues': status['hasIssues'] ?? false,
-        'canAutoResume': status['canAutoResume'] ?? false,
-        'issues': _extractIssues(status),
-        'autoResumeAction': _getAutoResumeAction(status),
+        'canAutoResume': _canAutoResumeState,
+        'issues': _currentIssues,
+        'autoResumeAction': _autoResumeAction,
       },
     ));
   }
@@ -783,15 +759,68 @@ class SmartPrintManager {
     return null;
   }
 
+  /// Check if there are any print issues that need attention
+  bool _hasPrintIssues(Map<String, dynamic> status) {
+    return status['isHeadOpen'] == true ||
+        status['isPaperOut'] == true ||
+        status['isRibbonOut'] == true ||
+        status['isHeadCold'] == true ||
+        status['isHeadTooHot'] == true;
+  }
+
+  /// Check if the printer can auto-resume (e.g., was paused but can be unpaused)
+  bool _canAutoResume(Map<String, dynamic> status) {
+    // Can auto-resume if only paused (no hardware issues)
+    final isPaused = status['isPaused'] == true;
+    final hasHardwareIssues = status['isHeadOpen'] == true ||
+        status['isPaperOut'] == true ||
+        status['isRibbonOut'] == true ||
+        status['isHeadCold'] == true ||
+        status['isHeadTooHot'] == true;
+
+    return isPaused && !hasHardwareIssues;
+  }
+
   /// Update current step and emit event
   Future<void> _updateStep(PrintStep step, String message) async {
     _currentStep = step;
+    _currentMessage = message;
     _logger.info('Print step: $step - $message');
+    
+    // Map PrintStep to PrintStatus for UI
+    PrintStatus uiStatus;
+    switch (step) {
+      case PrintStep.initializing:
+      case PrintStep.validating:
+        uiStatus = PrintStatus.connecting;
+        break;
+      case PrintStep.connecting:
+        uiStatus = PrintStatus.connecting;
+        break;
+      case PrintStep.connected:
+      case PrintStep.checkingStatus:
+        uiStatus = PrintStatus.configuring;
+        break;
+      case PrintStep.sending:
+      case PrintStep.waitingForCompletion:
+        uiStatus = PrintStatus.printing;
+        break;
+      case PrintStep.completed:
+        uiStatus = PrintStatus.done;
+        break;
+      case PrintStep.failed:
+        uiStatus = PrintStatus.failed;
+        break;
+      case PrintStep.cancelled:
+        uiStatus = PrintStatus.cancelled;
+        break;
+    }
     
     _eventController?.add(PrintEvent(
       type: PrintEventType.stepChanged,
       timestamp: DateTime.now(),
-      stepInfo: _createStepInfo(step, message),
+      status: uiStatus,
+      message: message,
     ));
   }
 
@@ -814,28 +843,19 @@ class SmartPrintManager {
       recoveryHint: recoveryHint,
     );
     
+    _currentError = errorInfo;
     _logger.error('Print error: ${errorInfo.message}', null, stackTrace);
     
     _eventController?.add(PrintEvent(
       type: PrintEventType.errorOccurred,
       timestamp: DateTime.now(),
+      status: PrintStatus.failed,
       errorInfo: errorInfo,
-      stepInfo: _createStepInfo(PrintStep.failed, errorInfo.message),
+      message: errorInfo.message,
     ));
   }
 
-  /// Create step info for current state
-  PrintStepInfo _createStepInfo(PrintStep step, String message,
-      {bool isCompleted = false}) {
-    return PrintStepInfo(
-      step: step,
-      message: message,
-      attempt: _currentAttempt,
-      maxAttempts: _maxAttempts,
-      elapsed: DateTime.now().difference(_startTime ?? DateTime.now()),
-      isCompleted: isCompleted,
-    );
-  }
+
 
   /// Determine error recoverability
   ErrorRecoverability _determineRecoverability(ErrorCode errorCode) {
@@ -870,7 +890,8 @@ class SmartPrintManager {
     _eventController?.add(PrintEvent(
       type: PrintEventType.retryAttempt,
       timestamp: DateTime.now(),
-      stepInfo: _createStepInfo(_currentStep, 'Retrying in ${delay.inSeconds} seconds'),
+      status: PrintStatus.connecting, // Retry goes back to connecting
+      message: 'Retrying in ${delay.inSeconds} seconds',
     ));
     
     await Future.delayed(delay);
@@ -923,7 +944,7 @@ class SmartPrintManager {
       case PrintStep.connected:
         return 'Connected';
       case PrintStep.checkingStatus:
-        return 'Checking printer status';
+        return 'Configuring printer';
       case PrintStep.sending:
         return 'Sending print data';
       case PrintStep.waitingForCompletion:
@@ -945,6 +966,67 @@ class SmartPrintManager {
 
   /// Check if operation is cancelled
   bool get isCancelled => _isCancelled;
+
+  /// Get current print status for UI
+  PrintStatus get currentStatus {
+    if (_isCancelled) return PrintStatus.cancelled;
+    if (_currentStep == PrintStep.completed) return PrintStatus.done;
+    if (_currentStep == PrintStep.failed) return PrintStatus.failed;
+    
+    switch (_currentStep) {
+      case PrintStep.initializing:
+      case PrintStep.validating:
+        return PrintStatus.connecting;
+      case PrintStep.connecting:
+        return PrintStatus.connecting;
+      case PrintStep.connected:
+      case PrintStep.checkingStatus:
+        return PrintStatus.configuring;
+      case PrintStep.sending:
+      case PrintStep.waitingForCompletion:
+        return PrintStatus.printing;
+      default:
+        return PrintStatus.connecting;
+    }
+  }
+
+  /// Check if currently printing
+  bool get isPrinting => currentStatus.isInProgress;
+
+  /// Check if print was successful
+  bool get isCompleted => currentStatus == PrintStatus.done;
+
+  /// Check if print failed
+  bool get hasFailed => currentStatus == PrintStatus.failed;
+
+  /// Check if print was cancelled
+  bool get wasCancelled => currentStatus == PrintStatus.cancelled;
+
+  /// Get current error info
+  PrintErrorInfo? get currentError => _currentError;
+
+  /// Get current status message
+  String get currentMessage => _currentMessage ?? currentStatus.displayName;
+
+  /// Get real-time status info
+  Map<String, dynamic>? get realTimeStatus => _lastPrinterStatus;
+
+  /// Get current issues list
+  List<String> get currentIssues => _currentIssues;
+
+  /// Check if can auto-resume
+  bool get canAutoResume => _canAutoResumeState;
+
+  /// Get auto-resume action message
+  String? get autoResumeAction => _autoResumeAction;
+
+  /// Check if waiting for user to fix issues
+  bool get isWaitingForUserFix => _isWaitingForUserFix;
+
+  /// Get retry information
+  bool get isRetrying => _currentAttempt > 1;
+  int get retryCount => _currentAttempt > 1 ? _currentAttempt - 1 : 0;
+  int get maxAttempts => _maxAttempts;
 
   /// Determine if recovery hint should be removed because SmartPrintManager auto-recovers
   bool _shouldRemoveRecoveryHint(ErrorCode errorCode) {
@@ -1003,5 +1085,234 @@ class SmartPrintManager {
 
     // Keep recovery hints for errors that require user intervention
     return false;
+  }
+
+  /// Create language-specific buffer clear command based on print format
+  PrinterCommand<void> _createLanguageSpecificClearBufferCommand(
+      PrintFormat format) {
+    switch (format) {
+      case PrintFormat.zpl:
+        return CommandFactory.createSendZplClearBufferCommand(
+            _printerManager.printer!);
+      case PrintFormat.cpcl:
+        return CommandFactory.createSendCpclClearBufferCommand(
+            _printerManager.printer!);
+    }
+  }
+
+  /// Create language-specific clear errors command based on print format
+  PrinterCommand<void> _createLanguageSpecificClearErrorsCommand(
+      PrintFormat format) {
+    switch (format) {
+      case PrintFormat.zpl:
+        return CommandFactory.createSendZplClearErrorsCommand(
+            _printerManager.printer!);
+      case PrintFormat.cpcl:
+        return CommandFactory.createSendCpclClearErrorsCommand(
+            _printerManager.printer!);
+    }
+  }
+
+  /// Perform language-specific status checks and buffer operations
+  Future<Result<void>> _performLanguageSpecificStatusChecks(
+      PrintFormat format) async {
+    try {
+      _logger.debug(
+          'Performing language-specific status checks for ${format.name}');
+
+      // Safety check: Verify printer is in correct mode before sending language-specific commands
+      final printer = _printerManager.printer;
+      if (printer == null) {
+        return Result.error('No printer instance available');
+      }
+
+      final languageResult =
+          await CommandFactory.createGetPrinterLanguageCommand(printer)
+              .execute();
+      if (languageResult.success && languageResult.data != null) {
+        final currentLanguage = languageResult.data!.toLowerCase();
+        bool languageMatches = false;
+
+        switch (format) {
+          case PrintFormat.zpl:
+            languageMatches = currentLanguage.contains('zpl');
+            break;
+          case PrintFormat.cpcl:
+            languageMatches = currentLanguage.contains('cpcl') ||
+                currentLanguage.contains('line_print');
+            break;
+        }
+
+        if (!languageMatches) {
+          _logger.warning(
+              'Printer not in correct mode for ${format.name} commands. Current: $currentLanguage');
+          return Result
+              .success(); // Skip language-specific commands if mode doesn't match
+        }
+      }
+
+      // Clear buffer using language-specific command
+      final clearBufferCommand =
+          _createLanguageSpecificClearBufferCommand(format);
+      final clearResult = await clearBufferCommand.execute();
+      if (clearResult.success) {
+        _logger.debug('Buffer cleared using ${format.name} command');
+      } else {
+        _logger.warning(
+            'Failed to clear buffer with ${format.name} command: ${clearResult.error?.message}');
+      }
+
+      // Clear errors using language-specific command
+      final clearErrorsCommand =
+          _createLanguageSpecificClearErrorsCommand(format);
+      final errorsResult = await clearErrorsCommand.execute();
+      if (errorsResult.success) {
+        _logger.debug('Errors cleared using ${format.name} command');
+      } else {
+        _logger.warning(
+            'Failed to clear errors with ${format.name} command: ${errorsResult.error?.message}');
+      }
+
+      return Result.success();
+    } catch (e, stack) {
+      _logger.error('Error during language-specific status checks', e, stack);
+      return Result.error('Language-specific status checks failed: $e');
+    }
+  }
+
+  /// Verify and set printer language mode to match the expected format
+  Future<Result<void>> _verifyAndSetPrinterLanguageMode(
+      PrintFormat expectedFormat) async {
+    try {
+      _logger
+          .info('Verifying printer language mode for ${expectedFormat.name}');
+
+      final printer = _printerManager.printer;
+      if (printer == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['No printer instance available'],
+        );
+      }
+
+      // Step 1: Get current printer language
+      final languageResult =
+          await CommandFactory.createGetPrinterLanguageCommand(printer)
+              .execute();
+      if (!languageResult.success || languageResult.data == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['Failed to get printer language'],
+        );
+      }
+
+      final currentLanguage = languageResult.data!.toLowerCase();
+      _logger.info('Current printer language: $currentLanguage');
+
+      // Step 2: Check if current language matches expected format
+      bool languageMatches = false;
+      String expectedLanguage = '';
+
+      switch (expectedFormat) {
+        case PrintFormat.zpl:
+          expectedLanguage = 'zpl';
+          languageMatches = currentLanguage.contains('zpl');
+          break;
+        case PrintFormat.cpcl:
+          expectedLanguage = 'cpcl';
+          languageMatches = currentLanguage.contains('cpcl') ||
+              currentLanguage.contains('line_print');
+          break;
+      }
+
+      _logger.info(
+          'Expected language: $expectedLanguage, matches: $languageMatches');
+
+      // Step 3: If language doesn't match, set the printer to the correct mode
+      if (!languageMatches) {
+        _logger.info('Setting printer language to $expectedLanguage');
+        await _updateStep(PrintStep.checkingStatus,
+            'Setting printer language mode...');
+
+        Result<void> setLangResult;
+        switch (expectedFormat) {
+          case PrintFormat.zpl:
+            setLangResult =
+                await CommandFactory.createSendSetZplModeCommand(printer)
+                    .execute();
+            break;
+          case PrintFormat.cpcl:
+            setLangResult =
+                await CommandFactory.createSendSetCpclModeCommand(printer)
+                    .execute();
+            break;
+        }
+
+        if (!setLangResult.success) {
+          return Result.errorCode(
+            ErrorCodes.statusCheckFailed,
+            formatArgs: [
+              'Failed to set printer language to $expectedLanguage: ${setLangResult.error?.message}'
+            ],
+          );
+        }
+
+        // Step 4: Wait for the printer to switch modes and verify
+        _logger
+            .info('Waiting for printer to switch to $expectedLanguage mode...');
+        await Future.delayed(
+            const Duration(seconds: 2)); // Give printer time to switch
+
+        // Step 5: Verify the language switch was successful
+        final verifyResult =
+            await CommandFactory.createGetPrinterLanguageCommand(printer)
+                .execute();
+        if (!verifyResult.success || verifyResult.data == null) {
+          return Result.errorCode(
+            ErrorCodes.statusCheckFailed,
+            formatArgs: ['Failed to verify printer language after switch'],
+          );
+        }
+
+        final newLanguage = verifyResult.data!.toLowerCase();
+        bool switchSuccessful = false;
+
+        switch (expectedFormat) {
+          case PrintFormat.zpl:
+            switchSuccessful = newLanguage.contains('zpl');
+            break;
+          case PrintFormat.cpcl:
+            switchSuccessful = newLanguage.contains('cpcl') ||
+                newLanguage.contains('line_print');
+            break;
+        }
+
+        if (!switchSuccessful) {
+          return Result.errorCode(
+            ErrorCodes.statusCheckFailed,
+            formatArgs: [
+              'Printer language switch failed. Current: $newLanguage, Expected: $expectedLanguage'
+            ],
+          );
+        }
+
+        _logger.info('Printer successfully switched to $expectedLanguage mode');
+        await _updateStep(PrintStep.checkingStatus,
+            'Printer configured successfully');
+      } else {
+        _logger.info('Printer already in correct $expectedLanguage mode');
+        await _updateStep(PrintStep.checkingStatus,
+            'Printer already configured');
+      }
+
+      return Result.success();
+    } catch (e, stack) {
+      _logger.error('Error verifying/setting printer language mode', e, stack);
+      return Result.errorCode(
+        ErrorCodes.statusCheckFailed,
+        formatArgs: ['Language mode verification failed: $e'],
+        dartStackTrace: stack,
+      );
+    }
   }
 } 

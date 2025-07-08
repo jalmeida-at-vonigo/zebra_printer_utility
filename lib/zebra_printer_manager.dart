@@ -27,6 +27,10 @@ class ZebraPrinterManager {
   
   // Smart print manager instance
   SmartPrintManager? _smartPrintManager;
+  
+  // Simple status tracking for UI
+  PrintStatus _currentPrintStatus = PrintStatus.done;
+  bool _isPrinting = false;
 
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter? get printer => _printer;
@@ -34,6 +38,12 @@ class ZebraPrinterManager {
   /// Public getter for the status stream controller
   StreamController<String>? get statusStreamController =>
       _statusStreamController;
+
+  /// Current print status for UI
+  PrintStatus get currentPrintStatus => _currentPrintStatus;
+
+  /// Whether currently printing
+  bool get isPrinting => _isPrinting;
 
   /// Stream of current connection state
   Stream<ZebraDevice?> get connection =>
@@ -310,116 +320,9 @@ class ZebraPrinterManager {
     }
   }
 
-  /// Real-time status polling stream for print completion monitoring
-  /// This provides continuous status updates for UI feedback
-  Stream<Map<String, dynamic>> startStatusPolling({
-    Duration interval = const Duration(milliseconds: 500),
-    Duration timeout = const Duration(seconds: 60),
-  }) async* {
-    _logger.info('Manager: Starting real-time status polling');
-    await _ensureInitialized();
 
-    if (_printer == null) {
-      _logger
-          .error('Manager: Cannot start status polling - no printer connected');
-      return;
-    }
 
-    final startTime = DateTime.now();
-    bool isCompleted = false;
 
-    while (!isCompleted && DateTime.now().difference(startTime) < timeout) {
-      try {
-        final statusResult = await getPrinterStatus();
-        if (statusResult.success && statusResult.data != null) {
-          final status = statusResult.data!;
-
-          // Add timestamp and completion status
-          status['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-          status['isCompleted'] = _isPrintCompleted(status);
-          status['hasIssues'] = _hasPrintIssues(status);
-          status['canAutoResume'] = _canAutoResume(status);
-
-          yield status;
-
-          // Check if print is completed
-          if (status['isCompleted'] == true) {
-            isCompleted = true;
-            _logger
-                .info('Manager: Print completion detected via status polling');
-          }
-        } else {
-          _logger.warning('Manager: Failed to get status during polling');
-          yield {
-            'error': 'Failed to get printer status',
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-            'isCompleted': false,
-            'hasIssues': true,
-            'canAutoResume': false,
-          };
-        }
-      } catch (e) {
-        _logger.error('Manager: Error during status polling', e);
-        yield {
-          'error': 'Status polling error: $e',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'isCompleted': false,
-          'hasIssues': true,
-          'canAutoResume': false,
-        };
-      }
-
-      // Wait before next poll
-      await Future.delayed(interval);
-    }
-
-    if (!isCompleted) {
-      _logger.warning('Manager: Status polling timed out');
-      yield {
-        'error': 'Status polling timed out',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'isCompleted': false,
-        'hasIssues': true,
-        'canAutoResume': false,
-      };
-    }
-  }
-
-  /// Check if print operation is completed based on status
-  bool _isPrintCompleted(Map<String, dynamic> status) {
-    // Print is completed when:
-    // 1. Ready to print (no active print job)
-    // 2. No partial format in progress
-    // 3. No blocking issues
-    final isReadyToPrint = status['isReadyToPrint'] == true;
-    final isPartialFormatInProgress =
-        status['isPartialFormatInProgress'] == true;
-    final hasBlockingIssues = _hasPrintIssues(status);
-
-    return isReadyToPrint && !isPartialFormatInProgress && !hasBlockingIssues;
-  }
-
-  /// Check if there are any print issues that need attention
-  bool _hasPrintIssues(Map<String, dynamic> status) {
-    return status['isHeadOpen'] == true ||
-        status['isPaperOut'] == true ||
-        status['isRibbonOut'] == true ||
-        status['isHeadCold'] == true ||
-        status['isHeadTooHot'] == true;
-  }
-
-  /// Check if the printer can auto-resume (e.g., was paused but can be unpaused)
-  bool _canAutoResume(Map<String, dynamic> status) {
-    // Can auto-resume if only paused (no hardware issues)
-    final isPaused = status['isPaused'] == true;
-    final hasHardwareIssues = status['isHeadOpen'] == true ||
-        status['isPaperOut'] == true ||
-        status['isRibbonOut'] == true ||
-        status['isHeadCold'] == true ||
-        status['isHeadTooHot'] == true;
-
-    return isPaused && !hasHardwareIssues;
-  }
 
   /// Auto-resume printer if it's paused and can be resumed
   Future<Result<void>> autoResumePrinter() async {
@@ -493,6 +396,10 @@ class ZebraPrinterManager {
   }) {
     _logger.info('Manager: Starting smart print operation');
     
+    // Set printing state immediately for UI
+    _isPrinting = true;
+    _currentPrintStatus = PrintStatus.connecting;
+    
     // Start the smart print operation in the background and return the events stream immediately
     smartPrintManager.smartPrint(
       data: data,
@@ -502,11 +409,22 @@ class ZebraPrinterManager {
     )
         .catchError((error) {
       _logger.error('Manager: Smart print operation failed', error);
+      // Update status on error
+      _isPrinting = false;
+      _currentPrintStatus = PrintStatus.failed;
       // Return a default result to satisfy the Future<Result<void>> requirement
       return Result.errorCode(
         ErrorCodes.operationError,
         formatArgs: ['Smart print operation failed: $error'],
       );
+    });
+
+    // Listen to events to update status
+    smartPrintManager.eventStream.listen((event) {
+      _currentPrintStatus = event.status;
+      if (event.status.isCompleted) {
+        _isPrinting = false;
+      }
     });
 
     return smartPrintManager.eventStream;
@@ -515,6 +433,8 @@ class ZebraPrinterManager {
   /// Cancel the current smart print operation
   void cancelSmartPrint() {
     _logger.info('Manager: Cancelling smart print operation');
+    _isPrinting = false;
+    _currentPrintStatus = PrintStatus.cancelled;
     smartPrintManager.cancel();
   }
 
