@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.44] - 2024-12-19
+
+### Added
+- **iOS-Only Platform Restriction**: Added platform detection to show user-friendly "not supported" message on non-iOS platforms
+- **Professional UI Design**: Implemented visually appealing and informative platform restriction dialog
+
+### Changed
+- **User Experience**: Non-iOS users now see a professional, informative message explaining the iOS requirement
+- **Visual Design**: Added platform-specific icons, feature list, and clear messaging for better user understanding
+
+### Features
+- Platform detection using `dart:io` Platform class
+- Professional dialog with platform-specific icons (Android/Computer)
+- Clear feature list showing what's available on iOS
+- Consistent styling with app's color scheme
+- User-friendly "Got it" button for dismissal
+
 ## [2.0.43] - 2024-12-19
 
 ### Fixed
