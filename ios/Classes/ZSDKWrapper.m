@@ -8,6 +8,8 @@
 #import "DiscoveredPrinter.h"
 #import "DiscoveredPrinterNetwork.h"
 #import "SGD.h"
+#import "PrinterStatus.h"
+#import "PrinterStatusMessages.h"
 #import <ExternalAccessory/ExternalAccessory.h>
 
 @implementation ZSDKWrapper
@@ -413,6 +415,228 @@
     } @catch (NSException *exception) {
         NSLog(@"Exception getting printer instance with language: %@", exception);
         return nil;
+    }
+}
+
+#pragma mark - Printer Status Detection
+
++ (NSDictionary *)getPrinterStatus:(id)connection {
+    if (!connection) {
+        return @{
+            @"isReadyToPrint": @NO,
+            @"isHeadOpen": @NO,
+            @"isPaperOut": @NO,
+            @"isPaused": @NO,
+            @"isRibbonOut": @NO,
+            @"error": @"No connection"
+        };
+    }
+    
+    @try {
+        id<ZebraPrinter,NSObject> printer = [ZebraPrinterFactory getInstance:connection error:nil];
+        if (!printer) {
+            return @{
+                @"isReadyToPrint": @NO,
+                @"isHeadOpen": @NO,
+                @"isPaperOut": @NO,
+                @"isPaused": @NO,
+                @"isRibbonOut": @NO,
+                @"error": @"Failed to get printer instance"
+            };
+        }
+        
+        NSError *error = nil;
+        PrinterStatus *status = [printer getCurrentStatus:&error];
+        
+        if (error) {
+            return @{
+                @"isReadyToPrint": @NO,
+                @"isHeadOpen": @NO,
+                @"isPaperOut": @NO,
+                @"isPaused": @NO,
+                @"isRibbonOut": @NO,
+                @"error": [error localizedDescription]
+            };
+        }
+        
+        // Get human-readable status messages
+        PrinterStatusMessages *statusMessages = [[PrinterStatusMessages alloc] initWithPrinterStatus:status];
+        NSArray *messages = [statusMessages getStatusMessage];
+        NSString *statusDescription = @"";
+        
+        if (status.isReadyToPrint) {
+            statusDescription = @"Ready to print";
+        } else if (messages && messages.count > 0) {
+            statusDescription = [messages componentsJoinedByString:@"; "];
+        } else {
+            statusDescription = @"Unknown status";
+        }
+        
+        return @{
+            @"isReadyToPrint": @(status.isReadyToPrint),
+            @"isHeadOpen": @(status.isHeadOpen),
+            @"isPaperOut": @(status.isPaperOut),
+            @"isPaused": @(status.isPaused),
+            @"isRibbonOut": @(status.isRibbonOut),
+            @"isHeadCold": @(status.isHeadCold),
+            @"isHeadTooHot": @(status.isHeadTooHot),
+            @"isReceiveBufferFull": @(status.isReceiveBufferFull),
+            @"isPartialFormatInProgress": @(status.isPartialFormatInProgress),
+            @"labelLengthInDots": @(status.labelLengthInDots),
+            @"numberOfFormatsInReceiveBuffer": @(status.numberOfFormatsInReceiveBuffer),
+            @"labelsRemainingInBatch": @(status.labelsRemainingInBatch),
+            @"statusDescription": statusDescription,
+            @"error": @""
+        };
+        
+    } @catch (NSException *exception) {
+        return @{
+            @"isReadyToPrint": @NO,
+            @"isHeadOpen": @NO,
+            @"isPaperOut": @NO,
+            @"isPaused": @NO,
+            @"isRibbonOut": @NO,
+            @"error": [exception reason]
+        };
+    }
+}
+
++ (BOOL)waitForPrintCompletion:(id)connection timeout:(NSInteger)timeoutSeconds {
+    if (!connection) return NO;
+    
+    NSDate *startTime = [NSDate date];
+    NSInteger timeoutMs = timeoutSeconds * 1000;
+    NSInteger checkIntervalMs = 500; // Check every 500ms
+    
+    while ([[NSDate date] timeIntervalSinceDate:startTime] * 1000 < timeoutMs) {
+        @try {
+            NSDictionary *status = [self getPrinterStatus:connection];
+            
+            // Check if there are any blocking issues
+            BOOL isHeadOpen = [status[@"isHeadOpen"] boolValue];
+            BOOL isPaperOut = [status[@"isPaperOut"] boolValue];
+            BOOL isPaused = [status[@"isPaused"] boolValue];
+            BOOL isRibbonOut = [status[@"isRibbonOut"] boolValue];
+            BOOL isPartialFormatInProgress = [status[@"isPartialFormatInProgress"] boolValue];
+            
+            // If there are hardware issues, return NO (print failed)
+            if (isHeadOpen || isPaperOut || isRibbonOut) {
+                return NO;
+            }
+            
+            // If printer is paused, wait for it to resume
+            if (isPaused) {
+                [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
+                continue;
+            }
+            
+            // For ZPL printers, check if partial format is in progress
+            if (isPartialFormatInProgress) {
+                [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
+                continue;
+            }
+            
+            // Check if ready to print (indicating previous job completed)
+            BOOL isReadyToPrint = [status[@"isReadyToPrint"] boolValue];
+            if (isReadyToPrint) {
+                return YES;
+            }
+            
+            // Wait before next check
+            [NSThread sleepForTimeInterval:checkIntervalMs / 1000.0];
+            
+        } @catch (NSException *exception) {
+            NSLog(@"Error checking print completion: %@", [exception reason]);
+            return NO;
+        }
+    }
+    
+    // Timeout reached
+    return NO;
+}
+
++ (NSDictionary *)getDetailedPrinterStatus:(id)connection {
+    NSDictionary *basicStatus = [self getPrinterStatus:connection];
+    
+    if (!connection) {
+        return @{
+            @"basicStatus": basicStatus,
+            @"canPrint": @NO,
+            @"blockingIssues": @[],
+            @"recommendations": @[@"Check printer connection"]
+        };
+    }
+    
+    @try {
+        // Get additional SGD settings for more detailed status
+        NSString *alerts = [SGD GET:@"alerts.status" withPrinterConnection:connection error:nil];
+        NSString *mediaType = [SGD GET:@"media.type" withPrinterConnection:connection error:nil];
+        NSString *printMode = [SGD GET:@"print.tone" withPrinterConnection:connection error:nil];
+        
+        // Analyze status and provide recommendations
+        NSMutableArray *blockingIssues = [NSMutableArray array];
+        NSMutableArray *recommendations = [NSMutableArray array];
+        BOOL canPrint = YES;
+        
+        // Check basic status issues
+        if ([basicStatus[@"isHeadOpen"] boolValue]) {
+            [blockingIssues addObject:@"Printer head is open"];
+            [recommendations addObject:@"Close the printer head/lid and try again"];
+            canPrint = NO;
+        }
+        
+        if ([basicStatus[@"isPaperOut"] boolValue]) {
+            [blockingIssues addObject:@"Out of paper/media"];
+            [recommendations addObject:@"Load paper/media and try again"];
+            canPrint = NO;
+        }
+        
+        if ([basicStatus[@"isRibbonOut"] boolValue]) {
+            [blockingIssues addObject:@"Out of ribbon"];
+            [recommendations addObject:@"Replace ribbon and try again"];
+            canPrint = NO;
+        }
+        
+        if ([basicStatus[@"isPaused"] boolValue]) {
+            [blockingIssues addObject:@"Printer is paused"];
+            [recommendations addObject:@"Press the pause button on the printer to resume"];
+            canPrint = NO;
+        }
+        
+        if ([basicStatus[@"isHeadCold"] boolValue]) {
+            [blockingIssues addObject:@"Print head is cold"];
+            [recommendations addObject:@"Wait for print head to warm up"];
+            canPrint = NO;
+        }
+        
+        if ([basicStatus[@"isHeadTooHot"] boolValue]) {
+            [blockingIssues addObject:@"Print head is too hot"];
+            [recommendations addObject:@"Wait for print head to cool down"];
+            canPrint = NO;
+        }
+        
+        // Check if ready to print
+        if ([basicStatus[@"isReadyToPrint"] boolValue] && blockingIssues.count == 0) {
+            [recommendations addObject:@"Printer is ready to print"];
+        }
+        
+        return @{
+            @"basicStatus": basicStatus,
+            @"alerts": alerts ?: @"",
+            @"mediaType": mediaType ?: @"",
+            @"printMode": printMode ?: @"",
+            @"canPrint": @(canPrint),
+            @"blockingIssues": blockingIssues,
+            @"recommendations": recommendations
+        };
+        
+    } @catch (NSException *exception) {
+        return @{
+            @"basicStatus": basicStatus,
+            @"canPrint": @NO,
+            @"blockingIssues": @[@"Status check failed"],
+            @"recommendations": @[@"Check printer connection and try again"]
+        };
     }
 }
 

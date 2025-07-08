@@ -1,0 +1,90 @@
+# Example App Maintenance Rule
+
+## Purpose
+Ensure the example app in `/example` always demonstrates the current, recommended, and supported usage patterns of the library. The example must serve as a showcase for best practices and robust workflows with consistent UI and logging.
+
+## Guidelines
+
+### 1. **Sync with Library API**
+- Update the example app immediately after any breaking or significant change to the library API.
+- Remove deprecated or legacy usage patterns from the example.
+- Add new screens/tabs for major new features or workflows.
+
+### 2. **Showcase Only Supported Patterns**
+- Do not include legacy, deprecated, or discouraged usage in the main example.
+- Each tab/screen must demonstrate a real, production-ready workflow.
+- Focus on the new manager-based, event-driven, and command-pattern APIs.
+
+### 3. **Shared Components Requirement**
+- **All screens MUST use the shared `OperationLogPanel`** for consistent logging.
+- **All screens MUST use `List<OperationLogEntry>`** for log data structure.
+- **All screens MUST use the shared `BTPrinterSelector`** for device selection.
+- No custom logging widgets or device selectors allowed.
+- Ensure consistent UI/UX across all screens.
+
+### 4. **Logging Standards**
+- Every screen must log all major operations (connect, disconnect, print, errors).
+- Use proper `OperationLogEntry` status values: 'started', 'completed', 'failed', 'timeout'.
+- Include meaningful operation IDs and method names.
+- Log both successful and failed operations.
+- Provide clear, actionable error messages.
+
+### 5. **Screen Documentation**
+- Each screen must have comprehensive Dartdoc comments explaining its purpose.
+- Document the use case and when to use each screen.
+- Include feature lists and workflow descriptions.
+- Update `example/README.md` when adding/removing screens.
+
+### 6. **Code Quality**
+- All example code must follow Flutter best practices.
+- Use proper error handling and user feedback.
+- Implement proper resource management (dispose streams, managers).
+- Ensure responsive UI with loading states and progress indicators.
+
+### 7. **Testing and Verification**
+- Verify the example app compiles and runs after any changes.
+- Test all screens on both iOS and Android platforms.
+- Ensure no analysis warnings or errors.
+- Test with actual Zebra printers when possible.
+
+## Required Screens Structure
+
+### Current Required Screens:
+1. **CPCL Test** (`lib/cpcl_screen.dart`) - Manual CPCL editing and direct printing
+2. **Result-Based** (`lib/result_based_screen.dart`) - Operation manager testing
+3. **Smart Discovery** (`lib/smart_discovery_screen.dart`) - Real-time device discovery
+4. **Smart Print** (`lib/smart_print_example_screen.dart`) - Event-driven printing
+
+### Shared Components:
+- **OperationLogPanel** (`lib/operation_log_panel.dart`) - Universal logging widget
+- **BTPrinterSelector** (`lib/bt_printer_selector.dart`) - Universal device selector
+
+## Maintenance Checklist
+
+After any significant change to the library:
+
+- [ ] Update all example screens to use the new API
+- [ ] Ensure all screens use `OperationLogPanel` and `BTPrinterSelector`
+- [ ] Verify all screens log operations using `OperationLogEntry`
+- [ ] Update screen documentation and comments
+- [ ] Update `example/README.md` with any changes
+- [ ] Test compilation and analysis (`flutter analyze`)
+- [ ] Test on both iOS and Android platforms
+- [ ] Verify example app runs without errors
+
+## Forbidden Patterns
+
+- ❌ Custom logging widgets or panels
+- ❌ Custom device selection widgets
+- ❌ Using `List<String>` for logs instead of `List<OperationLogEntry>`
+- ❌ Legacy API usage (deprecated methods, old patterns)
+- ❌ Inconsistent UI/UX between screens
+- ❌ Missing error handling or user feedback
+- ❌ Unused or obsolete example screens
+
+## File References
+
+- Main example app: [example/lib/main.dart](mdc:example/lib/main.dart)
+- Example README: [example/README.md](mdc:example/README.md)
+- Shared log panel: [example/lib/operation_log_panel.dart](mdc:example/lib/operation_log_panel.dart)
+- Shared device selector: [example/lib/bt_printer_selector.dart](mdc:example/lib/bt_printer_selector.dart)

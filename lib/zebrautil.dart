@@ -5,19 +5,16 @@
 /// and printing operations for both ZPL and CPCL formats.
 library zebrautil;
 
-// Export classes
-export 'models/print_enums.dart';
+export 'zebra.dart';
+export 'zebra_printer.dart';
+export 'zebra_printer_manager.dart';
+export 'zebra_printer_discovery.dart';
+export 'zebra_printer_readiness_manager.dart';
+export 'zebra_sgd_commands.dart';
 export 'models/zebra_device.dart';
 export 'models/result.dart';
-export 'models/printer_readiness.dart';
+export 'models/print_enums.dart';
 export 'models/readiness_options.dart';
 export 'models/readiness_result.dart';
-export 'internal/logger.dart';
-export 'internal/smart_device_selector.dart' show SmartDiscoveryResult;
-export 'internal/smart_print_manager.dart';
-export 'zebra_printer.dart';
-export 'zebra_printer_discovery.dart';
-export 'zebra_printer_service.dart';
-export 'zebra_printer_readiness_manager.dart';
-export 'zebra.dart';
-export 'zebra_sgd_commands.dart';
+export 'models/printer_readiness.dart';
+export 'smart_print_manager.dart';

@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'package:zebrautil/zebrautil.dart';
+import '../models/zebra_device.dart';
+import '../zebra_printer_discovery.dart';
 import 'printer_preferences.dart';
+import 'logger.dart';
 
 /// Smart device selector for dynamic field service environments
 /// 

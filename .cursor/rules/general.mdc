@@ -1,29 +1,36 @@
 ---
-description: 
-globs: 
 alwaysApply: true
 ---
-# GENERAL GUIDELINES
 
-* The complexity should be on the dart/flutter side as much a possible
-    - The native code side should be as thin as possible, and that makes sense.
+# General Project Standards
 
-# COMPLETION
+- No TODOs or known incomplete work should remain at the end of any task. If you are not able to complete, ask for help.
+- All code must be clean, working, and free of lint or analysis warnings (`flutter analyze` must pass with no issues).
+- No deprecated code is allowed; all code must use the latest APIs and patterns.
+- Only Dart and iOS code need to be evaluated/changed; Android is not yet supported.
+- All changes must be documented as required in the documentation section.
+- Always update the version number (patch increments only).
+- Always update the `CHANGELOG.md` with the changes (no need to document migration, breaking changes, or unreleased, as nothing was released yet).
+- All tests must be updated and passing with the proper implementation.
+- If you find unrelated lint or analysis issues, fix them as part of your change.
 
-* The code is clean and working.
-    - There is no LINT errors or WARNINGS, therefore no LINT ERRORS OR WARNINGS ARE ACCEPTABLE
-    - No ANALYSIS WARNING ARE ACCEPTABLE (`flutter analyze`)
-    - If you find issues warnings because of LINT or ANALYSIS, fix them, even if it is not related with your change.
-* The is a initial implementation, so no DEPRECTATED code is allowed, and all changes MUST BE COMPLETELY migrated to the new API
-* Only the dart code and the iOS need to be evaluated/changed.
-    - We are not supporting Android yet, therefore nothing needs to be evaluated or changed for it.
-* The change must be documented as detailed on the DOCUMENTATION section below
-* Update the version number:
-    - Only use patch increments ALWAYS
-* Update the @CHANGELOG.md with the changes
-    - There is no need to document migration, breaking changes, or unreleased, as nothing was released yet.
-* All the tests were updated and are passing with the proper implementation.
-* There should be no TODO, either by comment or by knowing, at the end of the task. If you are not able to complete, ask for help.
+# DOCUMENTATION
+
+* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details
+* The docs are about:
+    - Usability of the API
+    - Standards about the development and architecture, and
+* There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.# General Project Standards
+
+- No TODOs or known incomplete work should remain at the end of any task. If you are not able to complete, ask for help.
+- All code must be clean, working, and free of lint or analysis warnings (`flutter analyze` must pass with no issues).
+- No deprecated code is allowed; all code must use the latest APIs and patterns.
+- Only Dart and iOS code need to be evaluated/changed; Android is not yet supported.
+- All changes must be documented as required in the documentation section.
+- Always update the version number (patch increments only).
+- Always update the `CHANGELOG.md` with the changes (no need to document migration, breaking changes, or unreleased, as nothing was released yet).
+- All tests must be updated and passing with the proper implementation.
+- If you find unrelated lint or analysis issues, fix them as part of your change.
 
 # DOCUMENTATION
 

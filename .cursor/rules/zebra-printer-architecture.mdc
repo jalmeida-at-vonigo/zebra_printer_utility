@@ -1,0 +1,328 @@
+# Zebra Printer Plugin Architecture & Development Guide
+
+_Last updated: 2024-06-13_
+
+## 1. Overview
+This plugin follows a **3-layer architecture** with clear separation of responsibilities and uses the Zebra Link-OS SDK (ZSDK) for native printer communication.
+
+## 2. Dart Architecture
+
+### 3-Layer Architecture
+```
+┌─────────────────────┐
+│   SmartPrintManager │
+│   (Workflow Logic)  │
+└─────────────────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ ZebraPrinterManager │
+│ (Instance Manager)  │
+└─────────────────────┘
+           │
+           ▼
+┌─────────────────────┐    ┌─────────────────────┐
+│   ZebraPrinter      │    │ ZebraPrinterDiscovery│
+│ (Native Wrapper)    │    │ (Discovery Logic)   │
+└─────────────────────┘    └─────────────────────┘
+```
+
+### Component Responsibilities
+
+#### 1. ZebraPrinter (Native Wrapper)
+**File:** [lib/zebra_printer.dart](mdc:lib/zebra_printer.dart)
+
+**Responsibility:** Pure native wrapper for ZSDK operations
+- **ONLY** provides primitive, low-level operations
+- **NO** workflow logic, business logic, or state management
+- **NO** retries, delays, or complex error handling
+
+**Methods:**
+- `connectToPrinter(String address)` - Connect to printer
+- `disconnect()` - Disconnect from printer
+- `print({required String data})` - Send data to printer
+- `getPrinterStatus()` - Get basic printer status
+- `getSetting(String setting)` - Get printer setting
+- `setSetting(String setting, String value)` - Set printer setting
+- `isPrinterConnected()` - Check connection status
+- `rotate()` - Rotate print orientation
+- `startScanning()` / `stopScanning()` - Discovery operations
+
+**DO NOT ADD:**
+- Workflow logic
+- Retry mechanisms
+- Status evaluation
+- Business rules
+- Complex error handling
+
+#### 2. ZebraPrinterManager (Instance Manager)
+**File:** [lib/zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart)
+
+**Responsibility:** Instance and state management
+- Creates and manages `ZebraPrinter` instances
+- Manages connection state and streams
+- Provides access to printer primitives
+- Coordinates discovery and connection state
+- Handles initialization and disposal
+
+**Methods:**
+- `initialize()` - Initialize manager and printer instance
+- `connect(dynamic printerIdentifier)` - Connect to printer
+- `disconnect()` - Disconnect from printer
+- `print(String data)` - Send data to printer (primitive)
+- `getPrinterStatus()` - Get printer status
+- `getDetailedPrinterStatus()` - Get detailed status with recommendations
+- `waitForPrintCompletion()` - Wait for print completion
+- `getSetting()` / `setSetting()` - Get/set printer settings
+- `isConnected()` - Check connection status
+- `rotate()` - Rotate print orientation
+- `smartPrint()` - Start smart print workflow
+- `cancelSmartPrint()` - Cancel smart print operation
+
+**Streams:**
+- `connection` - Stream of connection state changes
+- `status` - Stream of status messages
+
+**DO NOT ADD:**
+- Complex workflow logic
+- Business rules
+- Retry mechanisms (beyond basic error handling)
+
+#### 3. SmartPrintManager (Workflow Logic)
+**File:** [lib/smart_print_manager.dart](mdc:lib/smart_print_manager.dart)
+
+**Responsibility:** Complex print workflows and orchestration
+- **ALL** workflow logic for printing
+- Status evaluation and monitoring
+- Automatic retries and error recovery
+- Real-time event system
+- Multi-step print management
+- Hardware issue detection and handling
+
+**Methods:**
+- `smartPrint()` - Complete print workflow with events
+- `cancel()` - Cancel print operation
+- `reset()` - Reset manager state
+
+**Events:**
+- `PrintEvent` - Real-time print events
+- `PrintStepInfo` - Step information
+- `PrintErrorInfo` - Error information
+- `PrintProgressInfo` - Progress information
+
+**Workflow Steps:**
+1. Initialize print operation
+2. Connect to printer (with retries)
+3. Check printer status for hardware issues
+4. Send print data
+5. Wait for print completion
+6. Handle errors and retry if needed
+7. Provide real-time updates via events
+
+**MUST CONTAIN:**
+- All complex workflow logic
+- Status evaluation
+- Error recovery
+- Retry mechanisms
+- Event system
+- Progress tracking
+
+## 3. Platform Implementation
+
+### iOS Implementation Strategy
+**Use Objective-C wrapper for ZSDK integration. Period.**
+- Swift cannot directly import the ZSDK framework due to module limitations
+- Create minimal Objective-C wrappers that expose ZSDK functionality to Swift
+- All business logic and thread management stays in Swift
+- The wrapper should only bridge ZSDK APIs, no complex logic
+
+### Key Files Structure
+
+#### Flutter/Dart Side
+- [lib/zebrautil.dart](mdc:lib/zebrautil.dart) - Main plugin entry point
+- [lib/zebra_printer.dart](mdc:lib/zebra_printer.dart) - Printer instance management and operations
+- [lib/models/zebra_device.dart](mdc:lib/models/zebra_device.dart) - Device model for discovered printers
+
+#### iOS Side
+- [ios/Classes/ZebrautilPlugin.swift](mdc:ios/Classes/ZebrautilPlugin.swift) - Main plugin registration
+- [ios/Classes/ZebraPrinterInstance.swift](mdc:ios/Classes/ZebraPrinterInstance.swift) - Swift implementation of printer operations
+- [ios/Classes/ZSDKWrapper.h](mdc:ios/Classes/ZSDKWrapper.h) - Objective-C wrapper header
+- [ios/Classes/ZSDKWrapper.m](mdc:ios/Classes/ZSDKWrapper.m) - Objective-C wrapper implementation
+- [ios/zebrautil.podspec](mdc:ios/zebrautil.podspec) - CocoaPods configuration
+
+#### Android Side
+- [android/src/main/java/com/rubdev/zebrautil/ZebraUtilPlugin.java](mdc:android/src/main/java/com/rubdev/zebrautil/ZebraUtilPlugin.java) - Main plugin
+- [android/src/main/java/com/rubdev/zebrautil/Printer.java](mdc:android/src/main/java/com/rubdev/zebrautil/Printer.java) - Printer operations
+
+### Method Channel Protocol
+
+#### Main Channel: `zebrautil`
+- `getInstance` - Creates a new printer instance, returns instance ID
+
+#### Instance Channel: `ZebraPrinterObject{instanceId}`
+Methods:
+- `checkPermission` - Check Bluetooth/network permissions
+- `startScan` - Start discovering printers
+- `stopScan` - Stop discovery
+- `connectToPrinter` - Connect to a printer by address
+- `print` - Send data to printer
+- `disconnect` - Disconnect from printer
+- `isPrinterConnected` - Check connection status
+- `setSettings` - Configure printer settings
+- `getLocateValue` - Get localized strings
+
+Events sent from native to Flutter:
+- `printerFound` - New printer discovered
+- `onDiscoveryError` - Discovery error occurred
+- `onDiscoveryDone` - Discovery completed
+
+### ZSDK Integration Guidelines
+
+#### iOS ZSDK Setup
+1. The ZSDK framework is located at `ios/ZSDK_API.xcframework`
+2. The podspec must include:
+   ```ruby
+   s.vendored_frameworks = 'ZSDK_API.xcframework'
+   s.frameworks = 'ExternalAccessory', 'CoreBluetooth'
+   s.libraries = 'z'
+   ```
+3. Use Objective-C wrapper to expose ZSDK APIs to Swift
+4. Never try to import ZSDK headers directly in Swift
+
+#### Android ZSDK Setup
+1. ZSDK JAR files are in `android/libs/`
+2. Main SDK file: `ZSDK_ANDROID_API.jar`
+3. Dependencies are configured in `android/build.gradle`
+
+## 4. Usage Patterns
+
+### For Simple Operations (Primitives)
+```dart
+// Use ZebraPrinterManager directly for simple operations
+final manager = ZebraPrinterManager();
+await manager.initialize();
+await manager.connect('00:11:22:33:44:55');
+await manager.print('^XA^FO50,50^FDHello^FS^XZ');
+```
+
+### For Complex Workflows (Smart Print)
+```dart
+// Use SmartPrintManager for complex workflows
+final manager = ZebraPrinterManager();
+await manager.initialize();
+
+// Start smart print with event stream
+final eventStream = manager.smartPrint(
+  '^XA^FO50,50^FDHello^FS^XZ',
+  device: selectedPrinter,
+  maxAttempts: 3,
+);
+
+// Listen to events for UI updates
+eventStream.listen((event) {
+  switch (event.type) {
+    case PrintEventType.stepChanged:
+      updateUI(event.stepInfo);
+      break;
+    case PrintEventType.errorOccurred:
+      handleError(event.errorInfo);
+      break;
+    case PrintEventType.completed:
+      showSuccess();
+      break;
+  }
+});
+```
+
+### For Static API (Zebra Class)
+```dart
+// Use static Zebra class for simple operations
+await Zebra.connect('00:11:22:33:44:55');
+await Zebra.print('^XA^FO50,50^FDHello^FS^XZ');
+
+// Or use smart print for complex workflows
+final eventStream = Zebra.smartPrint(
+  '^XA^FO50,50^FDHello^FS^XZ',
+  device: selectedPrinter,
+);
+```
+
+## 5. Command Pattern
+
+**Location:** [lib/internal/commands/](mdc:lib/internal/commands/)
+
+**Responsibility:** Encapsulate specific printer operations
+- Each command represents a single printer operation
+- Commands use `ZebraPrinter` for native calls
+- Commands are used by `SmartPrintManager` for workflow orchestration
+
+**Examples:**
+- `GetPrinterStatusCommand` - Get printer status
+- `WaitForPrintCompletionCommand` - Wait for print completion
+- `SendClearBufferCommand` - Clear printer buffer
+
+## 6. Development Guidelines
+
+### Code Style Guidelines
+
+#### Swift
+- Use proper queue management for async operations
+- Handle optionals safely
+- Provide meaningful error messages
+
+#### Objective-C Wrapper
+- Keep it minimal - only expose what's needed
+- Use `id` return types to avoid exposing ZSDK types in headers
+- Handle memory management with ARC
+
+#### Flutter/Dart
+- Follow Flutter plugin best practices
+- Use proper error handling with PlatformException
+- Maintain consistent API across platforms
+
+### Threading
+- All ZSDK operations must run on background threads
+- Use DispatchQueue for iOS, AsyncTask/Executors for Android
+- Always dispatch UI updates to main thread
+
+### Testing Approach
+- Test discovery without physical printers using simulator/emulator
+- Use dummy responses for initial development
+- Real device testing required for actual printing
+- Test both Bluetooth and network connections
+
+## 7. Common Issues and Solutions
+
+### iOS Build Issues
+- **"No such module 'ZSDK_API'"** - Use Objective-C wrapper, don't import directly in Swift
+- **"Could not build Objective-C module"** - Check that wrapper properly imports ZSDK headers
+- **Framework not found** - Ensure podspec vendored_frameworks path is correct
+
+### Important Notes
+- The plugin must be self-sustaining - no manual Xcode configuration required
+- Always clean and rebuild after podspec changes
+- Run `pod install` in example/ios after any iOS configuration changes
+- The ZSDK is a closed-source framework - work within its limitations
+
+## 8. Key Principles
+
+1. **Single Responsibility:** Each component has one clear purpose
+2. **Separation of Concerns:** Workflow logic is separate from primitives
+3. **Dependency Direction:** Higher layers depend on lower layers
+4. **Event-Driven:** Complex workflows use events for UI updates
+5. **Error Handling:** Each layer handles errors appropriate to its level
+6. **Resource Management:** Manager handles lifecycle and disposal
+
+## 9. Enforcement
+- **Follow the 3-layer architecture strictly**
+- **Use CommandFactory for all printer operations**
+- **Implement proper error handling at each layer**
+- **Update this rule after any significant discussion or codebase change**
+
+---
+
+**See also:**
+- [Command System Architecture](mdc:.cursor/rules/command-files.mdc)
+- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
+- [Event System](mdc:.cursor/rules/event-system.mdc)
+- [Platform-Specific Rules](mdc:.cursor/rules/ios/)

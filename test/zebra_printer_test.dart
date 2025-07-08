@@ -62,18 +62,18 @@ void main() {
       });
 
       test('setOnDiscoveryError updates callback', () {
-        void testCallback(String code, String? message) {}
-
-        printer.setOnDiscoveryError(testCallback);
-        expect(printer.onDiscoveryError, equals(testCallback));
-      });
+        // TODO: These methods no longer exist in the new API
+        // void testCallback(String code, String? message) {}
+        // printer.setOnDiscoveryError(testCallback);
+        // expect(printer.onDiscoveryError, equals(testCallback));
+      }, skip: 'Method no longer exists in new API');
 
       test('setOnPermissionDenied updates callback', () {
-        void testCallback() {}
-
-        printer.setOnPermissionDenied(testCallback);
-        expect(printer.onPermissionDenied, equals(testCallback));
-      });
+        // TODO: These methods no longer exist in the new API
+        // void testCallback() {}
+        // printer.setOnPermissionDenied(testCallback);
+        // expect(printer.onPermissionDenied, equals(testCallback));
+      }, skip: 'Method no longer exists in new API');
     });
 
     group('event handling', () {

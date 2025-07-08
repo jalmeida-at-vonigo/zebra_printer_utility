@@ -146,6 +146,17 @@ class ZebraPrinterInstance: NSObject {
                 result(FlutterError(code: "INVALID_ARGUMENT", message: "data and timeout are required", details: nil))
             }
             
+        case "getPrinterStatus":
+            getPrinterStatus(operationId: operationId, result: result)
+        case "waitForPrintCompletion":
+            if let timeout = args?["timeout"] as? Int {
+                waitForPrintCompletion(timeout: timeout, operationId: operationId, result: result)
+            } else {
+                waitForPrintCompletion(timeout: 30, operationId: operationId, result: result)
+            }
+        case "getDetailedPrinterStatus":
+            getDetailedPrinterStatus(operationId: operationId, result: result)
+            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -638,6 +649,121 @@ class ZebraPrinterInstance: NSObject {
             }
             // Don't return FlutterError when using callback pattern - let the callback handle the error
             result(false)
+        }
+    }
+    
+    // MARK: - Printer Status Operations
+    
+    private func getPrinterStatus(operationId: String?, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if let connection = self.connection {
+                let status = ZSDKWrapper.getPrinterStatus(connection)
+                
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onPrinterStatusResult", arguments: [
+                            "operationId": operationId,
+                            "status": status
+                        ])
+                    }
+                    result(status)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    let errorStatus: [String: Any] = [
+                        "isReadyToPrint": false,
+                        "isHeadOpen": false,
+                        "isPaperOut": false,
+                        "isPaused": false,
+                        "isRibbonOut": false,
+                        "error": "No printer connection"
+                    ]
+                    
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onPrinterStatusResult", arguments: [
+                            "operationId": operationId,
+                            "status": errorStatus
+                        ])
+                    }
+                    result(errorStatus)
+                }
+            }
+        }
+    }
+    
+    private func waitForPrintCompletion(timeout: Int, operationId: String?, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if let connection = self.connection {
+                let success = ZSDKWrapper.waitForPrintCompletion(connection, timeout: timeout)
+                
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onPrintCompletionResult", arguments: [
+                            "operationId": operationId,
+                            "success": success
+                        ])
+                    }
+                    result(success)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onPrintCompletionResult", arguments: [
+                            "operationId": operationId,
+                            "success": false
+                        ])
+                    }
+                    result(false)
+                }
+            }
+        }
+    }
+    
+    private func getDetailedPrinterStatus(operationId: String?, result: @escaping FlutterResult) {
+        connectionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            if let connection = self.connection {
+                let detailedStatus = ZSDKWrapper.getDetailedPrinterStatus(connection)
+                
+                DispatchQueue.main.async {
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onDetailedPrinterStatusResult", arguments: [
+                            "operationId": operationId,
+                            "detailedStatus": detailedStatus
+                        ])
+                    }
+                    result(detailedStatus)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    let errorStatus: [String: Any] = [
+                        "basicStatus": [
+                            "isReadyToPrint": false,
+                            "isHeadOpen": false,
+                            "isPaperOut": false,
+                            "isPaused": false,
+                            "isRibbonOut": false,
+                            "error": "No printer connection"
+                        ],
+                        "canPrint": false,
+                        "blockingIssues": [],
+                        "recommendations": ["Check printer connection"]
+                    ]
+                    
+                    if let operationId = operationId {
+                        self.channel.invokeMethod("onDetailedPrinterStatusResult", arguments: [
+                            "operationId": operationId,
+                            "detailedStatus": errorStatus
+                        ])
+                    }
+                    result(errorStatus)
+                }
+            }
         }
     }
 }

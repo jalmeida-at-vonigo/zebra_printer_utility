@@ -94,11 +94,5 @@ class ZebraSGDCommands {
       '\x03'; // ETX character for CPCL buffer flushing
   static String cpclClearErrors() => setCommand('alerts.clear', 'ALL');
 
-  /// Legacy ZPL-specific commands (use only when in ZPL mode)
-  static String zplResume() => '~PS\r\n';
-  static String zplClearErrors() => '~JR\r\n';
-  static String zplClearBuffer() =>
-      '\x18'; // CAN character for ZPL buffer clearing
-  static String zplFlushBuffer() =>
-      '\x03'; // ETX character for ZPL buffer flushing
+
 }

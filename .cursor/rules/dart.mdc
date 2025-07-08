@@ -1,72 +1,11 @@
-* The [zebra.dart](mdc:lib/zebra.dart) and [zebra_printer_service.dart](mdc:lib/zebra_printer_service.dart) should match the methods signatures when possible
-* There is no duplicate exports on [zebrautil.dart](mdc:lib/zebrautil.dart)
+# Dart/Flutter Code Standards
 
-# ZEBRAUTIL
-
-* The services and models are exporting using [zebrautil.dart](mdc:lib/zebrautil.dart)
-* Hide duplicate exports while reexporting the classes.
-* Define public models classes on the [model](mdc:lib/models) folder
-
-# COMMAND ARCHITECTURE ENFORCEMENT
-
-## Command Pattern Requirements
-* **NEVER call printer commands directly** - All printer operations must use the command pattern
-* **NEVER use `_printer!.sendCommand()` with raw strings** for any printer control operations
-* **ALWAYS use CommandFactory** to create and execute printer commands
-* **NEVER send control characters directly** (like `\x03`, `\x18`, `~JA`, `! U1` commands)
-
-## Command Architecture Rules
-
-### 1. One Command Per File
-* **Each command class must be in its own file**
-* **File name must match the class name** (snake_case)
-* **Example:** `SendZplClearBufferCommand` → `send_zpl_clear_buffer_command.dart`
-
-### 2. CommandFactory as Single Source
-* **[CommandFactory](mdc:lib/internal/commands/command_factory.dart) is the ONLY way to create command instances**
-* **NEVER instantiate command classes directly**
-* **NEVER use `new CommandClass()` anywhere in the codebase**
-
-### 3. ZebraSGDCommands Usage
-* **[ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) should ONLY contain utility methods**
-* **NEVER use ZebraSGDCommands for command strings**
-* **Allowed methods:** `isZPLData()`, `isCPCLData()`, `detectDataLanguage()`, `parseResponse()`, `isLanguageMatch()`
-* **Forbidden methods:** `getCommand()`, `setCommand()`, `doCommand()`, `zplClearErrors()`, `cpclClearBuffer()`, etc.
-
-### 4. Command String Definition
-* **All command strings must be defined within their respective command classes**
-* **NEVER define command strings in ZebraSGDCommands**
-* **Each command class should contain its own command string constant**
-
-## Command Pattern Usage
-* **Buffer operations:** Use `CommandFactory.createSendZplClearBufferCommand()`, `CommandFactory.createSendCpclClearBufferCommand()`
-* **Flush operations:** Use `CommandFactory.createSendZplFlushBufferCommand()`, `CommandFactory.createSendCpclFlushBufferCommand()`
-* **Error clearing:** Use `CommandFactory.createSendZplClearErrorsCommand()`, `CommandFactory.createSendCpclClearErrorsCommand()`
-* **Status checks:** Use `CommandFactory.createCheckConnectionCommand()`, `CommandFactory.createGetMediaStatusCommand()`, etc.
-
-## Examples
-```dart
-// ❌ WRONG - Direct command usage
-_printer!.sendCommand('\x03'); // ETX character
-_printer!.sendCommand('~JA'); // ZPL clear errors
-ZebraSGDCommands.zplClearErrors(); // Using ZebraSGDCommands for commands
-new SendZplClearBufferCommand(_printer); // Direct instantiation
-
-// ✅ CORRECT - Command pattern usage
-await CommandFactory.createSendCpclFlushBufferCommand(_printer!).execute();
-await CommandFactory.createSendZplClearErrorsCommand(_printer!).execute();
-ZebraSGDCommands.isZPLData(data); // Using ZebraSGDCommands for utilities only
-```
-
-## File Structure Requirements
-* All command classes in [lib/internal/commands/](mdc:lib/internal/commands/)
-* Each command class in its own file: `send_zpl_clear_buffer_command.dart`, `send_cpcl_flush_buffer_command.dart`, etc.
-* Command classes extend `SendCommandCommand` or appropriate base class
-* Command classes are language-specific (ZPL vs CPCL) when applicable
-* Use the [CommandFactory](mdc:lib/internal/commands/command_factory.dart) to create command instances
-
-## Migration Requirements
-* **Remove all command string methods from ZebraSGDCommands**
-* **Move command strings to their respective command classes**
-* **Update all imports to use individual command files**
-* **Ensure CommandFactory imports all command classes**
+- Follow Flutter plugin best practices for all Dart code.
+- Complexity should be handled on the Dart/Flutter side as much as possible; keep native code thin.
+- Use proper error handling with PlatformException.
+- Maintain consistent API across platforms.
+- Use proper queue management for async operations.
+- Handle optionals safely.
+- Provide meaningful error messages.
+- All code must be null safe and use the latest Dart language features.
+- All public APIs must be documented with Dartdoc comments.

@@ -1,0 +1,269 @@
+**See also:**
+- [Error Handling Guide](mdc:.readme/guides/error-handling.md)
+- [Development Docs](mdc:.readme/development/README.md)
+- [README.md](mdc:README.md)
+
+# RESULT-BASED ARCHITECTURE
+
+## Overview
+The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. This includes both error constants and success constants with formatable message templates.
+
+## Core Components
+
+### Result<T> Class
+- **Purpose**: Wrapper for all operation results with success/failure state
+- **Location**: [lib/models/result.dart](mdc:lib/models/result.dart)
+- **Key Methods**:
+  - `Result.success([T? data])` - Simple success result
+  - `Result.successCode(SuccessCode, formatArgs: [...], data: ...)` - Success with structured info
+  - `Result.errorCode(ErrorCode, formatArgs: [...], ...)` - Failure with structured error
+  - `Result.failure(ErrorInfo)` - Direct error info
+  - `Result.error(message, ...)` - Simple error with message
+
+### ErrorCode & SuccessCode Classes
+- **Purpose**: Structured constants with formatable message templates
+- **Location**: [lib/models/result.dart](mdc:lib/models/result.dart)
+- **Key Features**:
+  - Categorized constants (Connection, Print, Discovery, etc.)
+  - Formatable message templates using `{0}`, `{1}`, etc.
+  - Comprehensive descriptions and categories
+  - Utility methods for code lookup
+
+### ErrorInfo & SuccessInfo Classes
+- **Purpose**: Detailed information about errors and successes
+- **Features**:
+  - Human-readable messages
+  - Timestamps
+  - Native error details (for errors)
+  - Stack traces (for errors)
+  - Serialization support
+
+## Constants Organization
+
+### ErrorCodes Class
+All error constants are defined in `ErrorCodes` class:
+```dart
+// Connection errors
+static const connectionError = ErrorCode(...);
+static const connectionTimeout = ErrorCode(...);
+static const connectionRetryFailed = ErrorCode(...);
+
+// Print errors  
+static const printError = ErrorCode(...);
+static const printTimeout = ErrorCode(...);
+static const printRetryFailed = ErrorCode(...);
+
+// Discovery errors
+static const discoveryError = ErrorCode(...);
+static const noPrintersFound = ErrorCode(...);
+```
+
+### SuccessCodes Class
+All success constants are defined in `SuccessCodes` class:
+```dart
+// Connection success
+static const connectionSuccess = SuccessCode(...);
+static const connectionRetrySuccess = SuccessCode(...);
+static const disconnectSuccess = SuccessCode(...);
+
+// Print success
+static const printSuccess = SuccessCode(...);
+static const printRetrySuccess = SuccessCode(...);
+static const printDataSent = SuccessCode(...);
+
+// Discovery success
+static const discoverySuccess = SuccessCode(...);
+static const discoveryTimeoutSuccess = SuccessCode(...);
+```
+
+## FormatArgs Usage Guidelines
+
+### ✅ CORRECT - Pass Only Variable Values
+```dart
+// Good: Pass only the variable parts
+Result.errorCode(
+  ErrorCodes.connectionRetryFailed,
+  formatArgs: [_maxAttempts], // Just the number
+);
+
+Result.errorCode(
+  ErrorCodes.connectionTimeout,
+  formatArgs: [timeoutSeconds], // Just the timeout value
+);
+
+Result.successCode(
+  SuccessCodes.discoverySuccess,
+  formatArgs: [printerCount], // Just the count
+);
+```
+
+### ❌ WRONG - Pass Entire Messages
+```dart
+// Bad: Passing entire message strings
+Result.errorCode(
+  ErrorCodes.connectionError,
+  formatArgs: ['Failed to connect after $_maxAttempts attempts'], // Don't do this
+);
+
+Result.errorCode(
+  ErrorCodes.printError,
+  formatArgs: ['Print failed: $errorMessage'], // Don't do this
+);
+```
+
+### Message Template Examples
+```dart
+// Error templates
+'Failed to connect after {0} attempts'  // Use: formatArgs: [attempts]
+'Connection timed out after {0} seconds'  // Use: formatArgs: [seconds]
+'Multiple printers found ({0}), specify device explicitly'  // Use: formatArgs: [count]
+
+// Success templates  
+'Successfully connected to printer after {0} attempts'  // Use: formatArgs: [attempts]
+'Successfully discovered {0} printers'  // Use: formatArgs: [count]
+'Successfully sent {0} bytes of print data'  // Use: formatArgs: [bytes]
+```
+
+## Usage Patterns
+
+### Error Handling
+```dart
+// Simple error
+return Result.errorCode(ErrorCodes.connectionError);
+
+// Error with context
+return Result.errorCode(
+  ErrorCodes.connectionTimeout,
+  formatArgs: [timeoutSeconds],
+  errorNumber: nativeErrorCode,
+  nativeError: exception,
+);
+
+// Error with stack trace
+return Result.errorCode(
+  ErrorCodes.printError,
+  formatArgs: [errorMessage],
+  dartStackTrace: stackTrace,
+);
+```
+
+### Success Handling
+```dart
+// Simple success
+return Result.success(data);
+
+// Success with structured info
+return Result.successCode(
+  SuccessCodes.connectionSuccess,
+  data: connectionInfo,
+);
+
+// Success with context
+return Result.successCode(
+  SuccessCodes.printRetrySuccess,
+  formatArgs: [attempts],
+  data: printJobId,
+);
+```
+
+### Result Processing
+```dart
+final result = await operation();
+
+if (result.success) {
+  // Handle success
+  final data = result.data;
+  final successInfo = result.successInfo;
+  print('Success: ${successInfo?.message}');
+} else {
+  // Handle error
+  final error = result.error!;
+  print('Error: ${error.message}');
+  print('Code: ${error.code}');
+  print('Category: ${error.originalErrorCode?.category}');
+}
+```
+
+## Migration Requirements
+
+### From Legacy Error Handling
+```dart
+// Old way
+throw Exception('Connection failed after $attempts attempts');
+
+// New way
+return Result.errorCode(
+  ErrorCodes.connectionRetryFailed,
+  formatArgs: [attempts],
+);
+```
+
+### From String Messages
+```dart
+// Old way
+return Result.error('Failed to connect after $_maxAttempts attempts');
+
+// New way
+return Result.errorCode(
+  ErrorCodes.connectionRetryFailed,
+  formatArgs: [_maxAttempts],
+);
+```
+
+## Enforcement Rules
+
+### ✅ REQUIRED
+- **All error messages must use ErrorCodes constants**
+- **All success messages must use SuccessCodes constants**
+- **formatArgs must contain only variable values, not entire messages**
+- **Message templates must use {0}, {1}, etc. placeholders**
+- **All constants must be categorized and described**
+
+### ❌ FORBIDDEN
+- **Hardcoded error/success messages in code**
+- **Passing entire message strings in formatArgs**
+- **Defining error/success constants outside result.dart**
+- **Using generic error messages without specific codes**
+
+### 📝 DOCUMENTATION
+- **All constants must have clear descriptions**
+- **Categories must be consistent across error and success codes**
+- **Message templates must be self-explanatory**
+- **formatArgs usage must be documented in examples**
+
+## Testing Requirements
+
+### Error Code Testing
+```dart
+test('should return correct error code for connection timeout', () {
+  final result = Result.errorCode(
+    ErrorCodes.connectionTimeout,
+    formatArgs: [30],
+  );
+  
+  expect(result.error?.code, equals('CONNECTION_TIMEOUT'));
+  expect(result.error?.message, equals('Connection timed out after 30 seconds'));
+});
+```
+
+### Success Code Testing
+```dart
+test('should return correct success code for connection retry', () {
+  final result = Result.successCode(
+    SuccessCodes.connectionRetrySuccess,
+    formatArgs: [3],
+  );
+  
+  expect(result.successInfo?.code, equals('CONNECTION_RETRY_SUCCESS'));
+  expect(result.successInfo?.message, equals('Successfully connected to printer after 3 attempts'));
+});
+```
+
+## Last Updated
+- **Date**: 2024-12-19
+- **Version**: 2.0.0
+- **Changes**: Added SuccessCodes, improved formatArgs usage, comprehensive guidelines
+
+globs:
+alwaysApply: false
+---

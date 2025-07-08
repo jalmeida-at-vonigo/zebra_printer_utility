@@ -183,7 +183,7 @@ void main() {
           isStateValid: (s) => s == true,
           maxAttempts: 1,
           checkDelay: const Duration(milliseconds: 1),
-          errorCode: 'CUSTOM_ERROR',
+          errorCode: ErrorCodes.operationError,
         );
         
         expect(result.success, isFalse);

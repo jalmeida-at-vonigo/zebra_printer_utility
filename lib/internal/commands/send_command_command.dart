@@ -16,9 +16,14 @@ class SendCommandCommand extends PrinterCommand<void> {
   Future<Result<void>> execute() async {
     try {
       logger.debug('Sending command: $command');
-      printer.sendCommand(command);
-      logger.debug('Command sent successfully');
-      return Result.success();
+      final result = await printer.print(data: command);
+      if (result.success) {
+        logger.debug('Command sent successfully');
+        return Result.success();
+      } else {
+        logger.error('Failed to send command: ${result.error?.message}');
+        return result;
+      }
     } catch (e) {
       logger.error('Failed to send command: $command', e);
       return Result.error('Failed to send command: $e');

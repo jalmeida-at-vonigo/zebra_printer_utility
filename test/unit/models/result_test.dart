@@ -360,49 +360,45 @@ void main() {
   });
 
   group('ErrorCodes', () {
-    test('should have connection error codes', () {
-      expect(ErrorCodes.connectionError, equals('CONNECTION_ERROR'));
-      expect(ErrorCodes.connectionTimeout, equals('CONNECTION_TIMEOUT'));
-      expect(ErrorCodes.connectionLost, equals('CONNECTION_LOST'));
-      expect(ErrorCodes.notConnected, equals('NOT_CONNECTED'));
-      expect(ErrorCodes.alreadyConnected, equals('ALREADY_CONNECTED'));
-    });
+    test('ErrorCodes constants should have correct values', () {
+      // Connection errors
+      expect(ErrorCodes.connectionError.code, equals('CONNECTION_ERROR'));
+      expect(ErrorCodes.connectionTimeout.code, equals('CONNECTION_TIMEOUT'));
+      expect(ErrorCodes.connectionLost.code, equals('CONNECTION_LOST'));
+      expect(ErrorCodes.notConnected.code, equals('NOT_CONNECTED'));
+      expect(ErrorCodes.alreadyConnected.code, equals('ALREADY_CONNECTED'));
 
-    test('should have discovery error codes', () {
-      expect(ErrorCodes.discoveryError, equals('DISCOVERY_ERROR'));
-      expect(ErrorCodes.noPermission, equals('NO_PERMISSION'));
-      expect(ErrorCodes.bluetoothDisabled, equals('BLUETOOTH_DISABLED'));
-      expect(ErrorCodes.networkError, equals('NETWORK_ERROR'));
-      expect(ErrorCodes.noPrintersFound, equals('NO_PRINTERS_FOUND'));
-      expect(
-          ErrorCodes.multiplePrintersFound, equals('MULTIPLE_PRINTERS_FOUND'));
-    });
+      // Discovery errors
+      expect(ErrorCodes.discoveryError.code, equals('DISCOVERY_ERROR'));
+      expect(ErrorCodes.noPermission.code, equals('NO_PERMISSION'));
+      expect(ErrorCodes.bluetoothDisabled.code, equals('BLUETOOTH_DISABLED'));
+      expect(ErrorCodes.networkError.code, equals('NETWORK_ERROR'));
+      expect(ErrorCodes.noPrintersFound.code, equals('NO_PRINTERS_FOUND'));
+      expect(ErrorCodes.multiplePrintersFound.code,
+          equals('MULTIPLE_PRINTERS_FOUND'));
 
-    test('should have print error codes', () {
-      expect(ErrorCodes.printError, equals('PRINT_ERROR'));
-      expect(ErrorCodes.printerNotReady, equals('PRINTER_NOT_READY'));
-      expect(ErrorCodes.outOfPaper, equals('OUT_OF_PAPER'));
-      expect(ErrorCodes.headOpen, equals('HEAD_OPEN'));
-      expect(ErrorCodes.printerPaused, equals('PRINTER_PAUSED'));
-    });
+      // Print errors
+      expect(ErrorCodes.printError.code, equals('PRINT_ERROR'));
+      expect(ErrorCodes.printerNotReady.code, equals('PRINTER_NOT_READY'));
+      expect(ErrorCodes.outOfPaper.code, equals('OUT_OF_PAPER'));
+      expect(ErrorCodes.headOpen.code, equals('HEAD_OPEN'));
+      expect(ErrorCodes.printerPaused.code, equals('PRINTER_PAUSED'));
 
-    test('should have data error codes', () {
-      expect(ErrorCodes.invalidData, equals('INVALID_DATA'));
-      expect(ErrorCodes.invalidFormat, equals('INVALID_FORMAT'));
-      expect(ErrorCodes.encodingError, equals('ENCODING_ERROR'));
-    });
+      // Data errors
+      expect(ErrorCodes.invalidData.code, equals('INVALID_DATA'));
+      expect(ErrorCodes.invalidFormat.code, equals('INVALID_FORMAT'));
+      expect(ErrorCodes.encodingError.code, equals('ENCODING_ERROR'));
 
-    test('should have operation error codes', () {
-      expect(ErrorCodes.operationTimeout, equals('OPERATION_TIMEOUT'));
-      expect(ErrorCodes.operationCancelled, equals('OPERATION_CANCELLED'));
-      expect(ErrorCodes.invalidArgument, equals('INVALID_ARGUMENT'));
-      expect(ErrorCodes.operationError, equals('OPERATION_ERROR'));
-    });
+      // Operation errors
+      expect(ErrorCodes.operationTimeout.code, equals('OPERATION_TIMEOUT'));
+      expect(ErrorCodes.operationCancelled.code, equals('OPERATION_CANCELLED'));
+      expect(ErrorCodes.invalidArgument.code, equals('INVALID_ARGUMENT'));
+      expect(ErrorCodes.operationError.code, equals('OPERATION_ERROR'));
 
-    test('should have platform error codes', () {
-      expect(ErrorCodes.platformError, equals('PLATFORM_ERROR'));
-      expect(ErrorCodes.notImplemented, equals('NOT_IMPLEMENTED'));
-      expect(ErrorCodes.unknownError, equals('UNKNOWN_ERROR'));
+      // Platform errors
+      expect(ErrorCodes.platformError.code, equals('PLATFORM_ERROR'));
+      expect(ErrorCodes.notImplemented.code, equals('NOT_IMPLEMENTED'));
+      expect(ErrorCodes.unknownError.code, equals('UNKNOWN_ERROR'));
     });
   });
 }

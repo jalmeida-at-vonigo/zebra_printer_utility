@@ -1,0 +1,388 @@
+# Event System for Print Workflows
+
+## Overview
+The Zebra Printer plugin uses an **event-driven architecture** for real-time UI updates during print workflows. The `SmartPrintManager` emits events that UI components can listen to for progress updates, error handling, and status changes.
+
+## Event Architecture
+
+### Core Components
+- **SmartPrintManager** - Emits events during print workflows
+- **PrintEvent** - Base event class with type and metadata
+- **PrintStepInfo** - Information about current print step
+- **PrintErrorInfo** - Detailed error information
+- **PrintProgressInfo** - Progress tracking information
+
+### Event Types
+
+```dart
+enum PrintEventType {
+  stepChanged,      // Print step has changed
+  errorOccurred,    // An error occurred
+  retryAttempt,     // Retry attempt started
+  progressUpdate,   // Progress update
+  completed,        // Print completed successfully
+  cancelled,        // Print was cancelled
+}
+```
+
+## Event Classes
+
+### PrintEvent
+**File:** [lib/internal/smart_print_manager.dart](mdc:lib/internal/smart_print_manager.dart)
+
+```dart
+class PrintEvent {
+  final PrintEventType type;
+  final DateTime timestamp;
+  final PrintStepInfo? stepInfo;
+  final PrintErrorInfo? errorInfo;
+  final PrintProgressInfo? progressInfo;
+  final Map<String, dynamic> metadata;
+}
+```
+
+### PrintStepInfo
+```dart
+class PrintStepInfo {
+  final PrintStep step;
+  final String message;
+  final int attempt;
+  final int maxAttempts;
+  final Duration elapsed;
+  final Map<String, dynamic> metadata;
+  
+  // Computed properties
+  bool get isRetry => attempt > 1;
+  int get retryCount => attempt > 1 ? attempt - 1 : 0;
+  bool get isFinalAttempt => attempt >= maxAttempts;
+  double get progress; // 0.0 to 1.0
+}
+```
+
+### PrintErrorInfo
+```dart
+class PrintErrorInfo {
+  final String message;
+  final ErrorRecoverability recoverability;
+  final String? errorCode;
+  final dynamic nativeError;
+  final StackTrace? stackTrace;
+  final Map<String, dynamic> metadata;
+}
+```
+
+### PrintProgressInfo
+```dart
+class PrintProgressInfo {
+  final double progress; // 0.0 to 1.0
+  final String currentOperation;
+  final Duration elapsed;
+  final Duration estimatedRemaining;
+  final Map<String, dynamic> metadata;
+}
+```
+
+## Print Steps
+
+```dart
+enum PrintStep {
+  initializing,   // Initializing print operation
+  connecting,     // Connecting to printer
+  connected,      // Successfully connected
+  sending,        // Sending print data
+  completed,      // Print completed successfully
+  failed,         // Print failed
+  cancelled,      // Print was cancelled
+}
+```
+
+## Error Recoverability
+
+```dart
+enum ErrorRecoverability {
+  recoverable,     // Can retry (connection issues, timeouts)
+  nonRecoverable,  // Cannot retry (hardware issues)
+  unknown,         // Unknown error type
+}
+```
+
+## Usage Patterns
+
+### Basic Event Listening
+```dart
+// Get event stream from SmartPrintManager
+final eventStream = manager.smartPrint(
+  '^XA^FO50,50^FDHello^FS^XZ',
+  device: selectedPrinter,
+);
+
+// Listen to events
+eventStream.listen((event) {
+  switch (event.type) {
+    case PrintEventType.stepChanged:
+      _handleStepChange(event.stepInfo!);
+      break;
+    case PrintEventType.errorOccurred:
+      _handleError(event.errorInfo!);
+      break;
+    case PrintEventType.completed:
+      _handleCompletion();
+      break;
+    case PrintEventType.cancelled:
+      _handleCancellation();
+      break;
+  }
+});
+```
+
+### UI State Management
+```dart
+class PrintUI extends StatefulWidget {
+  @override
+  _PrintUIState createState() => _PrintUIState();
+}
+
+class _PrintUIState extends State<PrintUI> {
+  PrintStep _currentStep = PrintStep.initializing;
+  String _statusMessage = '';
+  double _progress = 0.0;
+  String? _errorMessage;
+  
+  void _handleStepChange(PrintStepInfo stepInfo) {
+    setState(() {
+      _currentStep = stepInfo.step;
+      _statusMessage = stepInfo.message;
+      _progress = stepInfo.progress;
+      _errorMessage = null; // Clear previous errors
+    });
+  }
+  
+  void _handleError(PrintErrorInfo errorInfo) {
+    setState(() {
+      _errorMessage = errorInfo.message;
+    });
+    
+    // Show error dialog for non-recoverable errors
+    if (errorInfo.recoverability == ErrorRecoverability.nonRecoverable) {
+      _showErrorDialog(errorInfo);
+    }
+  }
+  
+  void _handleCompletion() {
+    setState(() {
+      _currentStep = PrintStep.completed;
+      _statusMessage = 'Print completed successfully!';
+      _progress = 1.0;
+    });
+  }
+}
+```
+
+### Progress Tracking
+```dart
+void _handleProgressUpdate(PrintProgressInfo progressInfo) {
+  setState(() {
+    _progress = progressInfo.progress;
+    _statusMessage = progressInfo.currentOperation;
+  });
+  
+  // Update progress bar
+  _updateProgressBar(progressInfo.progress);
+  
+  // Show estimated time remaining
+  if (progressInfo.estimatedRemaining.inSeconds > 0) {
+    _showTimeRemaining(progressInfo.estimatedRemaining);
+  }
+}
+```
+
+### Error Handling
+```dart
+void _handleError(PrintErrorInfo errorInfo) {
+  setState(() {
+    _errorMessage = errorInfo.message;
+  });
+  
+  switch (errorInfo.recoverability) {
+    case ErrorRecoverability.recoverable:
+      // Show retry button
+      _showRetryButton();
+      break;
+    case ErrorRecoverability.nonRecoverable:
+      // Show manual intervention required
+      _showManualInterventionDialog(errorInfo);
+      break;
+    case ErrorRecoverability.unknown:
+      // Show generic error
+      _showGenericError(errorInfo);
+      break;
+  }
+}
+```
+
+## Event Emission in SmartPrintManager
+
+### Step Changes
+```dart
+void _updateStep(PrintStep step, String message) {
+  _currentStep = step;
+  
+  _emitEvent(PrintEventType.stepChanged, stepInfo: _createStepInfo(step, message));
+  
+  // Start/stop progress timer based on step
+  if (step == PrintStep.connecting || step == PrintStep.sending) {
+    _startProgressTimer();
+  } else {
+    _stopProgressTimer();
+  }
+}
+```
+
+### Error Events
+```dart
+void _handleError(Result<void> result) {
+  final errorInfo = _analyzeError(result.error);
+  
+  _emitEvent(PrintEventType.errorOccurred, errorInfo: errorInfo);
+  
+  // Check if we should retry
+  if (_currentAttempt < _maxAttempts && 
+      errorInfo.recoverability == ErrorRecoverability.recoverable) {
+    _emitEvent(PrintEventType.retryAttempt, stepInfo: _createStepInfo(
+      _currentStep,
+      'Retry ${_currentAttempt - 1} of ${_maxAttempts - 1}',
+    ));
+  }
+}
+```
+
+### Progress Updates
+```dart
+void _startProgressTimer() {
+  _progressTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    if (isPrinting && _startTime != null) {
+      final elapsed = DateTime.now().difference(_startTime!);
+      final progress = _calculateProgress();
+      
+      _emitEvent(PrintEventType.progressUpdate, progressInfo: PrintProgressInfo(
+        progress: progress,
+        currentOperation: _getCurrentOperation(),
+        elapsed: elapsed,
+        estimatedRemaining: _estimateRemainingTime(progress),
+      ));
+    } else {
+      timer.cancel();
+    }
+  });
+}
+```
+
+## Event Stream Management
+
+### Instance-Based Streams
+```dart
+class SmartPrintManager {
+  // Instance-based event stream controller
+  final StreamController<PrintEvent> _eventController = 
+      StreamController<PrintEvent>.broadcast();
+  
+  /// Stream of print events for this instance
+  Stream<PrintEvent> get events => _eventController.stream;
+  
+  void _emitEvent(PrintEventType type, {
+    PrintStepInfo? stepInfo,
+    PrintErrorInfo? errorInfo,
+    PrintProgressInfo? progressInfo,
+    Map<String, dynamic>? metadata,
+  }) {
+    final event = PrintEvent(
+      type: type,
+      timestamp: DateTime.now(),
+      stepInfo: stepInfo,
+      errorInfo: errorInfo,
+      progressInfo: progressInfo,
+      metadata: metadata ?? {},
+    );
+    
+    _logger.debug('Emitting event: $event');
+    _eventController.add(event);
+  }
+}
+```
+
+### Stream Disposal
+```dart
+void dispose() {
+  _stopProgressTimer();
+  _eventController.close();
+}
+```
+
+## Best Practices
+
+### 1. Event Design
+- **Keep events focused** - Each event should have a single purpose
+- **Include relevant data** - Provide all necessary information in the event
+- **Use typed events** - Leverage Dart's type system for safety
+- **Include metadata** - Add context information for debugging
+
+### 2. UI Integration
+- **Listen to specific events** - Only listen to events you need
+- **Handle all event types** - Don't ignore any event types
+- **Update UI atomically** - Update all related UI elements together
+- **Provide user feedback** - Show progress, errors, and status clearly
+
+### 3. Error Handling
+- **Categorize errors** - Use ErrorRecoverability for appropriate handling
+- **Provide actionable messages** - Tell users what they can do
+- **Log errors** - Include error information for debugging
+- **Graceful degradation** - Handle errors without crashing
+
+### 4. Performance
+- **Use broadcast streams** - Allow multiple listeners
+- **Dispose streams properly** - Prevent memory leaks
+- **Throttle progress updates** - Don't overwhelm the UI
+- **Batch UI updates** - Update UI efficiently
+
+## Testing Events
+
+### Unit Testing
+```dart
+test('SmartPrintManager should emit step change events', () async {
+  // Arrange
+  final manager = SmartPrintManager(printerManager);
+  final events = <PrintEvent>[];
+  
+  // Act
+  manager.events.listen(events.add);
+  await manager.smartPrint('test data');
+  
+  // Assert
+  expect(events, isNotEmpty);
+  expect(events.first.type, equals(PrintEventType.stepChanged));
+  expect(events.first.stepInfo?.step, equals(PrintStep.initializing));
+});
+```
+
+### Integration Testing
+```dart
+testWidgets('UI should update based on print events', (tester) async {
+  // Arrange
+  final manager = SmartPrintManager(printerManager);
+  
+  // Act
+  await tester.pumpWidget(PrintUI(manager: manager));
+  
+  // Simulate print events
+  manager._emitEvent(PrintEventType.stepChanged, 
+    stepInfo: PrintStepInfo(/* ... */));
+  
+  // Assert
+  await tester.pump();
+  expect(find.text('Connecting to printer...'), findsOneWidget);
+});
+```
+description:
+globs:
+alwaysApply: false
+---

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:zebrautil/zebrautil.dart';
+import '../models/zebra_device.dart';
+import 'logger.dart';
 
 /// Manages persistent storage for printer preferences
 class PrinterPreferences {

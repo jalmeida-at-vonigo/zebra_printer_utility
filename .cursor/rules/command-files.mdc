@@ -1,22 +1,29 @@
----
-description: Command file architecture and command string definition rules
-globs: lib/internal/commands/*.dart
-alwaysApply: true
----
 
-# COMMAND FILE ARCHITECTURE
+# COMMAND SYSTEM ARCHITECTURE
 
-## One Command Per File Rule
+_Last updated: 2024-06-13_
+
+## 1. Command Pattern Enforcement
+- **All printer operations must use the command pattern; never call printer commands directly.**
+- **Never use `_printer!.sendCommand()` with raw strings for any printer control operations.**
+- **Always use `CommandFactory` to create and execute printer commands.**
+- **Never send control characters directly (like `\x03`, `\x18`, `~JA`, `! U1` commands).**
+- **All command classes must be created via `CommandFactory` and never instantiated directly.**
+- **All command classes must extend the appropriate base class (e.g., `SendCommandCommand`).**
+- **All command classes must reside in `lib/internal/commands/`.**
+- **Update all imports to use individual command files and ensure `CommandFactory` imports all command classes.**
+
+## 2. One Command Per File Rule
 * **Each file must contain exactly ONE command class**
 * **File name must match the class name** (snake_case format)
 * **Example:** `SendZplClearBufferCommand` class → `send_zpl_clear_buffer_command.dart` file
 
-## Command String Definition
+## 3. Command String Definition
 * **All command strings must be defined as constants within the command class**
 * **NEVER import or use ZebraSGDCommands for command strings**
 * **Each command class should define its own command string**
 
-## File Structure Template
+## 4. File Structure Template
 ```dart
 import '../../zebra_printer.dart';
 import 'send_command_command.dart';
@@ -31,7 +38,7 @@ class [CommandClassName] extends SendCommandCommand {
 }
 ```
 
-## Examples
+## 5. Examples
 
 ### ✅ CORRECT - ZPL Clear Buffer Command
 ```dart
@@ -65,7 +72,7 @@ class SendCpclClearErrorsCommand extends SendCommandCommand {
 }
 ```
 
-## Forbidden Patterns
+## 6. Forbidden Patterns
 ```dart
 // ❌ WRONG - Multiple commands in one file
 class SendZplClearBufferCommand extends SendCommandCommand { ... }
@@ -78,9 +85,13 @@ SendZplClearBufferCommand(ZebraPrinter printer) : super(printer, ZebraSGDCommand
 // ❌ WRONG - File name doesn't match class name
 // File: clear_buffer_commands.dart (should be send_zpl_clear_buffer_command.dart)
 class SendZplClearBufferCommand extends SendCommandCommand { ... }
+
+// ❌ WRONG - Direct command execution without CommandFactory
+_printer!.sendCommand('\x18'); // Direct control character
+_printer!.sendCommand('~JA'); // Direct command string
 ```
 
-## Command String Constants
+## 7. Command String Constants
 * **Define command strings as constants when they are complex**
 * **Use clear comments explaining what the command does**
 * **Include language-specific information in comments**
@@ -91,6 +102,45 @@ class SendZplClearErrorsCommand extends SendCommandCommand {
   static const String _COMMAND = '~JA';
   
   SendZplClearErrorsCommand(ZebraPrinter printer) : super(printer, _COMMAND);
+  
+  @override
+  String get operationName => 'Send ZPL Clear Errors Command';
+}
+```
+
+## 8. CommandFactory Usage
+* **Always use CommandFactory to create commands:**
+```dart
+// ✅ CORRECT - Using CommandFactory
+final command = CommandFactory.createSendZplClearBufferCommand(printer);
+final result = await command.execute();
+
+// ❌ WRONG - Direct instantiation
+final command = SendZplClearBufferCommand(printer); // Don't do this
+```
+
+## 9. ZebraSGDCommands Utility-Only Rule
+* **[ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) should ONLY contain utility methods for:**
+  - Data format detection (`isZPLData`, `isCPCLData`)
+  - Response parsing (`parseResponse`)
+  - Language matching (`isLanguageMatch`)
+  - **NEVER command strings**
+* **Use CommandFactory for all command operations**
+
+## 10. Enforcement
+- **ALL printer operations must use the command pattern**
+- **ALL command strings must be defined in their respective command classes**
+- **NEVER use ZebraSGDCommands for command strings**
+- **ALWAYS use CommandFactory to create and execute commands**
+- **Update this rule after any significant discussion or codebase change**
+
+---
+
+**See also:**
+- [Command Format Naming](mdc:.cursor/rules/command-format-naming.mdc)
+- [ZebraSGDCommands Utility Rule](mdc:.cursor/rules/zebra-sgd-commands.mdc)
+- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+
   
   @override
   String get operationName => 'Send ZPL Clear Errors Command';

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
+import 'internal/logger.dart';
 
 
 /// Handles printer discovery and scanning operations
@@ -112,9 +113,9 @@ class ZebraPrinterDiscovery {
     } catch (e, stack) {
       _logger.error('Discovery error occurred', e, stack);
       _statusStreamController?.add('Discovery error: $e');
-      return Result.error(
-        'Failed to discover printers: $e',
-        code: ErrorCodes.discoveryError,
+      return Result.errorCode(
+        ErrorCodes.discoveryError,
+        formatArgs: [e.toString()],
         dartStackTrace: stack,
       );
     }
@@ -289,16 +290,15 @@ class ZebraPrinterDiscovery {
         _statusStreamController?.add('Found ${devices.length} printer(s)');
         return Result.success(devices);
       } else {
-        return Result.error(
-          'No printers found within timeout',
-          code: ErrorCodes.noPrintersFound,
+        return Result.errorCode(
+          ErrorCodes.noPrintersFound,
         );
       }
     } catch (e, stack) {
       _statusStreamController?.add('Discovery error: $e');
-      return Result.error(
-        'Failed to discover printers: $e',
-        code: ErrorCodes.discoveryError,
+      return Result.errorCode(
+        ErrorCodes.discoveryError,
+        formatArgs: [e.toString()],
         dartStackTrace: stack,
       );
     }
@@ -352,16 +352,15 @@ class ZebraPrinterDiscovery {
         _statusStreamController?.add('Found ${devices.length} printer(s)');
         return Result.success(devices);
       } else {
-        return Result.error(
-          'Only found ${devices.length} printer(s), expected $count',
-          code: ErrorCodes.noPrintersFound,
+        return Result.errorCode(
+          ErrorCodes.noPrintersFound,
         );
       }
     } catch (e, stack) {
       _statusStreamController?.add('Discovery error: $e');
-      return Result.error(
-        'Failed to discover printers: $e',
-        code: ErrorCodes.discoveryError,
+      return Result.errorCode(
+        ErrorCodes.discoveryError,
+        formatArgs: [e.toString()],
         dartStackTrace: stack,
       );
     }

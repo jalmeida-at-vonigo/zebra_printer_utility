@@ -34,7 +34,7 @@ class StateChangeVerifier {
     required bool Function(T?) isStateValid,
     Duration checkDelay = const Duration(milliseconds: 200),
     int maxAttempts = 3,
-    String? errorCode,
+    ErrorCode? errorCode,
   }) async {
     try {
       _log('Starting $operationName verification');
@@ -52,9 +52,9 @@ class StateChangeVerifier {
       final sendResult = await printer.print(data: command);
       if (!sendResult.success) {
         _log('$operationName: Failed to send command');
-        return Result.error(
-          'Failed to send $operationName command',
-          code: errorCode ?? ErrorCodes.operationError,
+        return Result.errorCode(
+          errorCode ?? ErrorCodes.operationError,
+          formatArgs: ['Failed to send $operationName command'],
         );
       }
 
@@ -81,15 +81,14 @@ class StateChangeVerifier {
       _log(
           '$operationName: Failed after $maxAttempts attempts. Final state: $finalState');
 
-      return Result.error(
-        '$operationName failed - state did not change after $maxAttempts attempts',
-        code: errorCode ?? ErrorCodes.operationTimeout,
+      return Result.errorCode(
+        errorCode ?? ErrorCodes.operationTimeout,
       );
     } catch (e, stack) {
       _log('$operationName: Exception occurred: $e');
-      return Result.error(
-        '$operationName error: $e',
-        code: errorCode ?? ErrorCodes.operationError,
+      return Result.errorCode(
+        errorCode ?? ErrorCodes.operationError,
+        formatArgs: ['$operationName error: $e'],
         dartStackTrace: stack,
       );
     }
@@ -148,9 +147,9 @@ class StateChangeVerifier {
 
       final sendResult = await printer.print(data: command);
       if (!sendResult.success) {
-        return Result.error(
-          'Failed to send $operationName command',
-          code: ErrorCodes.operationError,
+        return Result.errorCode(
+          ErrorCodes.operationError,
+          formatArgs: ['Failed to send $operationName command'],
         );
       }
 
@@ -159,9 +158,9 @@ class StateChangeVerifier {
 
       return Result.success();
     } catch (e, stack) {
-      return Result.error(
-        '$operationName error: $e',
-        code: ErrorCodes.operationError,
+      return Result.errorCode(
+        ErrorCodes.operationError,
+        formatArgs: ['$operationName error: $e'],
         dartStackTrace: stack,
       );
     }

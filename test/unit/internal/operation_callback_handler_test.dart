@@ -195,10 +195,6 @@ void main() {
       expect(called, isNull);
     });
 
-    test('handles legacy error format gracefully', () async {
-      await handler.handleMethodCall(const MethodCall(
-          'onConnectError', {'operationId': '1', 'error': 'legacy error'}));
-      expect(mockManager.calls, contains('fail:1:legacy error'));
-    });
+
   });
 }

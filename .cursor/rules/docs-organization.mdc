@@ -1,0 +1,48 @@
+# Documentation & Cursor Rule Organization and Completion Requirements
+
+## 1. Documentation Hierarchy & Navigability
+- All documentation must be organized for easy navigation and clarity.
+- Top-level docs must include:
+  - [README.md](mdc:README.md): Project overview, quickstart, and links to deeper docs.
+  - [docs/architecture.md](mdc:docs/architecture.md): System/component diagrams, high-level flows.
+  - [docs/usage.md](mdc:docs/usage.md): Public API usage, code samples, and workflows.
+  - [docs/error-codes.md](mdc:docs/error-codes.md): All error codes/messages, with explanations and usage.
+  - [docs/development.md](mdc:docs/development.md): Contribution, code style, and internal architecture.
+  - [docs/platforms/ios.md](mdc:docs/platforms/ios.md), [docs/platforms/android.md](mdc:docs/platforms/android.md): Platform-specific integration notes.
+  - [docs/examples.md](mdc:docs/examples.md): Example app structure and maintenance.
+- Each doc must start with a "Contents" section for navigation.
+- All docs must cross-link to relevant files and rules using `[filename](mdc:filename)` format.
+
+## 2. Cursor Rule Structure
+- General rules: `.cursor/rules/general.mdc`
+- Dart/Flutter code style: `.cursor/rules/dart.mdc`
+- Command pattern: `.cursor/rules/command-pattern.mdc`
+- Error code architecture: `.cursor/rules/error-code-architecture.mdc`
+- Example maintenance: `.cursor/rules/example-maintenance.mdc`
+- Platform-specific: `.cursor/rules/ios/`, `.cursor/rules/android/`
+- Event system: `.cursor/rules/event-system.mdc`
+- Zebra printer architecture: `.cursor/rules/zebra-printer-architecture.mdc`
+- Each rule must have a "Last updated" section at the top.
+- Rules must be consolidated for clarity, or split if a topic grows too large or covers multiple concerns.
+- All rules must be reviewed and updated after any relevant discussion or codebase change.
+
+## 3. Completion Requirements (MANDATORY)
+- **Every public API, error, and workflow must be documented.**
+- **All error codes/messages must be in a single source of truth ([result.dart](mdc:lib/models/result.dart) and [docs/error-codes.md](mdc:docs/error-codes.md)).**
+- **All platform-specific quirks must be in their respective docs.**
+- **All Cursor rules must be updated after any significant discussion, refactor, or feature addition.**
+- **Each rule and doc must be reviewed for clarity, coverage, and navigability after every major change.**
+- **No ambiguous, outdated, or duplicate documentation or rules are allowed.**
+- **All rules and docs must be cross-linked for discoverability.**
+
+## 4. Update Discipline
+- After any significant change, update all relevant documentation and Cursor rules immediately.
+- Add a "Last updated" section to every rule and doc.
+- If a rule is split, both parent and child rules must cross-link.
+- Regularly review and refactor documentation and rules for clarity and completeness.
+
+_Last updated: 2024-06-13_
+description:
+globs:
+alwaysApply: false
+---

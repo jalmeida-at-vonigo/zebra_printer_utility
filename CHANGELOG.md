@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.0.38] - 2025-01-08
+
+### Added
+- **Professional Documentation**: Complete rewrite of README.md with modern architecture overview
+- **Example App Consolidation**: Streamlined example app with shared components and consistent logging
+- **Example README**: Comprehensive documentation for the example app with screen descriptions and usage guides
+- **Shared Log Panel**: All example screens now use the unified `OperationLogPanel` for consistent logging
+- **Enhanced Cursor Rules**: Updated example maintenance rules to enforce shared components and logging standards
+
+### Changed
+- **Example App Structure**: Consolidated to 4 focused screens demonstrating specific workflows
+- **Logging Standardization**: All screens now use `List<OperationLogEntry>` with proper status values
+- **UI Consistency**: Unified device selection and logging across all example screens
+- **Documentation Quality**: Professional, well-organized documentation with clear architecture explanations
+
+### Removed
+- **Legacy Example Screens**: Removed outdated legacy and simplified screens
+- **Custom Logging**: Eliminated custom logging widgets in favor of shared `OperationLogPanel`
+- **Inconsistent UI**: Removed custom device selectors in favor of shared `BTPrinterSelector`
+
+## [2.0.37] - 2025-01-08
+
+### Removed
+- **Legacy Operations**: Removed direct, simplified, and legacy operations that were replaced by more robust APIs
+  - Removed `printSimplified()` method from `Zebra` class - replaced by `smartPrint()` for comprehensive workflows
+  - Removed `setPrinterForSimplified()` method - no longer needed with robust printer management
+  - Removed legacy ZPL-specific commands from `ZebraSGDCommands` class - replaced by command factory pattern
+  - Removed legacy and simplified example screens - replaced by modern smart print examples
+  - Removed legacy error handling test - replaced by comprehensive error handling in robust APIs
+- **Simplified API**: Cleaned up simplified API section that was marked as legacy
+  - Removed backward compatibility methods that were replaced by more robust alternatives
+  - Streamlined API to focus on modern, event-driven workflows
+
+### Technical
+- **Code Cleanup**: Removed deprecated and legacy code to improve maintainability
+- **API Simplification**: Reduced API surface area by removing redundant methods
+- **Example App**: Updated example app to focus on modern workflows only
+
 ## [2.0.36] - 2025-07-08
 
 ### Added
