@@ -83,7 +83,7 @@ class ZebraPrinter {
     _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
       final errorText = call.arguments?['ErrorText'] ?? 'Unknown error';
       if (onDiscoveryError != null) {
-        onDiscoveryError!('DISCOVERY_ERROR', errorText);
+        onDiscoveryError!(ErrorCodes.discoveryError.code, errorText);
       }
     });
     _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
@@ -114,7 +114,7 @@ class ZebraPrinter {
       _logger.error('Failed to start printer discovery', e);
       isScanning = false;
       if (onDiscoveryError != null) {
-        onDiscoveryError!('SCAN_ERROR', e.toString());
+        onDiscoveryError!(ErrorCodes.discoveryError.code, e.toString());
       }
     }
   }
@@ -140,9 +140,20 @@ class ZebraPrinter {
   Future<Result<void>> connectToPrinter(String address) async {
     _logger.info('Initiating connection to printer: $address');
     try {
+      // Check if already connected to the same printer
+      if (controller.selectedAddress == address) {
+        _logger.info(
+            'Already connected to printer: $address, skipping reconnection');
+        return Result.success();
+      }
+
+      // Only disconnect if connecting to a different printer
       if (controller.selectedAddress != null) {
+        _logger.info(
+            'Disconnecting from previous printer before connecting to: $address');
         await disconnect();
       }
+      
       controller.selectedAddress = address;
       final result = await _operationManager.execute<bool>(
         method: 'connectToPrinter',

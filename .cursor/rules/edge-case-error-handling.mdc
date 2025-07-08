@@ -1,0 +1,284 @@
+# EDGE CASE ERROR HANDLING ARCHITECTURE
+
+## Purpose
+This rule defines the comprehensive error handling strategy for edge cases in the Zebra printer system, ensuring robust operation and excellent user experience.
+
+## Architecture Overview
+
+### Responsibility Separation
+
+#### `/zebra_printer_utility` (Core Library)
+**Responsible for:**
+- Data validation and format detection
+- Connection management and retry logic
+- Printer status monitoring and detection
+- Auto-recovery for recoverable errors
+- Resource management and cleanup
+- Error classification and categorization
+- Detailed error information and recovery hints
+
+**NOT responsible for:**
+- UI/UX presentation
+- User interaction and decisions
+- Visual feedback and progress indicators
+- User-facing error messages
+
+#### `/mobile` (UI Layer)
+**Responsible for:**
+- User-friendly error presentation
+- Recovery guidance and instructions
+- User decision points for non-recoverable errors
+- Progress visualization and status updates
+- Action buttons and user interactions
+- Error categorization for UI styling
+
+**NOT responsible for:**
+- Core printing logic
+- Connection management
+- Error recovery automation
+- Hardware status detection
+
+## Error Categories
+
+### 1. Connection Failures
+**Library Handling:**
+- Auto-retry with exponential backoff
+- Connection type detection (WiFi/Bluetooth)
+- Timeout management
+- Network/Bluetooth state monitoring
+
+**UI Handling:**
+- Show retry progress
+- Allow user cancellation
+- Display connection type
+- Guide user to check settings
+
+### 2. Hardware Issues
+**Library Handling:**
+- Head open detection
+- Out of paper detection
+- Ribbon error detection
+- Pause/resume status monitoring
+- Detailed status reporting
+
+**UI Handling:**
+- Show hardware error messages
+- Provide specific recovery instructions
+- Guide user to fix physical issues
+- Offer retry options where appropriate
+
+### 3. Data Issues
+**Library Handling:**
+- Data format validation
+- Size limit checking
+- Encoding validation
+- Empty data detection
+
+**UI Handling:**
+- Show data validation errors
+- Allow data correction
+- Provide format guidance
+
+### 4. Network/Bluetooth Issues
+**Library Handling:**
+- Network timeout handling
+- Bluetooth pairing issues
+- Connection drop detection
+- Automatic reconnection
+
+**UI Handling:**
+- Show network status
+- Guide user to check settings
+- Provide troubleshooting steps
+
+### 5. Print Status Changes
+**Library Handling:**
+- Real-time status monitoring
+- Automatic pause/resume
+- Completion detection
+- Status change events
+
+**UI Handling:**
+- Real-time status updates
+- Progress indicators
+- Status change notifications
+
+## Implementation Guidelines
+
+### SmartPrintManager Enhancements
+
+#### New Print Steps
+```dart
+enum PrintStep {
+  initializing,      // 0.0
+  validating,        // 0.1 - Data validation
+  connecting,        // 0.2 - Connection attempts
+  connected,         // 0.3 - Successfully connected
+  checkingStatus,    // 0.4 - Printer status check
+  sending,           // 0.6 - Sending print data
+  waitingForCompletion, // 0.8 - Waiting for completion
+  completed,         // 1.0
+  failed,
+  cancelled,
+}
+```
+
+#### Error Classification
+```dart
+enum ErrorRecoverability {
+  recoverable,    // Auto-retry (connection, timeouts)
+  nonRecoverable, // Manual intervention (hardware)
+  unknown,        // Unknown error type
+}
+```
+
+#### Enhanced Error Information
+```dart
+class PrintErrorInfo {
+  final String message;
+  final ErrorRecoverability recoverability;
+  final String? errorCode;
+  final String? recoveryHint;  // User guidance
+  final Map<String, dynamic> metadata;
+}
+```
+
+### Mobile UI Enhancements
+
+#### Error Categorization
+```dart
+// Use SmartPrintManager error info when available
+if (errorInfo != null) {
+  switch (errorInfo.recoverability) {
+    case ErrorRecoverability.recoverable:
+      // Show retry progress, auto-retry
+    case ErrorRecoverability.nonRecoverable:
+      // Show manual fix instructions
+    case ErrorRecoverability.unknown:
+      // Show generic error with retry option
+  }
+}
+```
+
+#### User Decision Points
+```dart
+// For non-recoverable errors, show action buttons
+if (_shouldPromptUserAction(errorInfo, errorMessage)) {
+  // Show: Retry, Fix Issue, Cancel buttons
+  // Provide recovery hints
+  // Guide user through manual fixes
+}
+```
+
+## Error Recovery Strategies
+
+### Auto-Recovery (Library)
+- **Connection Issues**: Exponential backoff retry
+- **Timeouts**: Configurable timeout with retry
+- **Paused Printer**: Auto-resume if possible
+- **Temporary Errors**: Automatic retry with delay
+
+### Manual Recovery (UI)
+- **Hardware Issues**: User guidance and instructions
+- **Permission Issues**: Settings navigation guidance
+- **Data Issues**: Correction suggestions
+- **Network Issues**: Troubleshooting steps
+
+## Status Monitoring
+
+### Library Status Detection
+```dart
+// Enhanced status checking
+final statusResult = await _printerManager.getDetailedPrinterStatus();
+if (statusResult.success) {
+  final status = statusResult.data;
+  
+  // Check critical issues
+  if (status['headOpen'] == true) return ErrorCodes.headOpen;
+  if (status['outOfPaper'] == true) return ErrorCodes.outOfPaper;
+  if (status['paused'] == true) return ErrorCodes.printerPaused;
+  if (status['ribbonError'] == true) return ErrorCodes.ribbonError;
+}
+```
+
+### UI Status Visualization
+```dart
+// Real-time status updates
+StreamBuilder<PrintEvent>(
+  stream: smartPrintManager.eventStream,
+  builder: (context, snapshot) {
+    final event = snapshot.data;
+    switch (event?.type) {
+      case PrintEventType.stepChanged:
+        // Update progress indicator
+      case PrintEventType.errorOccurred:
+        // Show error with recovery options
+      case PrintEventType.statusUpdate:
+        // Update status display
+    }
+  },
+)
+```
+
+## Resource Management
+
+### Library Cleanup
+```dart
+void _cleanup() {
+  _timeoutTimer?.cancel();
+  _statusCheckTimer?.cancel();
+  _eventController?.close();
+  _eventController = null;
+}
+```
+
+### UI State Management
+```dart
+// Proper state cleanup on dispose
+@override
+void dispose() {
+  _smartPrintManager?.cancel();
+  super.dispose();
+}
+```
+
+## Testing Requirements
+
+### Library Testing
+- Test all error scenarios
+- Verify auto-recovery behavior
+- Test resource cleanup
+- Validate error classification
+
+### UI Testing
+- Test error presentation
+- Verify user interaction flows
+- Test recovery guidance
+- Validate status updates
+
+## Migration Notes
+
+### From Legacy Error Handling
+- Replace simple error strings with `PrintErrorInfo`
+- Use `ErrorRecoverability` for categorization
+- Implement proper resource cleanup
+- Add comprehensive status monitoring
+
+### Breaking Changes
+- `PrintStep` enum has new values
+- `PrintEvent` includes enhanced error information
+- Error handling requires `PrintErrorInfo` objects
+- Status checking is now mandatory for robust operation
+
+## Related Files
+- `lib/smart_print_manager.dart` - Enhanced error handling
+- `mobile/src/lib/Widgets/PrinterSelectionPopup/ZebraPrintingPopup.dart` - UI error handling
+- `lib/models/result.dart` - Error code system
+- `lib/zebra_printer_manager.dart` - Status detection
+
+## Last Updated
+2024-12-19 - Comprehensive edge case error handling architecture
+description:
+globs:
+alwaysApply: false
+---

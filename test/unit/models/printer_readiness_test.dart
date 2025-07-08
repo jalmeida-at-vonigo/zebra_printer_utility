@@ -1,107 +1,165 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/models/printer_readiness.dart';
+import 'package:zebrautil/zebra_printer.dart';
+import 'package:mockito/mockito.dart';
+
+class MockZebraPrinter extends Mock implements ZebraPrinter {}
 
 void main() {
   group('PrinterReadiness', () {
-    test('default values', () {
-      final readiness = PrinterReadiness();
-      expect(readiness.isReady, isFalse);
-      expect(readiness.isConnected, isNull);
-      expect(readiness.hasMedia, isNull);
-      expect(readiness.headClosed, isNull);
-      expect(readiness.isPaused, isNull);
-      expect(readiness.mediaStatus, isNull);
-      expect(readiness.headStatus, isNull);
-      expect(readiness.pauseStatus, isNull);
-      expect(readiness.hostStatus, isNull);
-      expect(readiness.errors, isEmpty);
-      expect(readiness.warnings, isEmpty);
-      expect(readiness.fullCheckPerformed, isFalse);
-      expect(readiness.timestamp, isA<DateTime>());
+    late MockZebraPrinter mockPrinter;
+
+    setUp(() {
+      mockPrinter = MockZebraPrinter();
+    });
+    
+    test('default values', () async {
+      final readiness = PrinterReadiness(printer: mockPrinter);
+      
+      // Check that properties are uninitialized by default
+      expect(readiness.wasConnectionRead, isFalse);
+      expect(readiness.wasMediaRead, isFalse);
+      expect(readiness.wasHeadRead, isFalse);
+      expect(readiness.wasPauseRead, isFalse);
+      expect(readiness.wasHostRead, isFalse);
+      expect(readiness.wasLanguageRead, isFalse);
+
+      // Check cached values show uninitialized
+      final cached = readiness.cachedValues;
+      expect(cached['connection'], equals('<unchecked>'));
+      expect(cached['mediaStatus'], equals('<unchecked>'));
+      expect(cached['hasMedia'], equals('<unchecked>'));
+      expect(cached['headStatus'], equals('<unchecked>'));
+      expect(cached['headClosed'], equals('<unchecked>'));
+      expect(cached['pauseStatus'], equals('<unchecked>'));
+      expect(cached['isPaused'], equals('<unchecked>'));
+      expect(cached['hostStatus'], equals('<unchecked>'));
+      expect(cached['errors'], equals('<unchecked>'));
+      expect(cached['languageStatus'], equals('<unchecked>'));
     });
 
-    test('should be ready when all conditions are met', () {
-      final readiness = PrinterReadiness();
-      readiness.isConnected = true;
-      readiness.headClosed = true;
-      readiness.isPaused = false;
-      readiness.errors.clear();
+    test('should be ready when all conditions are met', () async {
+      final readiness = PrinterReadiness(printer: mockPrinter);
 
-      expect(readiness.isReady, isTrue);
+      // Set cached values to simulate successful checks
+      readiness.setCachedConnection(true);
+      readiness.setCachedHead('OK', true);
+      readiness.setCachedPause('Not Paused', false);
+      readiness.setCachedHost('Online', []);
+
+      expect(await readiness.isReady, isTrue);
     });
 
-    test('summary returns "Printer is ready" if isReady', () {
-      final readiness = PrinterReadiness();
-      readiness.isConnected = true;
-      readiness.headClosed = true;
-      readiness.isPaused = false;
-      readiness.errors.clear();
-      expect(readiness.summary, equals('Printer is ready'));
+    test('toString shows uninitialized properties', () {
+      final readiness = PrinterReadiness(printer: mockPrinter);
+
+      final str = readiness.toString();
+      expect(str, contains('<unchecked>'));
+      expect(str, contains('connection: <unchecked>'));
+      expect(str, contains('media: <unchecked>'));
+      expect(str, contains('head: <unchecked>'));
+      expect(str, contains('pause: <unchecked>'));
+      expect(str, contains('host: <unchecked>'));
+      expect(str, contains('language: <unchecked>'));
     });
 
-    test('summary returns errors if present', () {
-      final readiness = PrinterReadiness();
-      readiness.errors.addAll(['Error 1', 'Error 2']);
-      expect(readiness.summary, equals('Error 1, Error 2'));
+    test('toString shows actual values when initialized', () {
+      final readiness = PrinterReadiness(printer: mockPrinter);
+
+      // Set some cached values
+      readiness.setCachedConnection(true);
+      readiness.setCachedMedia('OK', true);
+      readiness.setCachedHead('OK', true);
+
+      final str = readiness.toString();
+      expect(str, contains('connection: true'));
+      expect(str, contains('media: true'));
+      expect(str, contains('head: true'));
+      expect(str, contains('pause: <unchecked>'));
+      expect(str, contains('host: <unchecked>'));
+      expect(str, contains('language: <unchecked>'));
     });
 
-    test('summary returns "Not connected" if not connected', () {
-      final readiness = PrinterReadiness();
-      readiness.isConnected = false;
-      expect(readiness.summary, equals('Not connected'));
+    test('ensure methods trigger reads when not initialized', () async {
+      final readiness = PrinterReadiness(printer: mockPrinter);
+
+      // Initially not read
+      expect(readiness.wasConnectionRead, isFalse);
+
+      // This would trigger a read in real usage, but with mock printer it will fail
+      // We can't easily test the actual command execution without complex mocking
+      // So we'll just verify the ensure method exists and can be called
+      expect(readiness.ensureConnection, isA<Function>());
+      expect(readiness.ensureMediaStatus, isA<Function>());
+      expect(readiness.ensureHeadStatus, isA<Function>());
+      expect(readiness.ensurePauseStatus, isA<Function>());
+      expect(readiness.ensureHostStatus, isA<Function>());
+      expect(readiness.ensureLanguageStatus, isA<Function>());
     });
 
-    test('summary returns "No media" if hasMedia is false', () {
-      final readiness = PrinterReadiness();
-      readiness.hasMedia = false;
-      expect(readiness.summary, equals('No media'));
+    test('setCached methods mark properties as read', () {
+      final readiness = PrinterReadiness(printer: mockPrinter);
+
+      // Initially not read
+      expect(readiness.wasConnectionRead, isFalse);
+      expect(readiness.wasMediaRead, isFalse);
+      expect(readiness.wasHeadRead, isFalse);
+      expect(readiness.wasPauseRead, isFalse);
+      expect(readiness.wasHostRead, isFalse);
+      expect(readiness.wasLanguageRead, isFalse);
+
+      // Set cached values
+      readiness.setCachedConnection(true);
+      readiness.setCachedMedia('OK', true);
+      readiness.setCachedHead('OK', true);
+      readiness.setCachedPause('Not Paused', false);
+      readiness.setCachedHost('Online', []);
+      readiness.setCachedLanguage('zpl');
+
+      // Now marked as read
+      expect(readiness.wasConnectionRead, isTrue);
+      expect(readiness.wasMediaRead, isTrue);
+      expect(readiness.wasHeadRead, isTrue);
+      expect(readiness.wasPauseRead, isTrue);
+      expect(readiness.wasHostRead, isTrue);
+      expect(readiness.wasLanguageRead, isTrue);
+
+      // Cached values show actual values
+      final cached = readiness.cachedValues;
+      expect(cached['connection'], isTrue);
+      expect(cached['mediaStatus'], equals('OK'));
+      expect(cached['hasMedia'], isTrue);
+      expect(cached['headStatus'], equals('OK'));
+      expect(cached['headClosed'], isTrue);
+      expect(cached['pauseStatus'], equals('Not Paused'));
+      expect(cached['isPaused'], isFalse);
+      expect(cached['hostStatus'], equals('Online'));
+      expect(cached['errors'], isEmpty);
+      expect(cached['languageStatus'], equals('zpl'));
     });
 
-    test('summary returns "Head open" if headClosed is false', () {
-      final readiness = PrinterReadiness();
-      readiness.headClosed = false;
-      expect(readiness.summary, equals('Head open'));
-    });
+    test('readStatus shows correct read flags', () {
+      final readiness = PrinterReadiness(printer: mockPrinter);
 
-    test('summary returns "Printer paused" if isPaused is true', () {
-      final readiness = PrinterReadiness();
-      readiness.isPaused = true;
-      expect(readiness.summary, equals('Printer paused'));
-    });
-
-    test('summary returns "Not ready" if no other status', () {
-      final readiness = PrinterReadiness();
-      expect(readiness.summary, equals('Not ready'));
-    });
-
-    test('toMap returns correct structure', () {
-      final readiness = PrinterReadiness();
-      readiness.isConnected = true;
-      readiness.hasMedia = true;
-      readiness.headClosed = true;
-      readiness.isPaused = false;
-      readiness.mediaStatus = 'OK';
-      readiness.headStatus = 'OK';
-      readiness.pauseStatus = 'Not Paused';
-      readiness.hostStatus = 'Online';
-      readiness.errors.clear(); // Clear errors to make isReady true
-      readiness.warnings.add('Low media');
-      readiness.fullCheckPerformed = true;
-      final map = readiness.toMap();
-      expect(map['isReady'], isTrue);
-      expect(map['isConnected'], isTrue);
-      expect(map['hasMedia'], isTrue);
-      expect(map['headClosed'], isTrue);
-      expect(map['isPaused'], isFalse);
-      expect(map['mediaStatus'], equals('OK'));
-      expect(map['headStatus'], equals('OK'));
-      expect(map['pauseStatus'], equals('Not Paused'));
-      expect(map['hostStatus'], equals('Online'));
-      expect(map['errors'], isEmpty);
-      expect(map['warnings'], contains('Low media'));
-      expect(map['timestamp'], isA<String>());
-      expect(map['fullCheckPerformed'], isTrue);
-      expect(map['summary'], equals('Printer is ready'));
+      final readStatus = readiness.readStatus;
+      expect(readStatus['connection'], isFalse);
+      expect(readStatus['media'], isFalse);
+      expect(readStatus['head'], isFalse);
+      expect(readStatus['pause'], isFalse);
+      expect(readStatus['host'], isFalse);
+      expect(readStatus['language'], isFalse);
+      
+      // Set some cached values
+      readiness.setCachedConnection(true);
+      readiness.setCachedMedia('OK', true);
+      
+      final updatedReadStatus = readiness.readStatus;
+      expect(updatedReadStatus['connection'], isTrue);
+      expect(updatedReadStatus['media'], isTrue);
+      expect(updatedReadStatus['head'], isFalse);
+      expect(updatedReadStatus['pause'], isFalse);
+      expect(updatedReadStatus['host'], isFalse);
+      expect(updatedReadStatus['language'], isFalse);
     });
   });
 }

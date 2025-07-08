@@ -1,0 +1,257 @@
+# CommandFactory and CommunicationPolicy Integration
+
+## Overview
+The `CommandFactory` and `CommunicationPolicy` work together to provide robust, connection-aware command execution for Zebra printer operations.
+
+## Key Files
+- [CommandFactory](mdc:lib/internal/commands/command_factory.dart) - Factory for creating printer commands
+- [CommunicationPolicy](mdc:lib/internal/communication_policy.dart) - Connection assurance and retry logic
+- [ZebraPrinter](mdc:lib/zebra_printer.dart) - Low-level printer interface
+
+## Public API Usage
+
+### Basic Command Execution with Assurance
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+// Create printer instance
+final printer = ZebraPrinter('instance_id');
+
+// Create communication policy
+final policy = CommunicationPolicy(printer);
+
+// Create and execute command with assurance
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await policy.executeCommand(command);
+
+if (result.success) {
+  print('Printer status: ${result.data}');
+} else {
+  print('Error: ${result.error?.message}');
+}
+```
+
+### Direct Printer Operations with Assurance
+```dart
+// Execute any printer operation with connection assurance
+final result = await policy.executeWithAssurance(
+  () => printer.getSetting('device.languages'),
+  'Get Language Setting'
+);
+
+if (result.success) {
+  print('Language: ${result.data}');
+}
+```
+
+### Custom Command Execution
+```dart
+// Create custom command
+final command = CommandFactory.createGetSettingCommand(printer, 'media.status');
+
+// Execute with assurance
+final result = await policy.executeCommand(command);
+
+if (result.success && result.data != null) {
+  print('Media status: ${result.data}');
+}
+```
+
+### Error Handling
+```dart
+try {
+  final result = await policy.executeWithAssurance(
+    () => printer.print(data: 'test data'),
+    'Print Operation'
+  );
+  
+  if (!result.success) {
+    // Handle specific error types
+    if (result.error?.message?.contains('connection') ?? false) {
+      print('Connection error - printer may be disconnected');
+    } else {
+      print('Operation failed: ${result.error?.message}');
+    }
+  }
+} catch (e) {
+  print('Unexpected error: $e');
+}
+```
+
+## Available Commands
+
+### Status Commands
+```dart
+// Get basic printer status
+CommandFactory.createGetPrinterStatusCommand(printer)
+
+// Get detailed printer status with recommendations
+CommandFactory.createGetDetailedPrinterStatusCommand(printer)
+
+// Check connection
+CommandFactory.createCheckConnectionCommand(printer)
+
+// Get specific status
+CommandFactory.createGetMediaStatusCommand(printer)
+CommandFactory.createGetHeadStatusCommand(printer)
+CommandFactory.createGetPauseStatusCommand(printer)
+CommandFactory.createGetHostStatusCommand(printer)
+CommandFactory.createGetLanguageCommand(printer)
+```
+
+### Control Commands
+```dart
+// Clear operations
+CommandFactory.createSendClearErrorsCommand(printer)
+CommandFactory.createSendClearBufferCommand(printer)
+CommandFactory.createSendClearAlertsCommand(printer)
+
+// Format-specific clear operations
+CommandFactory.createSendZplClearErrorsCommand(printer)
+CommandFactory.createSendCpclClearErrorsCommand(printer)
+CommandFactory.createSendZplClearBufferCommand(printer)
+CommandFactory.createSendCpclClearBufferCommand(printer)
+
+// Flush operations
+CommandFactory.createSendFlushBufferCommand(printer)
+CommandFactory.createSendZplFlushBufferCommand(printer)
+CommandFactory.createSendCpclFlushBufferCommand(printer)
+
+// Mode operations
+CommandFactory.createSendSetZplModeCommand(printer)
+CommandFactory.createSendSetCpclModeCommand(printer)
+
+// Other operations
+CommandFactory.createSendUnpauseCommand(printer)
+CommandFactory.createSendCalibrationCommand(printer)
+```
+
+### Settings Commands
+```dart
+// Get any printer setting
+CommandFactory.createGetSettingCommand(printer, 'setting.name')
+
+// Send any command
+CommandFactory.createSendCommandCommand(printer, 'command string')
+```
+
+## Integration Patterns
+
+### With Managers (Recommended)
+```dart
+// Use managers for high-level operations
+final manager = ZebraPrinterManager();
+await manager.initialize();
+await manager.connect(printerAddress);
+
+// Managers already use CommunicationPolicy internally
+final result = await manager.print('test data');
+```
+
+### Direct Usage (Advanced)
+```dart
+// For advanced users who need direct control
+final policy = CommunicationPolicy(printer);
+
+// Execute multiple commands with assurance
+final commands = [
+  CommandFactory.createGetPrinterStatusCommand(printer),
+  CommandFactory.createGetMediaStatusCommand(printer),
+  CommandFactory.createGetLanguageCommand(printer),
+];
+
+for (final command in commands) {
+  final result = await policy.executeCommand(command);
+  print('${command.operationName}: ${result.success}');
+}
+```
+
+## Best Practices
+
+### Do's
+- ✅ Use managers for high-level operations (print, connect, etc.)
+- ✅ Use CommandFactory + CommunicationPolicy for custom operations
+- ✅ Always handle errors from command execution
+- ✅ Use descriptive operation names for logging
+
+### Don'ts
+- ❌ Don't execute commands directly without CommunicationPolicy
+- ❌ Don't bypass connection assurance for "simple" operations
+- ❌ Don't create custom commands when factory commands exist
+- ❌ Don't ignore error results from command execution
+
+## Error Handling Patterns
+
+### Connection Errors
+```dart
+final result = await policy.executeCommand(command);
+if (!result.success) {
+  final error = result.error?.message?.toLowerCase() ?? '';
+  if (error.contains('connection') || error.contains('timeout')) {
+    // Handle connection issues
+    print('Connection problem detected');
+  }
+}
+```
+
+### Retry Logic
+```dart
+// CommunicationPolicy handles retries automatically
+// For custom retry logic:
+int attempts = 0;
+while (attempts < 3) {
+  final result = await policy.executeCommand(command);
+  if (result.success) break;
+  
+  attempts++;
+  if (attempts < 3) {
+    await Future.delayed(Duration(seconds: attempts));
+  }
+}
+```
+
+## Debugging
+
+### Policy Statistics
+```dart
+// Check policy state
+final stats = CommunicationPolicy.getPolicyStats();
+print('Current policy depth: ${stats['policyDepth']}');
+print('Max retries configured: ${stats['maxRetries']}');
+```
+
+### Command Logging
+```dart
+// All commands are logged with operation names
+// Check logs for: "CommunicationPolicy: Executing [Operation Name]"
+```
+
+## Migration from Direct Printer Usage
+
+### Before (Not Recommended)
+```dart
+// Direct printer usage without assurance
+final result = await printer.getSetting('device.languages');
+```
+
+### After (Recommended)
+```dart
+// With connection assurance
+final policy = CommunicationPolicy(printer);
+final result = await policy.executeWithAssurance(
+  () => printer.getSetting('device.languages'),
+  'Get Language Setting'
+);
+```
+
+### Using Managers (Best Practice)
+```dart
+// Let managers handle everything
+final manager = ZebraPrinterManager();
+await manager.initialize();
+final status = await manager.getPrinterStatus();
+```
+description:
+globs:
+alwaysApply: false
+---

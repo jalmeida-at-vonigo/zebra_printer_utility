@@ -2,7 +2,7 @@ import 'printer_readiness.dart';
 
 /// Result of a printer readiness operation
 class ReadinessResult {
-  /// Whether the printer is ready for printing
+  /// Whether the printer is ready for printing (cached value)
   final bool isReady;
   
   /// Detailed readiness status
@@ -43,7 +43,7 @@ class ReadinessResult {
   /// Summary of the operation
   String get summary => 'Ready: $isReady, Fixes: ${appliedFixes.length}, Failed: ${failedFixes.length}';
   
-  /// Factory constructor from readiness status
+  /// Factory constructor from readiness status with cached ready state
   factory ReadinessResult.fromReadiness(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -51,7 +51,27 @@ class ReadinessResult {
     Map<String, String> fixErrors,
     Duration totalTime,
   ) => ReadinessResult(
-    isReady: readiness.isReady,
+        isReady:
+            false, // Will be updated by the caller with actual cached value
+        readiness: readiness,
+        appliedFixes: appliedFixes,
+        failedFixes: failedFixes,
+        fixErrors: fixErrors,
+        totalTime: totalTime,
+        timestamp: DateTime.now(),
+      );
+
+  /// Factory constructor with explicit ready state
+  factory ReadinessResult.withReadyState(
+    bool isReady,
+    PrinterReadiness readiness,
+    List<String> appliedFixes,
+    List<String> failedFixes,
+    Map<String, String> fixErrors,
+    Duration totalTime,
+  ) =>
+      ReadinessResult(
+        isReady: isReady,
     readiness: readiness,
     appliedFixes: appliedFixes,
     failedFixes: failedFixes,

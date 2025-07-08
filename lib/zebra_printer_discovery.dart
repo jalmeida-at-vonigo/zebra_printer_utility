@@ -8,6 +8,7 @@ import 'internal/logger.dart';
 class ZebraPrinterDiscovery {
   ZebraPrinter? _printer;
   ZebraController? _controller;
+  CommunicationPolicy? _communicationPolicy;
 
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<String>? _statusStreamController;
@@ -66,6 +67,11 @@ class ZebraPrinterDiscovery {
       );
     }
 
+    // Initialize communication policy (for future command execution)
+    if (_printer != null) {
+      _communicationPolicy = CommunicationPolicy(_printer!);
+    }
+
     // Forward status messages if callback provided
     if (statusCallback != null) {
       _statusStreamController?.stream.listen(statusCallback);
@@ -86,39 +92,42 @@ class ZebraPrinterDiscovery {
         .info('Starting printer discovery with timeout: ${timeout.inSeconds}s');
     await _ensureInitialized();
 
-    try {
-      final completer = Completer<List<ZebraDevice>>();
+    return await _communicationPolicy!.execute(
+      () async {
+        final completer = Completer<List<ZebraDevice>>();
 
-      // Start discovery
-      _isScanning = true;
-      _logger.info('Initiating printer scan');
-      _printer!.startScanning();
-      _statusStreamController?.add('Scanning for printers...');
+        // Start discovery
+        _isScanning = true;
+        _logger.info('Initiating printer scan');
+        _printer!.startScanning();
+        _statusStreamController?.add('Scanning for printers...');
 
-      // Set up timeout
-      _discoveryTimer?.cancel();
-      _discoveryTimer = Timer(timeout, () {
-        if (!completer.isCompleted) {
-          _logger.info('Discovery timeout reached, stopping scan');
-          _printer!.stopScanning();
-          _isScanning = false;
-          _statusStreamController?.add('Discovery completed');
-          completer.complete(_controller!.printers);
-        }
-      });
+        // Set up timeout
+        _discoveryTimer?.cancel();
+        _discoveryTimer = Timer(timeout, () {
+          if (!completer.isCompleted) {
+            _logger.info('Discovery timeout reached, stopping scan');
+            _printer!.stopScanning();
+            _isScanning = false;
+            _statusStreamController?.add('Discovery completed');
+            completer.complete(_controller!.printers);
+          }
+        });
 
-      final devices = await completer.future;
-      _logger.info('Discovery completed, found ${devices.length} printers');
-      return Result.success(devices);
-    } catch (e, stack) {
-      _logger.error('Discovery error occurred', e, stack);
-      _statusStreamController?.add('Discovery error: $e');
-      return Result.errorCode(
-        ErrorCodes.discoveryError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
-      );
-    }
+        final devices = await completer.future;
+        _logger.info('Discovery completed, found ${devices.length} printers');
+        return Result.success(devices);
+      },
+      'Discover Printers',
+      options: CommunicationPolicyOptions(
+        skipConnectionCheck: true, // Discovery doesn't need connection check
+        skipConnectionRetry: true, // Discovery is a one-time operation
+        timeout: timeout,
+        onEvent: (event) {
+          _statusStreamController?.add(event.message);
+        },
+      ),
+    );
   }
 
   /// Discover available printers with streaming approach
@@ -251,57 +260,61 @@ class ZebraPrinterDiscovery {
   }) async {
     await _ensureInitialized();
 
-    try {
-      final completer = Completer<List<ZebraDevice>>();
-      List<ZebraDevice>? foundPrinters;
+    return await _communicationPolicy!.execute(
+      () async {
+        final completer = Completer<List<ZebraDevice>>();
+        List<ZebraDevice>? foundPrinters;
 
-      // Start streaming discovery
-      final subscription = discoverPrintersStream(
-        timeout: timeout,
-        stopOnFirstPrinter: true,
-        includeWifi: includeWifi,
-        includeBluetooth: includeBluetooth,
-      ).listen(
-        (printers) {
-          if (printers.isNotEmpty && !completer.isCompleted) {
-            foundPrinters = printers;
-            completer.complete(printers);
-          }
-        },
-        onError: (error) {
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
-        },
-      );
-
-      // Set up timeout fallback
-      Timer(timeout, () {
-        if (!completer.isCompleted) {
-          subscription.cancel();
-          completer.complete(foundPrinters ?? []);
-        }
-      });
-
-      final devices = await completer.future;
-      subscription.cancel();
-      
-      if (devices.isNotEmpty) {
-        _statusStreamController?.add('Found ${devices.length} printer(s)');
-        return Result.success(devices);
-      } else {
-        return Result.errorCode(
-          ErrorCodes.noPrintersFound,
+        // Start streaming discovery
+        final subscription = discoverPrintersStream(
+          timeout: timeout,
+          stopOnFirstPrinter: true,
+          includeWifi: includeWifi,
+          includeBluetooth: includeBluetooth,
+        ).listen(
+          (printers) {
+            if (printers.isNotEmpty && !completer.isCompleted) {
+              foundPrinters = printers;
+              completer.complete(printers);
+            }
+          },
+          onError: (error) {
+            if (!completer.isCompleted) {
+              completer.completeError(error);
+            }
+          },
         );
-      }
-    } catch (e, stack) {
-      _statusStreamController?.add('Discovery error: $e');
-      return Result.errorCode(
-        ErrorCodes.discoveryError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
-      );
-    }
+
+        // Set up timeout fallback
+        Timer(timeout, () {
+          if (!completer.isCompleted) {
+            subscription.cancel();
+            completer.complete(foundPrinters ?? []);
+          }
+        });
+
+        final devices = await completer.future;
+        subscription.cancel();
+
+        if (devices.isNotEmpty) {
+          _statusStreamController?.add('Found ${devices.length} printer(s)');
+          return Result.success(devices);
+        } else {
+          return Result.errorCode(
+            ErrorCodes.noPrintersFound,
+          );
+        }
+      },
+      'Discover Printers Until First',
+      options: CommunicationPolicyOptions(
+        skipConnectionCheck: true, // Discovery doesn't need connection check
+        skipConnectionRetry: true, // Discovery is a one-time operation
+        timeout: timeout,
+        onEvent: (event) {
+          _statusStreamController?.add(event.message);
+        },
+      ),
+    );
   }
 
   /// Discover a specific number of printers
@@ -313,57 +326,61 @@ class ZebraPrinterDiscovery {
   }) async {
     await _ensureInitialized();
 
-    try {
-      final completer = Completer<List<ZebraDevice>>();
-      List<ZebraDevice>? foundPrinters;
+    return await _communicationPolicy!.execute(
+      () async {
+        final completer = Completer<List<ZebraDevice>>();
+        List<ZebraDevice>? foundPrinters;
 
-      // Start streaming discovery
-      final subscription = discoverPrintersStream(
-        timeout: timeout,
-        stopAfterCount: count,
-        includeWifi: includeWifi,
-        includeBluetooth: includeBluetooth,
-      ).listen(
-        (printers) {
-          if (printers.length >= count && !completer.isCompleted) {
-            foundPrinters = printers.take(count).toList();
-            completer.complete(foundPrinters!);
-          }
-        },
-        onError: (error) {
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
-        },
-      );
-
-      // Set up timeout fallback
-      Timer(timeout, () {
-        if (!completer.isCompleted) {
-          subscription.cancel();
-          completer.complete(foundPrinters ?? []);
-        }
-      });
-
-      final devices = await completer.future;
-      subscription.cancel();
-      
-      if (devices.length >= count) {
-        _statusStreamController?.add('Found ${devices.length} printer(s)');
-        return Result.success(devices);
-      } else {
-        return Result.errorCode(
-          ErrorCodes.noPrintersFound,
+        // Start streaming discovery
+        final subscription = discoverPrintersStream(
+          timeout: timeout,
+          stopAfterCount: count,
+          includeWifi: includeWifi,
+          includeBluetooth: includeBluetooth,
+        ).listen(
+          (printers) {
+            if (printers.length >= count && !completer.isCompleted) {
+              foundPrinters = printers.take(count).toList();
+              completer.complete(foundPrinters!);
+            }
+          },
+          onError: (error) {
+            if (!completer.isCompleted) {
+              completer.completeError(error);
+            }
+          },
         );
-      }
-    } catch (e, stack) {
-      _statusStreamController?.add('Discovery error: $e');
-      return Result.errorCode(
-        ErrorCodes.discoveryError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
-      );
-    }
+
+        // Set up timeout fallback
+        Timer(timeout, () {
+          if (!completer.isCompleted) {
+            subscription.cancel();
+            completer.complete(foundPrinters ?? []);
+          }
+        });
+
+        final devices = await completer.future;
+        subscription.cancel();
+
+        if (devices.length >= count) {
+          _statusStreamController?.add('Found ${devices.length} printer(s)');
+          return Result.success(devices);
+        } else {
+          return Result.errorCode(
+            ErrorCodes.noPrintersFound,
+          );
+        }
+      },
+      'Discover Printers Count',
+      options: CommunicationPolicyOptions(
+        skipConnectionCheck: true, // Discovery doesn't need connection check
+        skipConnectionRetry: true, // Discovery is a one-time operation
+        timeout: timeout,
+        onEvent: (event) {
+          _statusStreamController?.add(event.message);
+        },
+      ),
+    );
   }
 
   /// Stop printer discovery
@@ -379,27 +396,41 @@ class ZebraPrinterDiscovery {
   Future<List<ZebraDevice>> findPairedPrinters() async {
     await _ensureInitialized();
     
-    List<ZebraDevice> pairedPrinters = [];
+    final result = await _communicationPolicy!.execute(
+      () async {
+        List<ZebraDevice> pairedPrinters = [];
 
-    try {
-      // Check already discovered printers
-      if (_controller!.printers.isNotEmpty) {
-        pairedPrinters = _controller!.printers.where((p) => !p.isWifi).toList();
-      }
+        // Check already discovered printers
+        if (_controller!.printers.isNotEmpty) {
+          pairedPrinters =
+              _controller!.printers.where((p) => !p.isWifi).toList();
+        }
 
-      // Quick discovery if needed
-      if (pairedPrinters.isEmpty) {
-        _statusStreamController?.add('Checking for paired Bluetooth printers...');
-        _printer!.startScanning();
-        await Future.delayed(const Duration(seconds: 2));
-        _printer!.stopScanning();
-        pairedPrinters = _controller!.printers.where((p) => !p.isWifi).toList();
-      }
-    } catch (e) {
-      _statusStreamController?.add('Error finding paired printers: $e');
-    }
+        // Quick discovery if needed
+        if (pairedPrinters.isEmpty) {
+          _statusStreamController
+              ?.add('Checking for paired Bluetooth printers...');
+          _printer!.startScanning();
+          await Future.delayed(const Duration(seconds: 2));
+          _printer!.stopScanning();
+          pairedPrinters =
+              _controller!.printers.where((p) => !p.isWifi).toList();
+        }
+        
+        return Result.success(pairedPrinters);
+      },
+      'Find Paired Printers',
+      options: CommunicationPolicyOptions(
+        skipConnectionCheck: true, // Discovery doesn't need connection check
+        skipConnectionRetry: true, // Discovery is a one-time operation
+        timeout: const Duration(seconds: 5),
+        onEvent: (event) {
+          _statusStreamController?.add(event.message);
+        },
+      ),
+    );
 
-    return pairedPrinters;
+    return result.success ? result.data ?? [] : [];
   }
 
   /// Get list of paired/discovered printers for selection
@@ -411,8 +442,21 @@ class ZebraPrinterDiscovery {
       return _controller!.printers;
     }
 
-    // Otherwise discover
-    final result = await discoverPrinters(timeout: const Duration(seconds: 5));
+    // Otherwise discover with retry logic
+    final result = await _communicationPolicy!.execute(
+      () => discoverPrinters(timeout: const Duration(seconds: 5)),
+      'Get Available Printers',
+      options: CommunicationPolicyOptions(
+        skipConnectionCheck: true, // Discovery doesn't need connection check
+        skipConnectionRetry: false, // Allow retries for discovery
+        maxAttempts: 2, // Try discovery twice if it fails
+        timeout: const Duration(seconds: 10),
+        onEvent: (event) {
+          _statusStreamController?.add(event.message);
+        },
+      ),
+    );
+    
     return result.success ? result.data ?? [] : [];
   }
 

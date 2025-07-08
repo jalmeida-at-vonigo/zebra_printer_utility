@@ -2,81 +2,152 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2.0.39 - 2024-12-20
+## [2.0.40] - 2024-12-19
+
+### Redesigned
+- **CommunicationPolicy**: Complete redesign with optimistic execution workflow
+  - **Optimistic Execution**: Run commands first, react to failures instead of checking connection before every operation
+  - **Preemptive Timeout Check**: Only check connection if last check was more than 5 minutes ago
+  - **Integrated Workflow**: Connection health and failure handling become part of the command execution flow
+  - **Real-time Status Updates**: Status callback for live operation feedback with detailed event information
+  - **Reactive Failure Handling**: Automatic reconnection and retry when connection errors occur
+- **Ideal Command Execution**: Single integrated workflow for all printer operations
+  - **executeCommand()**: Execute commands with integrated connection management
+  - **executeOperation()**: Execute custom operations with integrated connection management
+  - **getConnectionStatus()**: Get current connection status with timeout checking
+  - **forceConnectionCheck()**: Force fresh connection check when needed
 
 ### Added
-- **Robust Print Operations**: Enhanced ZebraPrinterManager.print() with integrated workflow robustness
-  - Integrated prepareForPrint functionality for comprehensive printer preparation
-  - Added format-specific buffer clearing and flushing operations
-  - Implemented print completion verification with hardware status checking
-  - Added format-specific completion delays (CPCL: 2500ms, ZPL: 2000ms) with data size scaling
-  - Integrated language mode checking and automatic switching
-  - Added post-print CPCL buffer flush operations
-  - Comprehensive error handling and status reporting throughout the print workflow
-- **Print Completion Verification**: Hardware-based print completion verification system
-  - Automatic delay calculation based on data size (extra 1s per KB)
-  - Hardware status verification using waitForPrintCompletion command
-  - Format-specific completion timing optimized for CPCL and ZPL
-  - Robust error handling for completion verification failures
-- **Integrated Workflow**: Combined pre-print, print, and post-print operations
-  - Pre-print: Connection, media, head, pause, error, and language checks with fixes
-  - Print: Format detection, data preparation, and print execution
-  - Post-print: Buffer operations, completion verification, and status reporting
-  - Comprehensive status streaming for real-time operation feedback
+- **Printer Readiness Architecture**: Implemented comprehensive lazy caching pattern with single hardware read per property
+  - **PrinterReadiness Class**: Lazy status caching with options-driven communication
+  - **PrinterReadinessManager Class**: Orchestrates readiness checks and automatic corrections with enhanced event system
+  - **Reset Operations**: Individual and complete reset methods for force re-reading when needed
+  - **ReadinessResult Integration**: Comprehensive result structure with applied fixes tracking
+  - **Enhanced Event System**: Detailed readiness operation events with operation type, kind, and result tracking
+- **Hardware Communication Optimization**: Just-enough communication principle with minimal hardware calls
+  - **Single Read Pattern**: Each property is read only once and cached for subsequent access
+  - **Options Respect**: Only reads hardware for properties enabled in ReadinessOptions
+  - **Manager Efficiency**: Uses cached values, never makes duplicate hardware calls
+  - **Fix Flags Integration**: Fix flags implicitly allow reading corresponding status
+- **Comprehensive Reset Capability**: Full reset functionality for all readiness properties
+  - **Individual Resets**: `resetConnection()`, `resetMediaStatus()`, `resetHeadStatus()`, etc.
+  - **Complete Reset**: `resetAllStatuses()` for comprehensive re-reading
+  - **External Control**: Reset operations available for external code when hardware state changes
 
+### Enhanced
+- **PrinterReadinessManager Class**:
+  - **Enhanced Event System**: Detailed readiness operation events with operation type, kind, and result tracking
+  - **Cached Value Usage**: All check and fix methods use cached values from PrinterReadiness
+  - **No Reset Operations**: Removed automatic reset calls after applying fixes
+  - **Fix Logic**: Applies corrections based on options and format requirements
+  - **Efficient Communication**: No duplicate hardware calls during manager operations
+- **SmartPrintManager Class**:
+  - **Connection Optimization**: Avoids unnecessary disconnect/reconnect when already connected to same printer
+  - **Language Support**: Enabled language checking and fixing for proper ZPL/CPCL interpretation
+  - **Comprehensive Status Checks**: Enhanced readiness options to include essential language and error operations
+  - **Trusted Memory Status**: Optimistically trusts connection status while letting readiness manager verify
+  - **Enhanced Event Forwarding**: Forwards detailed readiness events to the event stream for comprehensive UI feedback
+- **ZebraPrinter Class**:
+  - **Connection Efficiency**: Only disconnects when connecting to a different printer
+  - **Same Printer Detection**: Skips reconnection when already connected to the same printer
+  - **Memory Status Trust**: Relies on cached connection status for efficiency
+- **Hardware Communication Flow**:
+  - **Initial Read (Lazy)**: Hardware communication only on first property access
+  - **Manager Check (Uses Cache)**: Manager operations use cached values exclusively
+  - **External Reset (When Needed)**: External code can reset and re-read when needed
+- **Performance Optimization**:
+  - **Reduced Hardware Calls**: Single read per property per session
+  - **Memory Efficiency**: Minimal memory overhead for cached values
+  - **Time Complexity**: O(1) for cached access, O(1) for reset operations
+  - **Connection Efficiency**: Eliminated unnecessary disconnect/reconnect cycles
 
-### Changed
-- **Reduced prepareForPrint Checks**: Optimized printer preparation to match original behavior
-  - Changed from comprehensive checks (connection, media, head, pause, errors, language, buffer) to language-only operations
-  - Added `ReadinessOptions.forLanguageOnly()` factory method for minimal language checks
-  - Updated `_checkAndFixLanguage` method to actually switch printer language when `fixLanguageMismatch` is true
-  - Reduced unnecessary checks to improve performance and match original ZebraPrinterService behavior
-  - Language switching now uses proper CommandFactory commands (setZplMode, setCpclMode) for exact compatibility
-- **ZebraPrinterManager Architecture**: Enhanced to provide both primitive and robust operations
-  - Main print() method now provides full workflow integration
-  - Added PrinterReadinessManager integration for comprehensive preparation
-  - Enhanced status streaming with detailed operation progress
-  - Improved error handling with specific error codes and messages
-- **Print Workflow**: Integrated workflow that matches old ZebraPrinterService robustness
-  - Automatic printer preparation with format-specific optimizations
-  - Intelligent buffer management for CPCL and ZPL formats
-  - Hardware-based completion verification instead of simple delays
-  - Comprehensive error recovery and status reporting
+### Simplified
+- **Connection Management**: Centralized all connection management, health checks, retries, and timeout policies in `CommunicationPolicy`
+  - **Removed Duplicate Logic**: Eliminated connection health caching, retry logic, and timeout handling from `ZebraPrinterManager`
+  - **Simplified Methods**: Streamlined `ensureConnectionHealth()` and `handleConnectionFailure()` to use `CommunicationPolicy` exclusively
+  - **Clean Architecture**: Clear separation between connection assurance (CommunicationPolicy) and operation timeouts (OperationManager)
+  - **Reduced Complexity**: Removed `_isConnectionHealthy`, `_lastConnectionCheck`, `_connectionCheckValidity`, and `_maxReconnectionAttempts` fields
+- **OperationManager Timeout**: Kept native operation timeout handling in `OperationManager` for tracking individual operation timeouts
+  - **Distinct Responsibilities**: CommunicationPolicy handles connection assurance, OperationManager handles operation tracking
+  - **No Duplication**: Each component has a single, clear responsibility for timeout handling
 
+### Integrated
+- **ZebraPrinterManager**: Updated to use new CommunicationPolicy integrated workflow
+  - **Removed Old Methods**: Eliminated `ensureConnectionHealth()` and `handleConnectionFailure()` methods
+  - **Public Access**: Added `communicationPolicy` getter for external access
+  - **Simplified Print Logic**: Print operations now use integrated workflow automatically
+- **SmartPrintManager**: Updated to use CommunicationPolicy directly
+  - **Direct Integration**: Uses communication policy for connection health and reconnection
+  - **Consistent Workflow**: All connection management goes through CommunicationPolicy
+- **PrinterReadiness**: Updated to use new CommunicationPolicy API
+  - **executeCommand()**: All status reading uses the new command execution API
+  - **getConnectionStatus()**: Connection checking uses the new status API
+- **PrinterReadinessManager**: Updated to use new CommunicationPolicy API
+  - **ensureConnection()**: Uses new connection status API
+  - **executeCommandWithAssurance()**: Uses new operation execution API
 
 ### Fixed
-- **Smart Print Event System**: Fixed SmartPrintManager to properly return event streams
-  - Changed SmartPrintManager.smartPrint() to return Stream<PrintEvent> instead of Future<Result<void>>
-  - Fixed Zebra.smartPrint() to properly handle event streams from SmartPrintManager
-  - Resolved null printer address issue in smart print operations
-- **Smart Print Example**: Enhanced example screen with proper printer selection
-  - Added printer selection functionality using BTPrinterSelector
-  - Added printer selection panel to UI with clear status display
-  - Fixed smart print to require printer selection before attempting to print
-  - Improved error handling and user feedback for printer selection
-- Fixed smartPrintManager getter to ensure proper initialization before use
-- Fixed example app to use correct Zebra.smartPrint and Zebra.cancelSmartPrint API
-- Removed obsolete TODO comments from test files
-- Fixed test expectations to match actual error message implementations
-
-### Removed
-- **Unused Code Cleanup**: Removed printPrimitive() method and related dead code
-  - Removed printPrimitive() method that was not being used anywhere in the codebase
-  - Removed _checkAndSwitchLanguageMode() method that was only used by printPrimitive
-  - Simplified codebase by eliminating unused methods and reducing complexity
-  - The robust print() method already provides all necessary functionality
+- **CorrectedReadiness Class**: Fixed constructor to properly extend PrinterReadiness with super parameters
+- **Multiple Hardware Reads**: Eliminated duplicate hardware calls in manager operations
+- **Options Violation**: Ensured all property access respects ReadinessOptions settings
+- **Reset Logic**: Removed unnecessary reset operations from manager after applying fixes
+- **Code Quality**: Fixed all linter errors and removed unused imports
+- **Connection Efficiency**: Eliminated unnecessary disconnect/reconnect cycles in smart print workflow
+- **Language Interpretation**: Fixed printer printing raw ZPL instead of interpreting it by enabling language checking/fixing
+- **Smart Print Workflow**: Optimized connection logic to trust memory status and avoid redundant operations
+- **Legacy Code Cleanup**: Removed redundant `_checkPrinterStatus` method from SmartPrintManager in favor of centralized readiness management
 
 ### Technical
-- **Language Switching**: Enhanced PrinterReadinessManager to perform actual language switching instead of just checking
-- **Performance Optimization**: Reduced prepareForPrint overhead by eliminating unnecessary status checks
-- **Exact Compatibility**: Ensured language switching calls match original ZebraPrinterService implementation
-- **Workflow Integration**: Seamless integration of prepareForPrint with print execution
-- **Format-Specific Optimization**: CPCL and ZPL specific handling for maximum reliability
-- **Hardware Verification**: Uses actual printer status for completion verification
-- **Status Streaming**: Real-time status updates throughout the entire print workflow
-- **Error Handling**: Comprehensive error handling with specific error codes and recovery
+- **Architecture**: Clear separation between status caching (PrinterReadiness) and fix orchestration (PrinterReadinessManager)
+- **Efficiency**: Just-enough hardware communication with single read per property pattern
+- **Flexibility**: Reset operations available for external use when hardware state changes
+- **Maintainability**: Comprehensive documentation and cursor rules for architecture patterns
+- **Performance**: Optimized hardware communication with minimal calls and maximum caching
+- **Standards**: Enforced single hardware read pattern and options-driven communication
+- **Event System**: Enhanced readiness events provide detailed operation tracking for UI and debugging
+- **Code Quality**: DRY, SRP, and KISS principles enforced throughout the architecture
 
-## [2.0.38] - 2025-01-08
+## [2.0.39] - 2024-12-19
+
+### Added
+- **Comprehensive Edge Case Error Handling**: Enhanced SmartPrintManager with robust error handling for all edge cases
+- **Enhanced Print Steps**: Added validation, status checking, and completion waiting steps
+- **Error Classification System**: Implemented ErrorRecoverability enum for better error categorization
+- **Recovery Hints**: Added user-friendly recovery instructions for different error types
+- **Data Validation**: Added comprehensive print data validation before sending
+- **Status Monitoring**: Enhanced printer status detection and monitoring
+- **Resource Management**: Improved cleanup and resource management
+- **Mobile UI Enhancements**: Enhanced error presentation with recovery guidance and user decision points
+- **New Cursor Rule**: Added edge-case-error-handling.mdc for comprehensive error handling architecture
+
+### Enhanced
+- **SmartPrintManager**: 
+  - Added data validation step with format and size checking
+  - Enhanced connection error classification and retry logic
+  - Added printer status checking before printing
+  - Implemented print completion waiting
+  - Added exponential backoff for retries
+  - Enhanced error information with recovery hints
+- **Mobile UI**:
+  - Enhanced error categorization using SmartPrintManager error info
+  - Added user decision points for non-recoverable errors
+  - Improved error presentation with recovery guidance
+  - Added action buttons for manual error resolution
+  - Enhanced status visualization and progress tracking
+
+### Fixed
+- **Error Handling**: Improved error classification and recovery strategies
+- **Resource Leaks**: Fixed potential resource leaks with proper cleanup
+- **Status Detection**: Enhanced printer status detection for hardware issues
+- **UI Responsiveness**: Improved UI responsiveness during error scenarios
+
+### Technical
+- **Architecture**: Clear separation of responsibilities between library and UI layers
+- **Error Recovery**: Auto-recovery for connection issues, manual guidance for hardware issues
+- **Status Monitoring**: Real-time status updates and change detection
+- **Testing**: Enhanced error scenario testing and validation
+
+## [2.0.38] - 2024-12-19
 
 ### Added
 - **Professional Documentation**: Complete rewrite of README.md with modern architecture overview

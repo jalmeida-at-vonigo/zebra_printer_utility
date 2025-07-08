@@ -90,6 +90,23 @@ class ReadinessOptions {
         fixLanguageMismatch: true,
       );
   
+  /// Optimized readiness options for smart print workflow
+  /// This performs all checks and fixes during smart print preparation
+  /// and disables them for the subsequent print operation
+  factory ReadinessOptions.smartOptimized() => const ReadinessOptions(
+        checkConnection: true,
+        checkMedia: true,
+        checkHead: true,
+        checkPause: true,
+        checkErrors: true,
+        checkLanguage: true,
+        fixPausedPrinter: true,
+        fixPrinterErrors: true,
+        fixLanguageMismatch: true,
+        clearBuffer: true,
+        flushBuffer: true,
+      );
+  
   /// Comprehensive readiness check with all fixes
   factory ReadinessOptions.comprehensive() => const ReadinessOptions(
     checkConnection: true,

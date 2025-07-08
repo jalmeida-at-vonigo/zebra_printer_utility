@@ -18,3 +18,5 @@ export 'models/readiness_options.dart';
 export 'models/readiness_result.dart';
 export 'models/printer_readiness.dart';
 export 'smart_print_manager.dart';
+export 'internal/communication_policy.dart';
+export 'internal/commands/command_factory.dart';

@@ -1,0 +1,181 @@
+# Zebra Printer Utility - Complete Architecture Overview
+
+## Overview
+The Zebra printer utility provides a comprehensive, robust interface for interacting with Zebra printers. It uses a layered architecture with centralized communication policies, command patterns, and manager-based workflows.
+
+## Core Architecture
+
+### Communication Layer
+- **[CommunicationPolicy](mdc:lib/internal/communication_policy.dart)** - Centralized connection assurance, timeout handling, and retry logic
+- **[OperationManager](mdc:lib/internal/operation_manager.dart)** - Native operation tracking and timeout management
+- **[ZebraPrinter](mdc:lib/zebra_printer.dart)** - Low-level printer interface with native communication
+
+### Command Layer
+- **[CommandFactory](mdc:lib/internal/commands/command_factory.dart)** - Factory for creating printer commands
+- **[BaseCommand](mdc:lib/internal/commands/base_command.dart)** - Base class for all printer commands
+- **Command Classes** - Individual command implementations for specific operations
+
+### Manager Layer
+- **[ZebraPrinterManager](mdc:lib/zebra_printer_manager.dart)** - High-level printer management and workflows
+- **[PrinterReadinessManager](mdc:lib/zebra_printer_readiness_manager.dart)** - Printer readiness operations
+- **[SmartPrintManager](mdc:lib/smart_print_manager.dart)** - Intelligent print workflows
+
+### Model Layer
+- **[PrinterReadiness](mdc:lib/models/printer_readiness.dart)** - Lazy printer status checking
+- **[ZebraDevice](mdc:lib/models/zebra_device.dart)** - Printer device representation
+- **[Result](mdc:lib/models/result.dart)** - Standardized result handling
+
+## Key Design Principles
+
+### DRY (Don't Repeat Yourself)
+- **Single Communication Policy**: All connection assurance centralized in `CommunicationPolicy`
+- **Command Pattern**: Reusable commands for all printer operations
+- **Manager Abstraction**: High-level workflows without duplication
+
+### Separation of Concerns
+- **Communication**: Handled by `CommunicationPolicy` and `OperationManager`
+- **Business Logic**: Handled by managers and workflows
+- **Data**: Handled by models and result objects
+- **Commands**: Handled by command pattern implementation
+
+### Robustness
+- **Connection Assurance**: Automatic connection checking and retry logic
+- **Timeout Handling**: Comprehensive timeout management at multiple levels
+- **Error Classification**: Intelligent error handling and retry decisions
+- **Policy Depth Protection**: Prevents infinite loops in nested operations
+
+## Usage Patterns
+
+### High-Level Usage (Recommended)
+```dart
+import 'package:zebrautil/zebrautil.dart';
+
+// Use managers for complete workflows
+final manager = ZebraPrinterManager();
+await manager.initialize();
+await manager.connect(printerAddress);
+final result = await manager.print('test data');
+```
+
+### Advanced Usage (Direct Control)
+```dart
+// For advanced users who need direct control
+final printer = ZebraPrinter('instance_id');
+final policy = CommunicationPolicy(printer);
+
+// Execute commands with assurance
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await policy.executeCommand(command);
+```
+
+### Custom Operations
+```dart
+// Execute any printer operation with assurance
+final result = await policy.executeWithAssurance(
+  () => printer.getSetting('device.languages'),
+  'Get Language Setting'
+);
+```
+
+## Communication Flow
+
+### Standard Operation
+1. **User Call** → Manager method
+2. **Business Logic** → Manager validation and preparation
+3. **Policy Execution** → CommunicationPolicy handles communication
+4. **Connection Check** → Policy ensures connection health
+5. **Command Execution** → Policy executes command with retry logic
+6. **Result Processing** → Manager processes and returns result
+
+### Error Handling
+1. **Operation Failure** → Policy detects failure
+2. **Error Classification** → Policy determines if retry is appropriate
+3. **Retry Logic** → Policy retries connection-related errors
+4. **Final Result** → Policy returns final result to manager
+5. **User Response** → Manager provides appropriate response
+
+## Integration Points
+
+### Managers Use CommunicationPolicy
+- **ZebraPrinterManager**: Connection health checks, print operations
+- **PrinterReadinessManager**: All command executions
+- **PrinterReadiness**: Status reading operations
+
+### Commands Use BaseCommand
+- **Standardized Interface**: All commands implement `BaseCommand`
+- **Factory Creation**: Commands created via `CommandFactory`
+- **Policy Execution**: Commands executed via `CommunicationPolicy`
+
+### Models Use CommunicationPolicy
+- **Lazy Loading**: Models use policy for status checks
+- **Caching**: Models cache results to avoid redundant calls
+- **Reset Capability**: Models can reset and re-read status
+
+## Configuration
+
+### CommunicationPolicy Settings
+- **Max Retries**: 2 attempts per operation
+- **Connection Timeout**: 5 seconds
+- **Operation Timeout**: 10 seconds
+- **Retry Delay**: 500ms with exponential backoff
+
+### Error Classification
+Connection-related errors are automatically detected and retried:
+- connection, connected, disconnect
+- timeout, network, bluetooth, wifi
+- socket, communication
+
+## Best Practices
+
+### For Application Development
+- ✅ Use managers for high-level operations
+- ✅ Let managers handle connection and retry logic
+- ✅ Use standardized result objects for error handling
+- ✅ Trust the communication policy's robustness
+
+### For Library Extension
+- ✅ Create new commands using the command pattern
+- ✅ Use CommunicationPolicy for all printer operations
+- ✅ Follow the manager pattern for new workflows
+- ✅ Implement proper error handling and result objects
+
+### For Testing
+- ✅ Mock CommunicationPolicy for unit tests
+- ✅ Use real policy for integration tests
+- ✅ Test error scenarios and retry logic
+- ✅ Verify policy depth protection
+
+## Migration Notes
+
+### From Direct Printer Usage
+- **Before**: Direct printer calls without assurance
+- **After**: Use managers or CommunicationPolicy
+- **Benefits**: Automatic connection assurance, retry logic, better error handling
+
+### From Custom Retry Logic
+- **Before**: Custom retry implementations in managers
+- **After**: Centralized retry logic in CommunicationPolicy
+- **Benefits**: Consistent behavior, better debugging, reduced code duplication
+
+## Debugging and Monitoring
+
+### Policy Statistics
+```dart
+final stats = CommunicationPolicy.getPolicyStats();
+print('Policy depth: ${stats['policyDepth']}');
+print('Max retries: ${stats['maxRetries']}');
+```
+
+### Logging
+- **CommunicationPolicy**: Logs all connection and retry operations
+- **Managers**: Log business logic and workflow operations
+- **Commands**: Log individual command executions
+
+### Error Tracking
+- **Result Objects**: Standardized error information
+- **Error Classification**: Automatic error type detection
+- **Retry Tracking**: Automatic retry attempt logging
+description:
+globs:
+alwaysApply: false
+---

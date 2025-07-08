@@ -201,9 +201,10 @@ class Zebra {
   /// FORM
   /// PRINT
   /// ```
-  static Future<Result<void>> print(String data, {PrintFormat? format}) async {
+  static Future<Result<void>> print(String data,
+      {PrintOptions? options}) async {
     await _ensureInitialized();
-    return await _manager.print(data, format: format);
+    return await _manager.print(data, options: options);
   }
 
   /// Smart print with comprehensive event system and automatic recovery

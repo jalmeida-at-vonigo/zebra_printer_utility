@@ -1,0 +1,139 @@
+# Communication Policy Architecture
+
+## Overview
+The `CommunicationPolicy` class provides centralized connection assurance, timeout handling, and retry logic for all printer communication operations. It includes policy depth tracking to prevent nested calls and infinite loops.
+
+## Key Files
+- [CommunicationPolicy](mdc:lib/internal/communication_policy.dart) - Core policy implementation
+- [ZebraPrinterManager](mdc:lib/zebra_printer_manager.dart) - Uses CommunicationPolicy for connection assurance
+- [PrinterReadinessManager](mdc:lib/zebra_printer_readiness_manager.dart) - Uses CommunicationPolicy for command execution
+- [PrinterReadiness](mdc:lib/models/printer_readiness.dart) - Uses CommunicationPolicy for status checks
+
+## Architecture Principles
+
+### DRY (Don't Repeat Yourself)
+- **Single Source of Truth**: All connection assurance and retry logic is centralized in `CommunicationPolicy`
+- **No Duplication**: Managers use the same policy instead of implementing their own retry logic
+- **Consistent Behavior**: All operations follow the same connection assurance patterns
+
+### KISS (Keep It Simple, Stupid)
+- **Simple API**: `executeWithAssurance()` and `ensureConnection()` methods
+- **Clear Separation**: Policy handles communication, managers handle business logic
+- **Minimal Dependencies**: Policy only depends on `ZebraPrinter` and basic utilities
+
+### Policy Depth Protection
+- **Static Counter**: `_policyDepth` tracks nested calls
+- **Automatic Skip**: Nested calls skip assurance to prevent infinite loops
+- **Debug Support**: Policy depth is exposed for debugging
+
+## Usage Patterns
+
+### For Managers (Internal Use)
+```dart
+// Initialize policy
+final policy = CommunicationPolicy(printer);
+
+// Execute operations with assurance
+final result = await policy.executeWithAssurance(
+  () => printer.print(data: 'test'),
+  'Print Operation'
+);
+
+// Check connection health
+final isConnected = await policy.ensureConnection();
+```
+
+### For Commands (Internal Use)
+```dart
+// Execute commands with assurance
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await policy.executeCommand(command);
+```
+
+### For Direct Printer Operations (Public Use)
+```dart
+// Create policy for direct printer operations
+final policy = CommunicationPolicy(printer);
+
+// Execute any printer operation with assurance
+final result = await policy.executeWithAssurance(
+  () => printer.getSetting('device.languages'),
+  'Get Language Setting'
+);
+```
+
+## Integration Points
+
+### ZebraPrinterManager
+- Uses `CommunicationPolicy` for connection health checks
+- Integrates policy into `ensureConnectionHealth()` method
+- Maintains backward compatibility with existing API
+
+### PrinterReadinessManager
+- Uses `CommunicationPolicy` for all command executions
+- Replaces custom retry logic with centralized policy
+- Maintains same public API
+
+### PrinterReadiness
+- Uses `CommunicationPolicy` for status reading operations
+- Ensures all status checks have connection assurance
+- Maintains lazy loading behavior
+
+## Policy Configuration
+
+### Retry Settings
+- **Max Retries**: 2 attempts per operation
+- **Connection Timeout**: 5 seconds
+- **Operation Timeout**: 10 seconds
+- **Retry Delay**: 500ms with exponential backoff
+
+### Error Classification
+Connection-related errors are automatically detected and retried:
+- connection, connected, disconnect
+- timeout, network, bluetooth, wifi
+- socket, communication
+
+## Best Practices
+
+### Do's
+- ✅ Use `CommunicationPolicy` for all printer operations
+- ✅ Let managers handle business logic, policy handle communication
+- ✅ Use descriptive operation names for logging
+- ✅ Trust the policy depth protection
+
+### Don'ts
+- ❌ Don't implement custom retry logic in managers
+- ❌ Don't bypass the policy for "simple" operations
+- ❌ Don't nest policy calls (protection is automatic)
+- ❌ Don't modify policy settings without thorough testing
+
+## Debugging
+
+### Policy Statistics
+```dart
+final stats = CommunicationPolicy.getPolicyStats();
+print('Policy depth: ${stats['policyDepth']}');
+print('Max retries: ${stats['maxRetries']}');
+```
+
+### Reset Policy Depth
+```dart
+CommunicationPolicy.resetPolicyDepth(); // For testing only
+```
+
+## Migration Notes
+
+### From Old Implementation
+- Old connection assurance logic has been removed from managers
+- All retry logic is now centralized in `CommunicationPolicy`
+- Policy depth protection prevents the nested retry issues
+- Backward compatibility is maintained through manager APIs
+
+### Testing Considerations
+- Policy depth protection may affect test scenarios
+- Use `resetPolicyDepth()` for isolated tests
+- Monitor policy statistics during integration tests
+description:
+globs:
+alwaysApply: false
+---

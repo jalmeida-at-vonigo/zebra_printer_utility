@@ -153,7 +153,259 @@ Individual command classes should be used for specific operations:
 - **Examples**: `SendClearAlertsCommand`, `SendZplClearErrorsCommand`, etc.
 - **Pattern**: Each command class handles one specific operation
 
-## 8. API Usage Guidelines
+## 8. Printer Readiness Architecture
+
+### Overview
+Printer readiness follows a **lazy caching pattern** with **single hardware read per property** and **just-enough communication** principles. The architecture ensures efficient hardware communication while providing comprehensive status checking and automatic correction capabilities.
+
+### Core Components
+
+#### PrinterReadiness ([lib/models/printer_readiness.dart](mdc:lib/models/printer_readiness.dart))
+- **Purpose**: Lazy status caching with single hardware read per property
+- **Pattern**: Properties are read only when first accessed and cached thereafter
+- **Options Respect**: Only reads hardware for properties enabled in ReadinessOptions
+- **Reset Capability**: Provides reset methods to force re-reading when needed
+
+#### PrinterReadinessManager ([lib/zebra_printer_readiness_manager.dart](mdc:lib/zebra_printer_readiness_manager.dart))
+- **Purpose**: Orchestrates readiness checks and automatic corrections
+- **Pattern**: Uses cached values from PrinterReadiness, never makes duplicate hardware calls
+- **Fix Logic**: Applies corrections based on options and format requirements
+- **No Reset Operations**: Does not trigger re-reads after applying fixes
+
+### Key Architectural Principles
+
+#### 1. Single Hardware Read Per Property
+```dart
+// ✅ CORRECT - Read once, cache forever
+final readiness = PrinterReadiness(printer: printer, options: options);
+final hasMedia = await readiness.hasMedia; // Reads hardware once
+final hasMediaAgain = await readiness.hasMedia; // Uses cached value
+
+// ❌ WRONG - Multiple hardware reads
+final command1 = CommandFactory.createGetMediaStatusCommand(printer);
+final command2 = CommandFactory.createGetMediaStatusCommand(printer);
+```
+
+#### 2. Options-Driven Communication
+```dart
+// Only read what's requested
+final options = ReadinessOptions(
+  checkConnection: true,
+  checkMedia: false, // Won't read media status
+  checkHead: true,
+);
+
+final readiness = PrinterReadiness(printer: printer, options: options);
+await readiness.isConnected; // Reads hardware
+await readiness.hasMedia; // Returns null (not read)
+await readiness.headClosed; // Reads hardware
+```
+
+#### 3. Manager Uses Cached Values
+```dart
+// ✅ CORRECT - Manager uses cached values
+Future<void> _checkAndFixMedia(PrinterReadiness readiness) async {
+  final hasMedia = await readiness.hasMedia; // Uses cached value
+  if (hasMedia == false) {
+    // Apply fix without re-reading
+    await applyMediaFix();
+  }
+}
+
+// ❌ WRONG - Manager makes duplicate hardware calls
+Future<void> _checkAndFixMedia(PrinterReadiness readiness) async {
+  final command = CommandFactory.createGetMediaStatusCommand(_printer);
+  final result = await command.execute(); // Duplicate hardware call
+}
+```
+
+#### 4. Fix Flags Allow Reading
+```dart
+// Fix flags implicitly allow reading the corresponding status
+final options = ReadinessOptions(
+  fixPausedPrinter: true, // Allows reading pause status
+  fixPrinterErrors: true, // Allows reading error status
+  fixLanguageMismatch: true, // Allows reading language status
+);
+```
+
+### Reset Operations
+
+#### Available Reset Methods
+```dart
+// Individual property resets
+await readiness.resetConnection();
+await readiness.resetMediaStatus();
+await readiness.resetHeadStatus();
+await readiness.resetPauseStatus();
+await readiness.resetHostStatus();
+await readiness.resetLanguageStatus();
+
+// Complete reset
+await readiness.resetAllStatuses();
+```
+
+#### Reset Usage Patterns
+```dart
+// ✅ CORRECT - External code can reset when needed
+final readiness = PrinterReadiness(printer: printer);
+await readiness.isPaused; // Initial read
+await printer.unpause(); // External operation
+await readiness.resetIsPaused(); // Force re-read
+final newStatus = await readiness.isPaused; // Fresh value
+
+// ❌ WRONG - Manager should not reset after fixes
+// (Manager applies fixes but doesn't verify them)
+```
+
+### ReadinessResult Integration
+
+#### Result Structure
+```dart
+final result = ReadinessResult.withReadyState(
+  isReady, // Cached ready state
+  readiness, // Lazy readiness object
+  appliedFixes, // List of successful fixes
+  failedFixes, // List of failed fixes
+  fixErrors, // Error details
+  totalTime, // Operation duration
+);
+```
+
+#### Usage Patterns
+```dart
+// Get readiness with automatic corrections
+final manager = PrinterReadinessManager(printer: printer);
+final result = await manager.prepareForPrint(
+  PrintFormat.zpl,
+  ReadinessOptions(
+    checkConnection: true,
+    checkMedia: true,
+    fixPausedPrinter: true,
+    fixPrinterErrors: true,
+  ),
+);
+
+if (result.success) {
+  final readiness = result.data!;
+  print('Ready: ${readiness.isReady}');
+  print('Applied fixes: ${readiness.appliedFixes}');
+}
+```
+
+### Hardware Communication Flow
+
+#### 1. Initial Read (Lazy)
+```dart
+final readiness = PrinterReadiness(printer: printer, options: options);
+// No hardware communication yet
+
+final hasMedia = await readiness.hasMedia;
+// Hardware communication happens here (if enabled in options)
+// Result is cached for future access
+```
+
+#### 2. Manager Check (Uses Cache)
+```dart
+final manager = PrinterReadinessManager(printer: printer);
+await manager.prepareForPrint(format, options);
+// Manager accesses readiness properties
+// Uses cached values, no additional hardware calls
+```
+
+#### 3. External Reset (When Needed)
+```dart
+// External code can reset and re-read when needed
+await readiness.resetHasMedia();
+final freshValue = await readiness.hasMedia; // New hardware read
+```
+
+### Best Practices
+
+#### 1. Always Use Cached Values
+```dart
+// ✅ CORRECT
+final readiness = PrinterReadiness(printer: printer);
+final status1 = await readiness.mediaStatus;
+final status2 = await readiness.mediaStatus; // Same cached value
+
+// ❌ WRONG - Multiple hardware reads
+final command1 = CommandFactory.createGetMediaStatusCommand(printer);
+final command2 = CommandFactory.createGetMediaStatusCommand(printer);
+```
+
+#### 2. Respect Options
+```dart
+// Only read what's needed
+final options = ReadinessOptions(
+  checkConnection: true,
+  checkMedia: false, // Don't read media
+  checkHead: true,
+);
+```
+
+#### 3. Use Reset Sparingly
+```dart
+// Only reset when you know the hardware state has changed
+await printer.unpause();
+await readiness.resetIsPaused(); // Justified reset
+
+// Don't reset without reason
+await readiness.resetAllStatuses(); // Usually unnecessary
+```
+
+#### 4. Manager Focus on Fixes
+```dart
+// Manager applies fixes but doesn't verify them
+// Verification is the responsibility of the caller
+final result = await manager.prepareForPrint(format, options);
+if (result.data!.hasFixes) {
+  // Caller can reset and verify if needed
+  await result.data!.readiness.resetAllStatuses();
+}
+```
+
+### Integration with Command System
+
+#### Command Usage in Readiness
+```dart
+// Readiness uses commands for hardware communication
+Future<void> _readMediaStatus() async {
+  final command = CommandFactory.createGetMediaStatusCommand(_printer);
+  final result = await command.execute();
+  // Cache the result
+}
+```
+
+#### Manager Uses Commands for Fixes
+```dart
+// Manager uses commands for corrections
+if (options.fixPausedPrinter) {
+  final unpauseCommand = CommandFactory.createSendUnpauseCommand(_printer);
+  await unpauseCommand.execute();
+}
+```
+
+### Performance Characteristics
+
+#### Hardware Communication
+- **Initial Read**: One command per enabled property
+- **Subsequent Access**: No hardware communication (cached)
+- **Manager Operations**: No additional hardware calls
+- **Reset Operations**: One command per reset property
+
+#### Memory Usage
+- **Cached Values**: Minimal memory overhead
+- **Readiness Object**: Lightweight, contains only status flags and cached values
+- **Manager**: Stateless, no persistent data
+
+#### Time Complexity
+- **First Access**: O(1) per property (hardware read)
+- **Cached Access**: O(1) (no hardware communication)
+- **Manager Operations**: O(1) (uses cached values)
+- **Reset Operations**: O(1) per property (single hardware read)
+
+## 9. API Usage Guidelines
 
 ### Simple Operations
 ```dart
@@ -195,40 +447,40 @@ deviceStream.listen((devices) {
 });
 ```
 
-## 9. Architecture Principles
+## 10. Architecture Principles
 
-### 9.1 Lazy Initialization
+### 10.1 Lazy Initialization
 - Managers are created only when needed
 - Initialization happens automatically on first API call
 - No explicit initialization required
 
-### 9.2 Static API Design
+### 10.2 Static API Design
 - All operations are static methods for simplicity
 - Consistent error handling with `Result<T>` pattern
 - Stream-based operations for real-time updates
 
-### 9.3 Manager Delegation
+### 10.3 Manager Delegation
 - Simple operations delegate to appropriate managers
 - Complex workflows use specialized managers
 - Direct manager access available for advanced use cases
 
-### 9.4 Error Handling
+### 10.4 Error Handling
 - All operations return `Result<T>` for consistent error handling
 - Smart print provides detailed error classification
 - Automatic retry logic in smart print operations
 
-### 9.5 Command Separation
+### 10.5 Command Separation
 - **Utility methods** in ZebraSGDCommands for data processing
 - **Command strings** generated through CommandFactory
 - **Command execution** handled by command classes
 - **Never mix** utility and command generation
 
-## 10. Circular Dependency Warning
+## 11. Circular Dependency Warning
 - **Any import or reference from `ZebraPrinterManager` to `SmartPrintManager` is strictly forbidden.**
 - If you need workflow logic, create a new `SmartPrintManager` in the consumer (UI, static API, etc.) and pass the manager as a dependency.
 - This ensures a clean, maintainable, and testable architecture.
 
-## 11. Example Usage
+## 12. Example Usage
 
 ### Correct: UI or static API creates workflow manager
 ```dart
@@ -244,14 +496,14 @@ final events = await smart.smartPrint(...);
 // (This will break the architecture and is not allowed)
 ```
 
-## 12. Summary Table
+## 13. Summary Table
 | Layer                | File                        | Depends On                | Exposes                |
 |----------------------|-----------------------------|---------------------------|------------------------|
 | Workflow/Orchestration | smart_print_manager.dart   | ZebraPrinterManager       | Events, workflow API   |
 | State/Primitives     | zebra_printer_manager.dart  | ZebraPrinter              | Primitive ops, state   |
 | Native Wrapper       | zebra_printer.dart          | (none)                    | Native ops only        |
 
-## 13. File Structure Reference
+## 14. File Structure Reference
 
 - **[zebra.dart](mdc:lib/zebra.dart)**: Main static API entry point
 - **[zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart)**: Core printer management
@@ -261,8 +513,11 @@ final events = await smart.smartPrint(...);
 - **[zebra_sgd_commands.dart](mdc:lib/zebra_sgd_commands.dart)**: Utility methods only (NO commands)
 - **[command_factory.dart](mdc:lib/internal/commands/command_factory.dart)**: Command string generation
 - **[internal/commands/](mdc:lib/internal/commands/)**: Individual command classes
+- **[printer_readiness.dart](mdc:lib/models/printer_readiness.dart)**: Lazy status caching with single hardware read per property
+- **[zebra_printer_readiness_manager.dart](mdc:lib/zebra_printer_readiness_manager.dart)**: Readiness orchestration and automatic corrections
+- **[readiness_result.dart](mdc:lib/models/readiness_result.dart)**: Result structure for readiness operations
 
-## 14. Best Practices
+## 15. Best Practices
 
 1. **Use Static API**: Prefer `Zebra.method()` over direct manager access
 2. **Handle Results**: Always check `Result.success` before using data
@@ -275,7 +530,7 @@ final events = await smart.smartPrint(...);
 9. **Respect Dependencies**: Never violate the dependency direction rules
 10. **Layer Separation**: Keep workflow logic separate from primitive operations
 
-## 15. Common Patterns
+## 16. Common Patterns
 
 ### Connection Management
 ```dart
@@ -332,7 +587,7 @@ final clearCommand = CommandFactory.createCommand(
 await printer.sendCommand(clearCommand);
 ```
 
-## 16. Enforcement
+## 17. Enforcement
 - **This rule is always applied.**
 - **Any violation (circular reference, wrong dependency direction) must be fixed immediately.**
 - **Review this rule after any significant codebase change.**

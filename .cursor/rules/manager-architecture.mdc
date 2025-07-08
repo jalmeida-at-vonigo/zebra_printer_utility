@@ -1,0 +1,200 @@
+# Manager Architecture with CommunicationPolicy
+
+## Overview
+The Zebra printer utility uses a layered architecture where managers handle business logic while delegating communication concerns to the `CommunicationPolicy`. This ensures consistent, robust communication across all operations.
+
+## Key Files
+- [ZebraPrinterManager](mdc:lib/zebra_printer_manager.dart) - High-level printer management
+- [PrinterReadinessManager](mdc:lib/zebra_printer_readiness_manager.dart) - Printer readiness operations
+- [PrinterReadiness](mdc:lib/models/printer_readiness.dart) - Lazy status checking
+- [CommunicationPolicy](mdc:lib/internal/communication_policy.dart) - Centralized communication logic
+
+## Architecture Layers
+
+### Layer 1: CommunicationPolicy (Foundation)
+- **Responsibility**: Connection assurance, timeout handling, retry logic
+- **Scope**: All printer communication operations
+- **Features**: Policy depth protection, automatic retries, error classification
+
+### Layer 2: Managers (Business Logic)
+- **Responsibility**: High-level operations, workflow coordination
+- **Scope**: Specific domains (printer management, readiness, etc.)
+- **Features**: Use CommunicationPolicy for all communication
+
+### Layer 3: Models (Data & State)
+- **Responsibility**: Data representation, lazy loading, caching
+- **Scope**: Printer status, readiness information
+- **Features**: Use CommunicationPolicy for status checks
+
+## Manager Integration Patterns
+
+### ZebraPrinterManager
+```dart
+class ZebraPrinterManager {
+  CommunicationPolicy? _communicationPolicy;
+  
+  // Uses policy for connection health checks
+  Future<Result<bool>> ensureConnectionHealth() async {
+    final result = await _communicationPolicy!.ensureConnection();
+    _isConnectionHealthy = result.success && (result.data ?? false);
+    return result;
+  }
+  
+  // Uses policy for robust print operations
+  Future<Result<void>> print(String data, {PrintOptions? options}) async {
+    // Business logic for print preparation
+    // ...
+    
+    // Use policy for actual print operation
+    final printResult = await _sendPrintDataWithFailureHandling(preparedData);
+  }
+}
+```
+
+### PrinterReadinessManager
+```dart
+class PrinterReadinessManager {
+  late final CommunicationPolicy _communicationPolicy;
+  
+  // All command execution goes through policy
+  Future<Result<T>> executeCommandWithAssurance<T>(
+    Future<Result<T>> Function() commandExecutor,
+    String operationName,
+  ) async {
+    return await _communicationPolicy.executeWithAssurance(
+        commandExecutor, operationName);
+  }
+  
+  // Connection assurance delegated to policy
+  Future<Result<bool>> ensureConnection() async {
+    return await _communicationPolicy.ensureConnection();
+  }
+}
+```
+
+### PrinterReadiness
+```dart
+class PrinterReadiness {
+  late final CommunicationPolicy _communicationPolicy;
+  
+  // All status reading uses policy
+  Future<void> _readMediaStatus() async {
+    final result = await _communicationPolicy.executeWithAssurance(
+        () => CommandFactory.createGetMediaStatusCommand(_printer).execute(),
+        'Get Media Status');
+    // Process result...
+  }
+}
+```
+
+## Communication Flow
+
+### Standard Operation Flow
+1. **Manager Method Called**: User calls manager method
+2. **Business Logic**: Manager performs business logic (validation, preparation)
+3. **Policy Execution**: Manager delegates to CommunicationPolicy
+4. **Connection Assurance**: Policy ensures connection is healthy
+5. **Operation Execution**: Policy executes the actual operation
+6. **Result Processing**: Manager processes the result
+7. **Response**: Manager returns appropriate response to user
+
+### Error Handling Flow
+1. **Operation Fails**: Communication operation fails
+2. **Error Classification**: Policy classifies error type
+3. **Retry Decision**: Policy decides if retry is appropriate
+4. **Retry Execution**: Policy retries if needed
+5. **Final Result**: Policy returns final result to manager
+6. **Manager Processing**: Manager handles the result appropriately
+
+## Policy Depth Protection
+
+### How It Works
+```dart
+// Manager calls policy
+await _communicationPolicy.executeWithAssurance(operation, 'name');
+// Policy depth: 1
+
+// If operation internally calls another policy method
+await _communicationPolicy.ensureConnection();
+// Policy depth: 2 - skips assurance to prevent infinite loops
+```
+
+### Benefits
+- **Prevents Infinite Loops**: Nested calls don't create infinite retry loops
+- **Maintains Performance**: Avoids redundant connection checks
+- **Preserves Logic**: Business logic continues to work correctly
+
+## Manager Responsibilities
+
+### ZebraPrinterManager
+- **Connection Management**: High-level connection operations
+- **Print Operations**: Complete print workflows
+- **Status Management**: Printer status and health monitoring
+- **Discovery Integration**: Printer discovery and selection
+
+### PrinterReadinessManager
+- **Readiness Operations**: Prepare printer for printing
+- **Diagnostics**: Comprehensive printer diagnostics
+- **Status Validation**: Validate printer state
+- **Correction Operations**: Fix printer issues
+
+### PrinterReadiness
+- **Status Caching**: Lazy loading of printer status
+- **Status Reading**: Individual status checks
+- **Data Management**: Status data representation
+- **Reset Operations**: Status cache management
+
+## Best Practices
+
+### For Manager Development
+- ✅ Always use CommunicationPolicy for communication operations
+- ✅ Delegate all connection concerns to the policy
+- ✅ Focus on business logic, not communication details
+- ✅ Trust the policy's retry and error handling
+
+### For Integration
+- ✅ Initialize CommunicationPolicy in manager constructors
+- ✅ Use policy methods consistently across all operations
+- ✅ Let policy handle all timeout and retry logic
+- ✅ Don't implement custom retry logic in managers
+
+### For Error Handling
+- ✅ Let policy handle connection-related errors
+- ✅ Focus on business logic errors in managers
+- ✅ Use policy's error classification for appropriate responses
+- ✅ Don't duplicate error handling logic
+
+## Testing Considerations
+
+### Unit Testing
+- **Mock CommunicationPolicy**: Mock the policy for isolated manager tests
+- **Test Business Logic**: Focus on testing manager business logic
+- **Verify Policy Calls**: Ensure managers call policy correctly
+
+### Integration Testing
+- **Real Policy**: Use real CommunicationPolicy for integration tests
+- **Policy Statistics**: Monitor policy depth and retry statistics
+- **Error Scenarios**: Test with various connection error scenarios
+
+### Policy Depth Testing
+- **Nested Calls**: Test scenarios with nested policy calls
+- **Depth Protection**: Verify depth protection works correctly
+- **Reset Functionality**: Test policy depth reset for isolated tests
+
+## Migration Notes
+
+### From Old Implementation
+- **Removed Duplication**: Eliminated duplicate retry logic from managers
+- **Centralized Communication**: All communication goes through CommunicationPolicy
+- **Improved Reliability**: Consistent connection assurance across all operations
+- **Better Debugging**: Centralized logging and statistics
+
+### Backward Compatibility
+- **Public APIs Unchanged**: Manager public APIs remain the same
+- **Internal Changes**: Only internal implementation changed
+- **Enhanced Reliability**: Better error handling and retry logic
+- **Improved Performance**: Reduced redundant connection checks
+description:
+globs:
+alwaysApply: false
+---

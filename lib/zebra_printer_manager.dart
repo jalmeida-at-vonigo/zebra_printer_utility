@@ -1,10 +1,59 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
-import 'internal/commands/command_factory.dart';
 import 'internal/smart_device_selector.dart';
 import 'internal/printer_preferences.dart';
 import 'internal/logger.dart';
+
+/// Options for configuring print operations
+class PrintOptions {
+  /// Whether to wait for print completion after sending data
+  final bool waitForPrintCompletion;
+
+  /// Readiness options for printer preparation
+  final ReadinessOptions readinessOptions;
+
+  /// Print format to use (null for auto-detection)
+  final PrintFormat? format;
+
+  const PrintOptions({
+    this.waitForPrintCompletion = true,
+    this.readinessOptions = const ReadinessOptions(),
+    this.format,
+  });
+
+  /// Default print options with completion waiting enabled
+  factory PrintOptions.defaults() => PrintOptions(
+        waitForPrintCompletion: true,
+        readinessOptions: ReadinessOptions.quickWithLanguage(),
+      );
+
+  /// Print options without completion waiting
+  factory PrintOptions.withoutCompletion() => PrintOptions(
+        waitForPrintCompletion: false,
+        readinessOptions: ReadinessOptions.quickWithLanguage(),
+      );
+
+  /// Print options with specific format
+  factory PrintOptions.withFormat(PrintFormat format) => PrintOptions(
+        waitForPrintCompletion: true,
+        readinessOptions: ReadinessOptions.quickWithLanguage(),
+        format: format,
+      );
+
+  /// Creates a copy with modified options
+  PrintOptions copyWith({
+    bool? waitForPrintCompletion,
+    ReadinessOptions? readinessOptions,
+    PrintFormat? format,
+  }) =>
+      PrintOptions(
+        waitForPrintCompletion:
+            waitForPrintCompletion ?? this.waitForPrintCompletion,
+        readinessOptions: readinessOptions ?? this.readinessOptions,
+        format: format ?? this.format,
+      );
+}
 
 /// Manager for Zebra printer instances and state
 ///
@@ -21,7 +70,8 @@ class ZebraPrinterManager {
   ZebraPrinter? _printer;
   ZebraController? _controller;
   ZebraPrinterDiscovery? _discovery;
-  PrinterReadinessManager? _readinessManager;
+  ZebraPrinterReadinessManager? _readinessManager;
+  CommunicationPolicy? _communicationPolicy;
 
   StreamController<ZebraDevice?>? _connectionStreamController;
   StreamController<String>? _statusStreamController;
@@ -35,6 +85,12 @@ class ZebraPrinterManager {
   /// Public getter for the status stream controller
   StreamController<String>? get statusStreamController =>
       _statusStreamController;
+
+  /// Public getter for the readiness manager
+  ZebraPrinterReadinessManager? get readinessManager => _readinessManager;
+
+  /// Get the communication policy for external use
+  CommunicationPolicy? get communicationPolicy => _communicationPolicy;
 
   /// Stream of current connection state
   Stream<ZebraDevice?> get connection =>
@@ -59,43 +115,57 @@ class ZebraPrinterManager {
   List<ZebraDevice> get discoveredPrinters => _controller?.printers ?? [];
 
   /// Initialize the printer manager
-  Future<void> initialize() async {
-    if (_printer != null) return;
+  Future<Result<bool>> initialize() async {
+    try {
+      _logger.info('Initializing ZebraPrinterManager');
+      
+      // Initialize controller and streams
+      _controller = ZebraController();
+      _connectionStreamController = StreamController<ZebraDevice?>.broadcast();
+      _statusStreamController = StreamController<String>.broadcast();
 
-    _logger.info('Initializing ZebraPrinterManager');
-    _controller = ZebraController();
-    _connectionStreamController = StreamController<ZebraDevice?>.broadcast();
-    _statusStreamController = StreamController<String>.broadcast();
+      // Initialize discovery service
+      _logger.info('Initializing discovery service');
+      await discovery.initialize(
+        controller: _controller,
+        statusCallback: (msg) => _statusStreamController?.add(msg),
+      );
 
-    // Initialize discovery service
-    _logger.info('Initializing discovery service');
-    await discovery.initialize(
-      controller: _controller,
-      statusCallback: (msg) => _statusStreamController?.add(msg),
-    );
+      // Listen to controller changes for connection updates
+      _controller!.addListener(_onControllerChanged);
 
-    // Listen to controller changes for connection updates
-    _controller!.addListener(_onControllerChanged);
+      _logger.info('Creating printer instance');
+      _printer = await _getPrinterInstance(
+        controller: _controller,
+        onDiscoveryError: (code, message) {
+          _logger.error('Discovery error: $code - $message');
+          _statusStreamController?.add('Discovery error: $message');
+        },
+        onPermissionDenied: () {
+          _logger.warning(
+              'Bluetooth permission denied, continuing with network discovery only');
+          _statusStreamController
+              ?.add('Bluetooth permission denied, using network discovery');
+        },
+      );
 
-    _logger.info('Creating printer instance');
-    _printer = await _getPrinterInstance(
-      controller: _controller,
-      onDiscoveryError: (code, message) {
-        _logger.error('Discovery error: $code - $message');
-        _statusStreamController?.add('Discovery error: $message');
-      },
-      onPermissionDenied: () {
-        _logger.warning(
-            'Bluetooth permission denied, continuing with network discovery only');
-        _statusStreamController
-            ?.add('Bluetooth permission denied, using network discovery');
-      },
-    );
-
-    // Initialize readiness manager
-    _readinessManager = PrinterReadinessManager(printer: _printer!);
-
-    _logger.info('ZebraPrinterManager initialization completed');
+      // Initialize readiness manager
+      _readinessManager = ZebraPrinterReadinessManager(printer: _printer!);
+      
+      // Initialize communication policy with status updates
+      _communicationPolicy = CommunicationPolicy(
+        _printer!,
+        onStatusUpdate: (status) {
+          _statusStreamController?.add(status);
+        },
+      );
+      
+      _logger.info('ZebraPrinterManager initialization completed');
+      return Result.success(true);
+    } catch (e) {
+      _logger.error('Failed to initialize ZebraPrinterManager: $e');
+      return Result.error('Initialization failed: $e');
+    }
   }
 
   void _onControllerChanged() {
@@ -107,7 +177,10 @@ class ZebraPrinterManager {
   // No workflow logic, just method forwarding with basic error handling
 
   /// Primitive: Connect to a printer by address or device
-  Future<Result<void>> connect(dynamic printerIdentifier) async {
+  Future<Result<void>> connect(
+    dynamic printerIdentifier, {
+    CommunicationPolicyOptions? options,
+  }) async {
     String? address;
     ZebraDevice? device;
 
@@ -123,58 +196,49 @@ class ZebraPrinterManager {
     _logger.info('Manager: Connecting to printer: $address');
     await _ensureInitialized();
 
-    try {
-      _statusStreamController?.add('Connecting to $address...');
-      final result = await _printer!.connectToPrinter(address!);
+    // Use CommunicationPolicy for connection with retry logic
+    return await _communicationPolicy!.execute(
+      () async {
+        _statusStreamController?.add('Connecting to $address...');
+        final result = await _printer!.connectToPrinter(address!);
 
-      if (result.success) {
-        _logger.info('Manager: Successfully connected to printer: $address');
-        _statusStreamController?.add('Connected to $address');
+        if (result.success) {
+          _logger.info('Manager: Successfully connected to printer: $address');
+          _statusStreamController?.add('Connected to $address');
 
-        // Record successful connection for smart selection
-        await SmartDeviceSelector.recordSuccessfulConnection(address);
+          // Record successful connection for smart selection
+          await SmartDeviceSelector.recordSuccessfulConnection(address);
 
-        // Use the provided device or find it in the controller's list
-        ZebraDevice? deviceToSave = device ??
-            _controller?.printers.firstWhere(
-              (p) => p.address == address,
-              orElse: () => ZebraDevice(
-                  address: address ?? '',
-                  name: 'Unknown Printer',
-                  status: 'Connected',
-                  isWifi: (address ?? '').contains('.')),
-            );
+          // Use the provided device or find it in the controller's list
+          ZebraDevice? deviceToSave = device ??
+              _controller?.printers.firstWhere(
+                (p) => p.address == address,
+                orElse: () => ZebraDevice(
+                    address: address ?? '',
+                    name: 'Unknown Printer',
+                    status: 'Connected',
+                    isWifi: (address ?? '').contains('.')),
+              );
 
-        if (deviceToSave != null) {
-          await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
+          if (deviceToSave != null) {
+            await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
+          }
+
+          return result;
+        } else {
+          _logger.error(
+              'Manager: Failed to connect to printer: $address - ${result.error?.message}');
+          _statusStreamController?.add('Failed to connect to $address');
+
+          // Record failed connection
+          await SmartDeviceSelector.recordFailedConnection(address);
+
+          return result;
         }
-
-        return result;
-      } else {
-        _logger.error(
-            'Manager: Failed to connect to printer: $address - ${result.error?.message}');
-        _statusStreamController?.add('Failed to connect to $address');
-
-        // Record failed connection
-        await SmartDeviceSelector.recordFailedConnection(address);
-
-        return result;
-      }
-    } catch (e, stack) {
-      _logger.error('Manager: Connection error to printer: $address', e, stack);
-      _statusStreamController?.add('Connection error: $e');
-      if (e.toString().contains('timeout')) {
-        return Result.errorCode(
-          ErrorCodes.connectionTimeout,
-          dartStackTrace: stack,
-        );
-      }
-      return Result.errorCode(
-        ErrorCodes.connectionError,
-        formatArgs: ['Connection error: $e'],
-        dartStackTrace: stack,
-      );
-    }
+      },
+      'Connect to Printer',
+      options: options,
+    );
   }
 
   /// Primitive: Disconnect from current printer
@@ -245,7 +309,7 @@ class ZebraPrinterManager {
 
   /// Robust print method with integrated workflow - as robust as the old ZebraPrinterService
   /// This combines pre-print preparation, print execution, and post-print verification
-  Future<Result<void>> print(String data, {PrintFormat? format}) async {
+  Future<Result<void>> print(String data, {PrintOptions? options}) async {
     _logger.info('Manager: Starting robust print operation');
     await _ensureInitialized();
 
@@ -258,18 +322,37 @@ class ZebraPrinterManager {
     }
 
     try {
-      // Step 1: Detect data format
-      final detectedFormat = format ??
+      // Step 1: Ensure connection health before printing
+      _logger.info('Manager: Ensuring connection health before printing');
+      final healthResult = await _communicationPolicy!.getConnectionStatus();
+      if (!healthResult.success || !healthResult.data!) {
+        _logger.warning(
+            'Manager: Connection health check failed, attempting reconnection');
+        final reconnectResult = await connect(
+          connectedPrinter!,
+          options: const CommunicationPolicyOptions(skipConnectionRetry: true),
+        );
+
+        if (!reconnectResult.success) {
+          _logger.error(
+              'Manager: Failed to reconnect after connection health failure');
+          return Result.error('Failed to establish connection for printing');
+        }
+      }
+
+      // Step 2: Detect data format
+      final printOptions = options ?? PrintOptions.defaults();
+      final detectedFormat = printOptions.format ??
           ZebraSGDCommands.detectDataLanguage(data) ??
           PrintFormat.zpl;
       _logger.info('Manager: Detected print format: ${detectedFormat.name}');
 
-      // Step 2: Prepare printer for printing (integrated prepareForPrint)
+      // Step 3: Prepare printer for printing (integrated prepareForPrint)
       _logger.info(
           'Manager: Preparing printer for ${detectedFormat.name} printing');
       _statusStreamController?.add('Preparing printer...');
 
-      final readinessOptions = ReadinessOptions.quickWithLanguage();
+      final readinessOptions = printOptions.readinessOptions;
 
       final prepareResult = await _readinessManager!.prepareForPrint(
         detectedFormat,
@@ -299,14 +382,27 @@ class ZebraPrinterManager {
         _statusStreamController?.add('Printer ready for printing');
       }
 
-      // Step 3: Prepare data based on format
-      final preparedData = _preparePrintData(data, format);
+      // Step 4: Prepare data based on format
+      final preparedData = _preparePrintData(data, detectedFormat);
 
-      // Step 4: Send print data
+      // Step 5: Send print data with connection failure handling
       _logger.info('Manager: Sending print data to printer');
       _statusStreamController?.add('Sending print data...');
 
-      final printResult = await _printer!.print(data: preparedData);
+      final printResult = await _communicationPolicy!.execute(
+        () => _printer!.print(data: preparedData),
+        'Send Print Data',
+        options: CommunicationPolicyOptions(
+          maxAttempts: 3,
+          skipConnectionCheck: false,
+          skipConnectionRetry: false,
+          onEvent: (event) {
+            // Forward status updates to the status stream
+            _statusStreamController?.add(event.message);
+          },
+        ),
+      );
+      
       if (!printResult.success) {
         _logger.error(
             'Manager: Print operation failed: ${printResult.error?.message}');
@@ -321,7 +417,7 @@ class ZebraPrinterManager {
       _logger.info('Manager: Print data sent successfully');
       _statusStreamController?.add('Print data sent successfully');
 
-      // Step 5: Post-print buffer operations (format-specific)
+      // Step 6: Post-print buffer operations (format-specific)
       if (detectedFormat == PrintFormat.cpcl) {
         _logger.info('Manager: Sending CPCL flush command');
         try {
@@ -334,45 +430,47 @@ class ZebraPrinterManager {
         }
       }
 
-      // Step 6: Wait for print completion with format-specific delays
-      final completionResult =
-          await _waitForPrintCompletion(data, detectedFormat);
-      if (!completionResult.success) {
-        _logger.warning(
-            'Manager: Print completion verification failed: ${completionResult.error?.message}');
-        _statusStreamController?.add('Print completed (verification failed)');
-      } else {
-        final success = completionResult.data ?? false;
-        if (success) {
-          _logger.info('Manager: Print completion verified successfully');
-          _statusStreamController?.add('Print completed successfully');
-        } else {
+      // Step 7: Wait for print completion with format-specific delays (if enabled)
+      if (printOptions.waitForPrintCompletion) {
+        final completionResult =
+            await waitForPrintCompletion(data, detectedFormat);
+        if (!completionResult.success) {
           _logger.warning(
-              'Manager: Print completion failed - hardware issues detected');
-          _statusStreamController?.add('Print completed with hardware issues');
+              'Manager: Print completion verification failed: ${completionResult.error?.message}');
+          _statusStreamController?.add('Print completed (verification failed)');
+        } else {
+          final success = completionResult.data ?? false;
+          if (success) {
+            _logger.info('Manager: Print completion verified successfully');
+            _statusStreamController?.add('Print completed successfully');
+          } else {
+            _logger.warning(
+                'Manager: Print completion failed - hardware issues detected');
+            _statusStreamController
+                ?.add('Print completed with hardware issues');
+          }
         }
+      } else {
+        _logger.info('Manager: Skipping print completion wait (disabled)');
+        _statusStreamController
+            ?.add('Print data sent (completion wait disabled)');
       }
 
       return Result.success();
     } catch (e, stack) {
-      _logger.error('Manager: Print operation error', e, stack);
+      _logger.error(
+          'Manager: Unexpected error during print operation', e, stack);
       _statusStreamController?.add('Print error: $e');
-      if (e.toString().contains('timeout')) {
-        return Result.errorCode(
-          ErrorCodes.operationTimeout,
-          dartStackTrace: stack,
-        );
-      }
       return Result.errorCode(
         ErrorCodes.printError,
-        formatArgs: ['Print error: $e'],
+        formatArgs: ['Unexpected print error: $e'],
         dartStackTrace: stack,
       );
     }
   }
 
   /// Wait for print completion with format-specific delays and verification
-  Future<Result<bool>> _waitForPrintCompletion(
+  Future<Result<bool>> waitForPrintCompletion(
       String data, PrintFormat? format) async {
     try {
       // Calculate delay based on data size and format (same as old service)
@@ -400,8 +498,6 @@ class ZebraPrinterManager {
     }
   }
 
-
-
   /// Primitive: Get printer status
   Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
     _logger.info('Manager: Getting printer status');
@@ -423,7 +519,7 @@ class ZebraPrinterManager {
         return result;
       } else {
         _logger.error(
-            'Manager: Failed to get printer status - ${result.error?.message}');
+            'Manager: Failed to get printer status - ${result.error!.message}');
         return result;
       }
     } catch (e, stack) {
@@ -457,7 +553,7 @@ class ZebraPrinterManager {
         return result;
       } else {
         _logger.error(
-            'Manager: Failed to get detailed printer status - ${result.error?.message}');
+            'Manager: Failed to get detailed printer status - ${result.error!.message}');
         return result;
       }
     } catch (e, stack) {

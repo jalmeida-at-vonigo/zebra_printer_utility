@@ -3,10 +3,13 @@
 - [Development Docs](mdc:.readme/development/README.md)
 - [README.md](mdc:README.md)
 
-# RESULT-BASED ARCHITECTURE
+# RESULT-BASED ARCHITECTURE & ERROR CODE CENTRALIZATION
 
 ## Overview
-The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. This includes both error constants and success constants with formatable message templates.
+The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. **ALL error and success codes MUST be defined in [result.dart](mdc:lib/models/result.dart) and referenced using the centralized constants.**
+
+## Core Principle
+**NO hardcoded error or success strings should exist anywhere in the codebase outside of [result.dart](mdc:lib/models/result.dart).**
 
 ## Core Components
 
@@ -43,103 +46,101 @@ The plugin uses a comprehensive Result-based architecture for consistent error a
 ### ErrorCodes Class
 All error constants are defined in `ErrorCodes` class:
 ```dart
-// Connection errors
-static const connectionError = ErrorCode(...);
-static const connectionTimeout = ErrorCode(...);
-static const connectionRetryFailed = ErrorCode(...);
-
-// Print errors  
-static const printError = ErrorCode(...);
-static const printTimeout = ErrorCode(...);
-static const printRetryFailed = ErrorCode(...);
-
-// Discovery errors
-static const discoveryError = ErrorCode(...);
-static const noPrintersFound = ErrorCode(...);
+class ErrorCodes {
+  static const connectionError = ErrorCode(...);
+  static const connectionTimeout = ErrorCode(...);
+  static const connectionRetryFailed = ErrorCode(...);
+  static const printError = ErrorCode(...);
+  static const printTimeout = ErrorCode(...);
+  static const printRetryFailed = ErrorCode(...);
+  static const discoveryError = ErrorCode(...);
+  static const noPrintersFound = ErrorCode(...);
+  // ... see [result.dart](mdc:lib/models/result.dart)
+}
 ```
 
 ### SuccessCodes Class
 All success constants are defined in `SuccessCodes` class:
 ```dart
-// Connection success
-static const connectionSuccess = SuccessCode(...);
-static const connectionRetrySuccess = SuccessCode(...);
-static const disconnectSuccess = SuccessCode(...);
-
-// Print success
-static const printSuccess = SuccessCode(...);
-static const printRetrySuccess = SuccessCode(...);
-static const printDataSent = SuccessCode(...);
-
-// Discovery success
-static const discoverySuccess = SuccessCode(...);
-static const discoveryTimeoutSuccess = SuccessCode(...);
+class SuccessCodes {
+  static const connectionSuccess = SuccessCode(...);
+  static const connectionRetrySuccess = SuccessCode(...);
+  static const disconnectSuccess = SuccessCode(...);
+  static const printSuccess = SuccessCode(...);
+  static const printRetrySuccess = SuccessCode(...);
+  static const printDataSent = SuccessCode(...);
+  static const discoverySuccess = SuccessCode(...);
+  static const discoveryTimeoutSuccess = SuccessCode(...);
+  // ... see [result.dart](mdc:lib/models/result.dart)
+}
 ```
 
 ## FormatArgs Usage Guidelines
 
+- **NEVER pass a full error message as a format argument.**
+- Only pass dynamic values (numbers, field names, etc.) as formatArgs.
+- If a new error message template is needed, add a new ErrorCode constant in [result.dart](mdc:lib/models/result.dart).
+- All error message templates must be defined in [result.dart](mdc:lib/models/result.dart), not in usage sites.
+
 ### ✅ CORRECT - Pass Only Variable Values
 ```dart
-// Good: Pass only the variable parts
 Result.errorCode(
   ErrorCodes.connectionRetryFailed,
-  formatArgs: [_maxAttempts], // Just the number
+  formatArgs: [_maxAttempts],
 );
-
 Result.errorCode(
   ErrorCodes.connectionTimeout,
-  formatArgs: [timeoutSeconds], // Just the timeout value
+  formatArgs: [timeoutSeconds],
 );
-
 Result.successCode(
   SuccessCodes.discoverySuccess,
-  formatArgs: [printerCount], // Just the count
+  formatArgs: [printerCount],
+);
+// CORRECT for new error templates:
+Result.errorCode(
+  ErrorCodes.printDataTooLarge,
+  formatArgs: [data.length],
 );
 ```
 
 ### ❌ WRONG - Pass Entire Messages
 ```dart
-// Bad: Passing entire message strings
 Result.errorCode(
   ErrorCodes.connectionError,
-  formatArgs: ['Failed to connect after $_maxAttempts attempts'], // Don't do this
+  formatArgs: ['Failed to connect after $_maxAttempts attempts'],
 );
-
 Result.errorCode(
   ErrorCodes.printError,
-  formatArgs: ['Print failed: $errorMessage'], // Don't do this
+  formatArgs: ['Print failed: $errorMessage'],
+);
+Result.errorCode(
+  ErrorCodes.printDataError,
+  formatArgs: ['Print data too large (${data.length} bytes)'],
 );
 ```
 
 ### Message Template Examples
 ```dart
-// Error templates
 'Failed to connect after {0} attempts'  // Use: formatArgs: [attempts]
 'Connection timed out after {0} seconds'  // Use: formatArgs: [seconds]
 'Multiple printers found ({0}), specify device explicitly'  // Use: formatArgs: [count]
-
-// Success templates  
 'Successfully connected to printer after {0} attempts'  // Use: formatArgs: [attempts]
 'Successfully discovered {0} printers'  // Use: formatArgs: [count]
 'Successfully sent {0} bytes of print data'  // Use: formatArgs: [bytes]
+'Print data too large: {0} bytes' // Use: formatArgs: [data.length]
 ```
 
 ## Usage Patterns
 
 ### Error Handling
 ```dart
-// Simple error
 return Result.errorCode(ErrorCodes.connectionError);
-
-// Error with context
 return Result.errorCode(
   ErrorCodes.connectionTimeout,
   formatArgs: [timeoutSeconds],
   errorNumber: nativeErrorCode,
   nativeError: exception,
 );
-
-// Error with stack trace
 return Result.errorCode(
   ErrorCodes.printError,
   formatArgs: [errorMessage],
@@ -149,16 +150,11 @@ return Result.errorCode(
 
 ### Success Handling
 ```dart
-// Simple success
 return Result.success(data);
-
-// Success with structured info
 return Result.successCode(
   SuccessCodes.connectionSuccess,
   data: connectionInfo,
 );
-
-// Success with context
 return Result.successCode(
   SuccessCodes.printRetrySuccess,
   formatArgs: [attempts],
@@ -169,45 +165,16 @@ return Result.successCode(
 ### Result Processing
 ```dart
 final result = await operation();
-
 if (result.success) {
-  // Handle success
   final data = result.data;
   final successInfo = result.successInfo;
   print('Success: ${successInfo?.message}');
 } else {
-  // Handle error
   final error = result.error!;
   print('Error: ${error.message}');
   print('Code: ${error.code}');
   print('Category: ${error.originalErrorCode?.category}');
 }
-```
-
-## Migration Requirements
-
-### From Legacy Error Handling
-```dart
-// Old way
-throw Exception('Connection failed after $attempts attempts');
-
-// New way
-return Result.errorCode(
-  ErrorCodes.connectionRetryFailed,
-  formatArgs: [attempts],
-);
-```
-
-### From String Messages
-```dart
-// Old way
-return Result.error('Failed to connect after $_maxAttempts attempts');
-
-// New way
-return Result.errorCode(
-  ErrorCodes.connectionRetryFailed,
-  formatArgs: [_maxAttempts],
-);
 ```
 
 ## Enforcement Rules
@@ -225,13 +192,58 @@ return Result.errorCode(
 - **Defining error/success constants outside result.dart**
 - **Using generic error messages without specific codes**
 
-### 📝 DOCUMENTATION
-- **All constants must have clear descriptions**
-- **Categories must be consistent across error and success codes**
-- **Message templates must be self-explanatory**
-- **formatArgs usage must be documented in examples**
+## Centralization Enforcement
+
+### Files That MUST Use Centralized Constants
+- `lib/smart_print_manager.dart` - Error handling and recovery
+- `lib/zebra_printer.dart` - Connection and discovery errors
+- `lib/zebra_printer_manager.dart` - Printer management errors
+- `lib/zebra_printer_discovery.dart` - Discovery errors
+- `lib/zebra_printer_readiness_manager.dart` - Readiness errors
+- `mobile/src/lib/Services/ZebraPrinterPopupService.dart` - Mobile service errors
+- `mobile/src/lib/Widgets/PrinterSelectionPopup/ZebraPrintingPopup.dart` - UI error handling
+
+### Allowed String Literals
+Only these string literals are allowed outside of [result.dart](mdc:lib/models/result.dart):
+- **Logger prefixes**: `Logger.withPrefix('ClassName')`
+- **Method channel names**: `MethodChannel('zebrautil')`
+- **Method names**: `'startScan'`, `'connectToPrinter'`, etc.
+- **Argument keys**: `'Address'`, `'Data'`, `'setting'`, etc.
+- **Status values**: `'Connected'`, `'Disconnected'`, `'Found'`, etc.
+- **UI labels**: `'Retry'`, `'Cancel'`, `'OK'`, etc.
+- **Connection types**: `'WiFi'`, `'Bluetooth'`, `'USB'`, etc.
+
+### Forbidden String Literals
+These are NEVER allowed outside of [result.dart](mdc:lib/models/result.dart):
+- **Error codes**: `'CONNECTION_ERROR'`, `'PRINT_ERROR'`, `'DISCOVERY_ERROR'`, etc.
+- **Success codes**: `'CONNECTION_SUCCESS'`, `'PRINT_SUCCESS'`, etc.
+- **Error categories**: `'Connection'`, `'Print'`, `'Discovery'`, etc.
+- **Error descriptions**: Any error description strings
+
+## Migration Requirements
+
+### When Adding New Error/Success Codes
+1. **ALWAYS** add to [result.dart](mdc:lib/models/result.dart) first
+2. **NEVER** define error/success codes in other files
+3. **ALWAYS** use the centralized constants in all other files
+
+### When Refactoring Existing Code
+1. **Find** all hardcoded error/success strings
+2. **Replace** with appropriate `ErrorCodes` or `SuccessCodes` constants
+3. **Verify** all references use centralized constants
+4. **Test** to ensure functionality remains intact
 
 ## Testing Requirements
+
+### Static Analysis
+- **No hardcoded error/success strings** in any Dart files
+- **All error/success codes** reference centralized constants
+- **No duplicate error/success code definitions**
+
+### Runtime Validation
+- **Error codes** resolve to valid `ErrorCode` objects
+- **Success codes** resolve to valid `SuccessCode` objects
+- **Message formatting** works correctly with format args
 
 ### Error Code Testing
 ```dart
@@ -240,29 +252,20 @@ test('should return correct error code for connection timeout', () {
     ErrorCodes.connectionTimeout,
     formatArgs: [30],
   );
-  
   expect(result.error?.code, equals('CONNECTION_TIMEOUT'));
   expect(result.error?.message, equals('Connection timed out after 30 seconds'));
 });
 ```
 
-### Success Code Testing
-```dart
-test('should return correct success code for connection retry', () {
-  final result = Result.successCode(
-    SuccessCodes.connectionRetrySuccess,
-    formatArgs: [3],
-  );
-  
-  expect(result.successInfo?.code, equals('CONNECTION_RETRY_SUCCESS'));
-  expect(result.successInfo?.message, equals('Successfully connected to printer after 3 attempts'));
-});
-```
+## Related Files
+- [result.dart](mdc:lib/models/result.dart) - Centralized error and success code definitions
+- [smart_print_manager.dart](mdc:lib/smart_print_manager.dart) - Error handling implementation
+- [zebra_printer.dart](mdc:lib/zebra_printer.dart) - Connection error handling
+- [zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart) - Printer management errors
+- [error-code-centralization.mdc](mdc:.cursor/rules/error-code-centralization.mdc) - Rule for error code centralization
 
 ## Last Updated
-- **Date**: 2024-12-19
-- **Version**: 2.0.0
-- **Changes**: Added SuccessCodes, improved formatArgs usage, comprehensive guidelines
+2024-12-19 - Merged result-based-architecture and error-code-centralization rules for unified enforcement
 
 globs:
 alwaysApply: false

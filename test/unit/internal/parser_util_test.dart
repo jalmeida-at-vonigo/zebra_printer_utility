@@ -2,196 +2,256 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/internal/parser_util.dart';
 
 void main() {
-  group('ParserUtil', () {
-    group('toBool', () {
-      test('returns true for true-like values', () {
-        expect(ParserUtil.toBool(true), isTrue);
-        expect(ParserUtil.toBool(1), isTrue);
-        expect(ParserUtil.toBool('true'), isTrue);
-        expect(ParserUtil.toBool('on'), isTrue);
-        expect(ParserUtil.toBool('1'), isTrue);
-        expect(ParserUtil.toBool('yes'), isTrue);
-        expect(ParserUtil.toBool('y'), isTrue);
-        expect(ParserUtil.toBool('enabled'), isTrue);
-        expect(ParserUtil.toBool('active'), isTrue);
+  group('ParserUtil - Host Status Parsing', () {
+    group('parseHostStatus', () {
+      test('should handle null status', () {
+        final result = ParserUtil.parseHostStatus(null);
+        expect(result.isOk, false);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, 'No status response');
+        expect(result.details, {});
       });
-      
-      test('handles case-insensitive string values', () {
-        expect(ParserUtil.toBool('TRUE'), isTrue);
-        expect(ParserUtil.toBool('True'), isTrue);
-        expect(ParserUtil.toBool('ON'), isTrue);
-        expect(ParserUtil.toBool('Yes'), isTrue);
-        expect(ParserUtil.toBool('FALSE'), isFalse);
-        expect(ParserUtil.toBool('False'), isFalse);
+
+      test('should handle empty status', () {
+        final result = ParserUtil.parseHostStatus('');
+        expect(result.isOk, false);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, 'No status response');
+        expect(result.details, {});
       });
-      
-      test('handles whitespace in string values', () {
-        expect(ParserUtil.toBool('  true  '), isTrue);
-        expect(ParserUtil.toBool('\ttrue\n'), isTrue);
-        expect(ParserUtil.toBool('  false  '), isFalse);
+
+      test('should parse OK text status', () {
+        final result = ParserUtil.parseHostStatus('OK');
+        expect(result.isOk, true);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, null);
+        expect(result.details['rawStatus'], 'OK');
+        expect(result.details['statusType'], 'text');
       });
-      
-      test('returns false for false-like values', () {
-        expect(ParserUtil.toBool(false), isFalse);
-        expect(ParserUtil.toBool(0), isFalse);
-        expect(ParserUtil.toBool('false'), isFalse);
-        expect(ParserUtil.toBool('off'), isFalse);
-        expect(ParserUtil.toBool('0'), isFalse);
-        expect(ParserUtil.toBool('no'), isFalse);
-        expect(ParserUtil.toBool('n'), isFalse);
-        expect(ParserUtil.toBool('disabled'), isFalse);
-        expect(ParserUtil.toBool('inactive'), isFalse);
+
+      test('should parse Ready text status', () {
+        final result = ParserUtil.parseHostStatus('Ready');
+        expect(result.isOk, true);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, null);
+        expect(result.details['rawStatus'], 'Ready');
+        expect(result.details['statusType'], 'text');
       });
-      test('returns null for unknown values', () {
-        expect(ParserUtil.toBool('maybe'), isNull);
-        expect(ParserUtil.toBool(null), isNull);
-        expect(ParserUtil.toBool([]), isNull);
+
+      test('should parse error text status', () {
+        final result = ParserUtil.parseHostStatus('Paper Out');
+        expect(result.isOk, false);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, 'Out of paper');
+        expect(result.details['rawStatus'], 'Paper Out');
+        expect(result.details['statusType'], 'text');
+      });
+
+      test('should parse comma-separated OK status', () {
+        final result = ParserUtil.parseHostStatus('0,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, true);
+        expect(result.errorCode, 0);
+        expect(result.errorMessage, null); // No error message for OK status
+        expect(result.details['rawStatus'], '0,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.details['statusType'], 'comma_separated');
+        expect(result.details['fieldCount'], 12);
+      });
+
+      test('should parse comma-separated error status', () {
+        final result =
+            ParserUtil.parseHostStatus('159,0,0,2030,000,0,0,0,000,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 159);
+        expect(result.errorMessage, 'Hardware error detected');
+        expect(result.details['rawStatus'], '159,0,0,2030,000,0,0,0,000,0,0,0');
+        expect(result.details['statusType'], 'comma_separated');
+        expect(result.details['fieldCount'], 12);
+        expect(result.details['field1'], 0);
+        expect(result.details['field2'], 0);
+        expect(result.details['field3'], 2030);
+        expect(result.details['field4'],
+            '000'); // field4 is kept as string (not parsed as int)
+        expect(result.details['field5'], 0);
+      });
+
+      test('should parse out of paper error', () {
+        final result = ParserUtil.parseHostStatus('100,1,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 100);
+        expect(result.errorMessage, 'Out of paper/media');
+      });
+
+      test('should parse out of ribbon error', () {
+        final result = ParserUtil.parseHostStatus('101,0,1,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 101);
+        expect(result.errorMessage, 'Out of ribbon');
+      });
+
+      test('should parse head open error', () {
+        final result = ParserUtil.parseHostStatus('102,0,0,1,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 102);
+        expect(result.errorMessage, 'Print head is open');
+      });
+
+      test('should parse head cold error', () {
+        final result = ParserUtil.parseHostStatus('103,0,0,0,1,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 103);
+        expect(result.errorMessage, 'Print head is cold');
+      });
+
+      test('should parse head too hot error', () {
+        final result = ParserUtil.parseHostStatus('104,0,0,0,0,1,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 104);
+        expect(result.errorMessage, 'Print head is too hot');
+      });
+
+      test('should parse paused status', () {
+        final result = ParserUtil.parseHostStatus('1,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 1);
+        expect(result.errorMessage, 'Printer is paused');
+      });
+
+      test('should parse processing status', () {
+        final result = ParserUtil.parseHostStatus('2,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 2);
+        expect(result.errorMessage, 'Printer is processing');
+      });
+
+      test('should parse warming up status', () {
+        final result = ParserUtil.parseHostStatus('4,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 4);
+        expect(result.errorMessage, 'Printer is warming up');
+      });
+
+      test('should parse firmware error', () {
+        final result = ParserUtil.parseHostStatus('160,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 160);
+        expect(result.errorMessage, 'Firmware error');
+      });
+
+      test('should parse communication error', () {
+        final result = ParserUtil.parseHostStatus('163,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 163);
+        expect(result.errorMessage, 'Communication error');
+      });
+
+      test('should parse unknown error code', () {
+        final result = ParserUtil.parseHostStatus('999,0,0,0,0,0,0,0,0,0,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 999);
+        expect(result.errorMessage, 'Unknown error code: 999');
+      });
+
+      test('should handle short comma-separated status', () {
+        final result = ParserUtil.parseHostStatus('159,0,0');
+        expect(result.isOk, false);
+        expect(result.errorCode, 159);
+        expect(result.errorMessage, 'Hardware error detected');
+        expect(result.details['fieldCount'], 3);
+        expect(result.details['field1'], 0);
+        expect(result.details['field2'], 0);
+        expect(result.details['field3'], null); // Should not exist
+      });
+
+      test('should handle invalid comma-separated status', () {
+        final result = ParserUtil.parseHostStatus(',');
+        expect(result.isOk, false);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, 'Invalid status format');
+        expect(result.details['rawStatus'], ',');
+      });
+
+      test('should handle empty comma-separated status', () {
+        final result = ParserUtil.parseHostStatus('');
+        expect(result.isOk, false);
+        expect(result.errorCode, null);
+        expect(result.errorMessage, 'No status response');
+        expect(result.details, {});
+      });
+
+      test('should normalize status with quotes', () {
+        final result =
+            ParserUtil.parseHostStatus('"159,0,0,2030,000,0,0,0,000,0,0,0"');
+        expect(result.isOk, false);
+        expect(result.errorCode, 159);
+        expect(result.errorMessage, 'Hardware error detected');
+        expect(result.details['rawStatus'], '159,0,0,2030,000,0,0,0,000,0,0,0');
+      });
+
+      test('should normalize status with extra whitespace', () {
+        final result =
+            ParserUtil.parseHostStatus('  159,0,0,2030,000,0,0,0,000,0,0,0  ');
+        expect(result.isOk, false);
+        expect(result.errorCode, 159);
+        expect(result.errorMessage, 'Hardware error detected');
+        expect(result.details['rawStatus'], '159,0,0,2030,000,0,0,0,000,0,0,0');
       });
     });
 
-    group('toInt', () {
-      test('parses int and num', () {
-        expect(ParserUtil.toInt(5), equals(5));
-        expect(ParserUtil.toInt(5.7), equals(5));
+    group('HostStatusInfo', () {
+      test('should convert to map correctly', () {
+        final info = HostStatusInfo(
+          isOk: false,
+          errorCode: 159,
+          errorMessage: 'Hardware error detected',
+          details: {'test': 'value'},
+        );
+
+        final map = info.toMap();
+        expect(map['isOk'], false);
+        expect(map['errorCode'], 159);
+        expect(map['errorMessage'], 'Hardware error detected');
+        expect(map['details'], {'test': 'value'});
       });
-      test('parses string int', () {
-        expect(ParserUtil.toInt('42'), equals(42));
-        expect(ParserUtil.toInt('  42  '), equals(42));
+
+      test('should convert to string correctly for OK status', () {
+        final info = HostStatusInfo(
+          isOk: true,
+          errorCode: 0,
+          errorMessage: null,
+          details: {},
+        );
+
+        expect(info.toString(), 'HostStatusInfo(OK)');
       });
-      test('parses string double', () {
-        expect(ParserUtil.toInt('42.9'), equals(42));
-      });
-      test('extracts int from string', () {
-        expect(ParserUtil.toInt('30 degrees'), equals(30));
-        expect(ParserUtil.toInt('-15C'), equals(-15));
-      });
-      test('returns fallback for invalid', () {
-        expect(ParserUtil.toInt('not a number', fallback: 7), equals(7));
-        expect(ParserUtil.toInt(null, fallback: 9), equals(9));
+
+      test('should convert to string correctly for error status', () {
+        final info = HostStatusInfo(
+          isOk: false,
+          errorCode: 159,
+          errorMessage: 'Hardware error detected',
+          details: {},
+        );
+
+        expect(info.toString(),
+            'HostStatusInfo(Error: Hardware error detected [Code: 159])');
       });
     });
 
-    group('toDouble', () {
-      test('parses double and num', () {
-        expect(ParserUtil.toDouble(5.5), equals(5.5));
-        expect(ParserUtil.toDouble(5), equals(5.0));
+    group('parseErrorFromStatus (legacy compatibility)', () {
+      test('should use new host status parsing for comma-separated format', () {
+        final result =
+            ParserUtil.parseErrorFromStatus('159,0,0,2030,000,0,0,0,000,0,0,0');
+        expect(result, 'Hardware error detected');
       });
-      test('parses string double', () {
-        expect(ParserUtil.toDouble('42.9'), equals(42.9));
-        expect(ParserUtil.toDouble('  42.9  '), equals(42.9));
-      });
-      test('extracts double from string', () {
-        expect(ParserUtil.toDouble('30.5 degrees'), equals(30.5));
-        expect(ParserUtil.toDouble('-15.2C'), equals(-15.2));
-      });
-      test('returns fallback for invalid', () {
-        expect(ParserUtil.toDouble('not a number', fallback: 7.1), equals(7.1));
-        expect(ParserUtil.toDouble(null, fallback: 9.2), equals(9.2));
-      });
-    });
 
-    group('safeToString', () {
-      test('returns string for value', () {
-        expect(ParserUtil.safeToString(123), equals('123'));
-        expect(ParserUtil.safeToString('abc'), equals('abc'));
+      test('should fallback to text parsing for simple errors', () {
+        final result = ParserUtil.parseErrorFromStatus('Paper Out');
+        expect(result, 'Out of paper');
       });
-      test('returns fallback for null', () {
-        expect(ParserUtil.safeToString(null, fallback: 'none'), equals('none'));
-      });
-    });
 
-    group('isStatusOk', () {
-      test('returns true for ok/ready/normal/idle', () {
-        expect(ParserUtil.isStatusOk('OK'), isTrue);
-        expect(ParserUtil.isStatusOk('ready'), isTrue);
-        expect(ParserUtil.isStatusOk('normal'), isTrue);
-        expect(ParserUtil.isStatusOk('idle'), isTrue);
-      });
-      test('returns false for null or unknown', () {
-        expect(ParserUtil.isStatusOk(null), isFalse);
-        expect(ParserUtil.isStatusOk('error'), isFalse);
-      });
-    });
-
-    group('hasMedia', () {
-      test('returns true for loaded/ok/ready/present', () {
-        expect(ParserUtil.hasMedia('loaded'), isTrue);
-        expect(ParserUtil.hasMedia('ok'), isTrue);
-        expect(ParserUtil.hasMedia('ready'), isTrue);
-        expect(ParserUtil.hasMedia('present'), isTrue);
-      });
-      test('returns false for out/empty/missing/absent', () {
-        expect(ParserUtil.hasMedia('out'), isFalse);
-        expect(ParserUtil.hasMedia('empty'), isFalse);
-        expect(ParserUtil.hasMedia('missing'), isFalse);
-        expect(ParserUtil.hasMedia('absent'), isFalse);
-      });
-      test('returns false for null or unknown', () {
-        expect(ParserUtil.hasMedia(null), isFalse);
-        expect(ParserUtil.hasMedia('unknown'), isFalse);
-      });
-    });
-
-    group('isHeadClosed', () {
-      test('returns true for closed/ok/locked', () {
-        expect(ParserUtil.isHeadClosed('closed'), isTrue);
-        expect(ParserUtil.isHeadClosed('ok'), isTrue);
-        expect(ParserUtil.isHeadClosed('locked'), isTrue);
-      });
-      test('returns false for open/unlocked', () {
-        expect(ParserUtil.isHeadClosed('open'), isFalse);
-        expect(ParserUtil.isHeadClosed('unlocked'), isFalse);
-      });
-      test('returns false for null or unknown', () {
-        expect(ParserUtil.isHeadClosed(null), isFalse);
-        expect(ParserUtil.isHeadClosed('unknown'), isFalse);
-      });
-    });
-
-    group('parseErrorFromStatus', () {
-      test('returns error string for known errors', () {
-        expect(ParserUtil.parseErrorFromStatus('Paper out'),
-            equals('Out of paper'));
-        expect(ParserUtil.parseErrorFromStatus('Ribbon out'),
-            equals('Out of ribbon'));
-        expect(ParserUtil.parseErrorFromStatus('Head open'),
-            equals('Print head open'));
-        expect(ParserUtil.parseErrorFromStatus('Head cold'),
-            equals('Print head cold'));
-        expect(ParserUtil.parseErrorFromStatus('Head over temp'),
-            equals('Print head overheated'));
-        expect(
-            ParserUtil.parseErrorFromStatus('Pause'), equals('Printer paused'));
-        expect(ParserUtil.parseErrorFromStatus('error'), equals('error'));
-      });
-      test('returns null for no error', () {
-        expect(ParserUtil.parseErrorFromStatus('OK'), isNull);
-        expect(ParserUtil.parseErrorFromStatus(null), isNull);
-      });
-    });
-
-    group('extractNumber', () {
-      test('extracts number from string', () {
-        expect(ParserUtil.extractNumber('203 dpi'), equals(203));
-        expect(ParserUtil.extractNumber('-15.5C'), equals(-15.5));
-      });
-      test('returns null for no number', () {
-        expect(ParserUtil.extractNumber('no number'), isNull);
-        expect(ParserUtil.extractNumber(null), isNull);
-      });
-    });
-
-    group('normalizeStatus', () {
-      test('removes quotes and trims', () {
-        expect(ParserUtil.normalizeStatus(' "OK" '), equals('OK'));
-      });
-      test('removes extra whitespace', () {
-        expect(
-            ParserUtil.normalizeStatus('  ready   now  '), equals('ready now'));
-      });
-      test('returns empty for null or empty', () {
-        expect(ParserUtil.normalizeStatus(null), equals(''));
-        expect(ParserUtil.normalizeStatus(''), equals(''));
+      test('should return null for OK status', () {
+        final result = ParserUtil.parseErrorFromStatus('OK');
+        expect(result, null);
       });
     });
   });

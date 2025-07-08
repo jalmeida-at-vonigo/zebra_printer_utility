@@ -766,6 +766,20 @@ class ErrorCodes {
     description: 'Print failed after maximum retry attempts',
   );
 
+  static const printDataInvalidFormat = ErrorCode(
+    code: 'PRINT_DATA_INVALID_FORMAT',
+    messageTemplate: 'Invalid print data format',
+    category: 'Print',
+    description: 'Print data format is invalid',
+  );
+
+  static const printDataTooLarge = ErrorCode(
+    code: 'PRINT_DATA_TOO_LARGE',
+    messageTemplate: 'Print data too large: {0} bytes',
+    category: 'Print',
+    description: 'Print data exceeds maximum allowed size',
+  );
+
   // ===== DATA ERRORS =====
   static const invalidData = ErrorCode(
     code: 'INVALID_DATA',
@@ -985,6 +999,8 @@ class ErrorCodes {
       ribbonError,
       printDataError,
       printRetryFailed,
+      printDataInvalidFormat,
+      printDataTooLarge,
       invalidData,
       invalidFormat,
       encodingError,
@@ -1019,4 +1035,78 @@ class ErrorCodes {
       return null;
     }
   }
+
+  // ===== CUSTOM ERROR SCENARIOS FOR FORMAT ARGS =====
+  static const connectionFailed = ErrorCode(
+    code: 'CONNECTION_FAILED',
+    messageTemplate: 'Connection failed: {0}',
+    category: 'Connection',
+    description: 'Connection failed with error',
+  );
+  static const disconnectFailed = ErrorCode(
+    code: 'DISCONNECT_FAILED',
+    messageTemplate: 'Disconnect failed: {0}',
+    category: 'Connection',
+    description: 'Disconnect failed with error',
+  );
+  static const printFailed = ErrorCode(
+    code: 'PRINT_FAILED',
+    messageTemplate: 'Print failed: {0}',
+    category: 'Print',
+    description: 'Print failed with error',
+  );
+  static const ribbonErrorDetected = ErrorCode(
+    code: 'RIBBON_ERROR_DETECTED',
+    messageTemplate: 'Ribbon error detected: {0}',
+    category: 'Print',
+    description: 'Ribbon error detected',
+  );
+  static const printCompletionHardwareError = ErrorCode(
+    code: 'PRINT_COMPLETION_HARDWARE_ERROR',
+    messageTemplate: 'Print completion failed due to hardware issues',
+    category: 'Print',
+    description: 'Print completion failed due to hardware issues',
+  );
+  static const statusUnknownError = ErrorCode(
+    code: 'STATUS_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown status error: {0}',
+    category: 'Status',
+    description: 'Unknown error occurred during status check',
+  );
+  static const printUnknownError = ErrorCode(
+    code: 'PRINT_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown print error: {0}',
+    category: 'Print',
+    description: 'Unknown error occurred during print',
+  );
+  static const connectionUnknownError = ErrorCode(
+    code: 'CONNECTION_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown connection error: {0}',
+    category: 'Connection',
+    description: 'Unknown error occurred during connection',
+  );
+  static const disconnectUnknownError = ErrorCode(
+    code: 'DISCONNECT_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown disconnect error: {0}',
+    category: 'Connection',
+    description: 'Unknown error occurred during disconnect',
+  );
+  static const statusCheckUnknownError = ErrorCode(
+    code: 'STATUS_CHECK_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown status check error: {0}',
+    category: 'Status',
+    description: 'Unknown error occurred during status check',
+  );
+  static const detailedStatusUnknownError = ErrorCode(
+    code: 'DETAILED_STATUS_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown detailed status error: {0}',
+    category: 'Status',
+    description: 'Unknown error occurred during detailed status check',
+  );
+  static const waitCompletionUnknownError = ErrorCode(
+    code: 'WAIT_COMPLETION_UNKNOWN_ERROR',
+    messageTemplate: 'Unknown error while waiting for print completion: {0}',
+    category: 'Print',
+    description: 'Unknown error while waiting for print completion',
+  );
 }
