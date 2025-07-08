@@ -1,6 +1,3 @@
----
-alwaysApply: true
----
 
 # General Project Standards
 
@@ -20,22 +17,21 @@ alwaysApply: true
 * The docs are about:
     - Usability of the API
     - Standards about the development and architecture, and
-* There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.# General Project Standards
+* There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.
 
-- No TODOs or known incomplete work should remain at the end of any task. If you are not able to complete, ask for help.
-- All code must be clean, working, and free of lint or analysis warnings (`flutter analyze` must pass with no issues).
-- No deprecated code is allowed; all code must use the latest APIs and patterns.
-- Only Dart and iOS code need to be evaluated/changed; Android is not yet supported.
-- All changes must be documented as required in the documentation section.
-- Always update the version number (patch increments only).
-- Always update the `CHANGELOG.md` with the changes (no need to document migration, breaking changes, or unreleased, as nothing was released yet).
-- All tests must be updated and passing with the proper implementation.
-- If you find unrelated lint or analysis issues, fix them as part of your change.
+# General Completion Rule
 
-# DOCUMENTATION
+To consider any task or change complete, you must:
 
-* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details
-* The docs are about:
+1. Ensure all code is clean, working, and free of lint/analysis warnings (`flutter analyze` must pass with no issues).
+2. No TODOs or known incomplete work should remain at the end of any task.
+3. All changes must be documented as required in the documentation section (update `CHANGELOG.md`, `README.md`, and `.readme` as needed).
+4. Always update the version number (patch increments only).
+5. All tests must be updated and passing with the proper implementation.
+6. If you find unrelated lint or analysis issues, fix them as part of your change.
+7. **Before marking a task as complete, reevaluate all git changes against all workspace and user rules to ensure compliance.**
+
+This rule is always applied to every request and governs the definition of done for all work in this codebase.
     - Usability of the API
     - Standards about the development and architecture, and
 * There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.

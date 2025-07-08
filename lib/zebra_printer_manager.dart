@@ -493,13 +493,21 @@ class ZebraPrinterManager {
   }) {
     _logger.info('Manager: Starting smart print operation');
     
-    // Start the smart print operation and return the events stream
+    // Start the smart print operation in the background and return the events stream immediately
     smartPrintManager.smartPrint(
       data: data,
       device: device,
       maxAttempts: maxAttempts,
       timeout: timeout,
-    );
+    )
+        .catchError((error) {
+      _logger.error('Manager: Smart print operation failed', error);
+      // Return a default result to satisfy the Future<Result<void>> requirement
+      return Result.errorCode(
+        ErrorCodes.operationError,
+        formatArgs: ['Smart print operation failed: $error'],
+      );
+    });
 
     return smartPrintManager.eventStream;
   }

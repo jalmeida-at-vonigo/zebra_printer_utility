@@ -4,6 +4,9 @@ import 'models/result.dart';
 import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
 import 'internal/logger.dart';
+import 'internal/commands/command_factory.dart';
+import 'models/print_enums.dart';
+import 'zebra_sgd_commands.dart';
 
 /// Print step enumeration
 enum PrintStep {
@@ -46,6 +49,7 @@ class PrintStepInfo {
   final int maxAttempts;
   final Duration elapsed;
   final Map<String, dynamic> metadata;
+  final bool isCompleted;
 
   const PrintStepInfo({
     required this.step,
@@ -54,6 +58,7 @@ class PrintStepInfo {
     required this.maxAttempts,
     required this.elapsed,
     this.metadata = const {},
+    this.isCompleted = false,
   });
 
   bool get isRetry => attempt > 1;
@@ -224,6 +229,16 @@ class SmartPrintManager {
         }
       }
 
+      // Step 2.5: Detect print data format (CPCL or ZPL)
+      final format = _detectPrintFormat(data);
+      if (format == null) {
+        return Result.errorCode(
+          ErrorCodes.printDataInvalidFormat,
+          formatArgs: ['Unknown or unsupported print format'],
+        );
+      }
+      _logger.info('Detected print format: $format');
+
       // Step 3: Connect to printer
       final connectResult = await _connectToPrinter(device);
       if (!connectResult.success) {
@@ -236,6 +251,45 @@ class SmartPrintManager {
         if (!statusResult.success) {
           return statusResult;
         }
+      }
+
+      // Step 4.5: Check the printer's current language/mode
+      final printer = _printerManager.printer;
+      if (printer == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['No printer instance available'],
+        );
+      }
+      final languageResult = await CommandFactory.createGetPrinterLanguageCommand(printer).execute();
+      if (!languageResult.success || languageResult.data == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['Failed to get printer language'],
+        );
+      }
+      final currentLanguage = languageResult.data!.toLowerCase();
+      _logger.info('Printer current language: $currentLanguage');
+
+      // Step 4.6: If the printer's language does not match the data format, set the printer to the correct mode
+      String expectedLanguage = format == PrintFormat.zpl ? 'zpl' : 'cpcl';
+      if ((expectedLanguage == 'zpl' && !currentLanguage.contains('zpl')) ||
+          (expectedLanguage == 'cpcl' && !currentLanguage.contains('cpcl') && !currentLanguage.contains('line_print'))) {
+        _logger.info('Setting printer language to $expectedLanguage');
+        Result<void> setLangResult;
+        if (expectedLanguage == 'zpl') {
+          setLangResult = await CommandFactory.createSendSetZplModeCommand(printer).execute();
+        } else {
+          setLangResult = await CommandFactory.createSendSetCpclModeCommand(printer).execute();
+        }
+        if (!setLangResult.success) {
+          return Result.errorCode(
+            ErrorCodes.statusCheckFailed,
+            formatArgs: ['Failed to set printer language to $expectedLanguage'],
+          );
+        }
+        // Give the printer a moment to switch modes
+        await Future.delayed(const Duration(seconds: 1));
       }
 
       // Step 5: Send print data
@@ -342,16 +396,65 @@ class SmartPrintManager {
     return trimmed.isNotEmpty;
   }
 
+  /// Detect print format from data
+  PrintFormat? _detectPrintFormat(String data) {
+    if (ZebraSGDCommands.isZPLData(data)) {
+      return PrintFormat.zpl;
+    } else if (ZebraSGDCommands.isCPCLData(data)) {
+      return PrintFormat.cpcl;
+    } else {
+      return null;
+    }
+  }
+
   /// Connect to printer with retry logic
   Future<Result<void>> _connectToPrinter(ZebraDevice? device) async {
     while (_currentAttempt <= _maxAttempts && !_isCancelled) {
+      // Start connection with progress indicator
       await _updateStep(PrintStep.connecting, 'Connecting to printer (attempt $_currentAttempt/$_maxAttempts)');
       
+      // Emit progress event for UI animation
+      _eventController?.add(PrintEvent(
+        type: PrintEventType.stepChanged,
+        timestamp: DateTime.now(),
+        stepInfo: _createStepInfo(PrintStep.connecting,
+            'Connecting to printer (attempt $_currentAttempt/$_maxAttempts)'),
+      ));
+      
       try {
+        // Simulate connection progress for better UX
+        await _emitConnectionProgress('Initializing connection...');
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        await _emitConnectionProgress('Establishing connection...');
         final result = await _printerManager.connect(device);
+        
         if (result.success) {
           _isConnected = true;
+          
+          await _emitConnectionProgress('Connection established successfully');
+          await Future.delayed(const Duration(milliseconds: 300));
+
+          // Mark connecting step as completed
           await _updateStep(PrintStep.connected, 'Successfully connected to printer');
+          
+          // Emit completion event for the connecting step
+          _eventController?.add(PrintEvent(
+            type: PrintEventType.progressUpdate,
+            timestamp: DateTime.now(),
+            stepInfo: _createStepInfo(
+                PrintStep.connecting, 'Connection completed',
+                isCompleted: true),
+          ));
+
+          // Emit the connected step
+          _eventController?.add(PrintEvent(
+            type: PrintEventType.stepChanged,
+            timestamp: DateTime.now(),
+            stepInfo: _createStepInfo(
+                PrintStep.connected, 'Successfully connected to printer'),
+          ));
+          
           return Result.success();
         } else {
           await _handleError(
@@ -382,6 +485,15 @@ class SmartPrintManager {
     );
   }
 
+  /// Emit connection progress updates for UI animation
+  Future<void> _emitConnectionProgress(String message) async {
+    _eventController?.add(PrintEvent(
+      type: PrintEventType.stepChanged,
+      timestamp: DateTime.now(),
+      stepInfo: _createStepInfo(PrintStep.connecting, message),
+    ));
+  }
+
   /// Classify connection errors for better recovery
   ErrorCode _classifyConnectionError(String errorMessage) {
     final message = errorMessage.toLowerCase();
@@ -402,55 +514,88 @@ class SmartPrintManager {
     }
   }
 
-  /// Check printer status before printing
+  /// Check printer status before printing using smart workflow
   Future<Result<void>> _checkPrinterStatus() async {
     await _updateStep(PrintStep.checkingStatus, 'Checking printer status');
 
     try {
-      final statusResult = await _printerManager.getDetailedPrinterStatus();
+      // Use the new smart status workflow
+      final printer = _printerManager.printer;
+      if (printer == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['No printer instance available'],
+        );
+      }
+      final statusResult =
+          await CommandFactory.createSmartPrinterStatusWorkflow(printer)
+              .execute();
       if (statusResult.success) {
         _lastPrinterStatus = statusResult.data;
 
-        // Check for critical issues
+        // Check for critical issues using the new analysis structure
         final status = statusResult.data;
         if (status != null) {
-          if (status['headOpen'] == true) {
-            return Result.errorCode(
-              ErrorCodes.headOpen,
-            );
-          }
+          final analysis = status['analysis'] as Map<String, dynamic>?;
+          if (analysis != null) {
+            final canPrint = analysis['canPrint'] as bool? ?? false;
+            final blockingIssues =
+                analysis['blockingIssues'] as List<dynamic>? ?? [];
 
-          if (status['outOfPaper'] == true) {
-            return Result.errorCode(
-              ErrorCodes.outOfPaper,
-            );
-          }
-
-          if (status['paused'] == true) {
-            return Result.errorCode(
-              ErrorCodes.printerPaused,
-            );
-          }
-
-          if (status['ribbonError'] == true) {
-            return Result.errorCode(
-              ErrorCodes.ribbonError,
-              formatArgs: ['Ribbon error detected'],
-            );
+            if (!canPrint && blockingIssues.isNotEmpty) {
+              // Return specific error based on the first blocking issue
+              final firstIssue = blockingIssues.first.toString().toLowerCase();
+              if (firstIssue.contains('head open')) {
+                return Result.errorCode(ErrorCodes.headOpen);
+              } else if (firstIssue.contains('out of paper')) {
+                return Result.errorCode(ErrorCodes.outOfPaper);
+              } else if (firstIssue.contains('paused')) {
+                return Result.errorCode(ErrorCodes.printerPaused);
+              } else if (firstIssue.contains('ribbon')) {
+                return Result.errorCode(ErrorCodes.ribbonError);
+              } else if (firstIssue.contains('head too cold')) {
+                return Result.errorCode(
+                  ErrorCodes.printerNotReady,
+                  formatArgs: ['Print head is cold'],
+                );
+              } else if (firstIssue.contains('head too hot')) {
+                return Result.errorCode(
+                  ErrorCodes.printerNotReady,
+                  formatArgs: ['Print head is too hot'],
+                );
+              } else {
+                return Result.errorCode(
+                  ErrorCodes.statusCheckFailed,
+                  formatArgs: [firstIssue],
+                );
+              }
+            }
           }
         }
 
+        await _updateStep(
+            PrintStep.checkingStatus, 'Printer is ready to print');
         return Result.success();
       } else {
-        return Result.errorCode(
-          ErrorCodes.statusCheckFailed,
-          formatArgs: [statusResult.error?.message ?? 'Unknown status error'],
-        );
+        // Use the specific error code from the result
+        if (statusResult.error?.code != null) {
+          return Result.errorCode(
+            ErrorCodes.fromCode(statusResult.error!.code!) ??
+                ErrorCodes.statusCheckFailed,
+            formatArgs: [statusResult.error?.message ?? 'Unknown status error'],
+          );
+        } else {
+          return Result.errorCode(
+            ErrorCodes.statusCheckFailed,
+            formatArgs: [statusResult.error?.message ?? 'Unknown status error'],
+          );
+        }
       }
     } catch (e, stack) {
+      _logger.error('Exception during status check', e, stack);
       return Result.errorCode(
         ErrorCodes.statusCheckFailed,
-        formatArgs: [e.toString()],
+        formatArgs: ['Exception: $e'],
         dartStackTrace: stack,
       );
     }
@@ -680,13 +825,15 @@ class SmartPrintManager {
   }
 
   /// Create step info for current state
-  PrintStepInfo _createStepInfo(PrintStep step, String message) {
+  PrintStepInfo _createStepInfo(PrintStep step, String message,
+      {bool isCompleted = false}) {
     return PrintStepInfo(
       step: step,
       message: message,
       attempt: _currentAttempt,
       maxAttempts: _maxAttempts,
       elapsed: DateTime.now().difference(_startTime ?? DateTime.now()),
+      isCompleted: isCompleted,
     );
   }
 

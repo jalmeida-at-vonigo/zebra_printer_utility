@@ -929,6 +929,46 @@ class ErrorCodes {
         'Review the printer\'s status response and ensure it\'s valid.',
   );
 
+  static const detailedStatusCheckFailed = ErrorCode(
+    code: 'DETAILED_STATUS_CHECK_FAILED',
+    messageTemplate: 'Failed to get detailed printer status: {0}',
+    category: 'Status',
+    description: 'Detailed printer status check failure',
+    recoveryHint: 'Re-check the printer\'s detailed status or try again later.',
+  );
+
+  static const basicStatusCheckFailed = ErrorCode(
+    code: 'BASIC_STATUS_CHECK_FAILED',
+    messageTemplate: 'Failed to get basic printer status: {0}',
+    category: 'Status',
+    description: 'Basic printer status check failure',
+    recoveryHint: 'Re-check the printer\'s basic status or try again later.',
+  );
+
+  static const statusResponseFormatError = ErrorCode(
+    code: 'STATUS_RESPONSE_FORMAT_ERROR',
+    messageTemplate: 'Invalid response format for {0} status',
+    category: 'Status',
+    description: 'Status response format is invalid or unexpected',
+    recoveryHint: 'Check printer firmware version and ensure compatibility.',
+  );
+
+  static const statusConnectionError = ErrorCode(
+    code: 'STATUS_CONNECTION_ERROR',
+    messageTemplate: 'Connection error during status check: {0}',
+    category: 'Status',
+    description: 'Connection lost during status check',
+    recoveryHint: 'Reconnect to the printer and try the status check again.',
+  );
+
+  static const statusTimeoutError = ErrorCode(
+    code: 'STATUS_TIMEOUT_ERROR',
+    messageTemplate: 'Status check timed out: {0}',
+    category: 'Status',
+    description: 'Status check operation timed out',
+    recoveryHint: 'Increase timeout or check printer responsiveness.',
+  );
+
   // ===== COMMAND ERRORS =====
   static const commandError = ErrorCode(
     code: 'COMMAND_ERROR',
@@ -1094,6 +1134,11 @@ class ErrorCodes {
       statusCheckFailed,
       statusTimeout,
       invalidStatusResponse,
+      detailedStatusCheckFailed,
+      basicStatusCheckFailed,
+      statusResponseFormatError,
+      statusConnectionError,
+      statusTimeoutError,
       commandError,
       commandTimeout,
       invalidCommand,

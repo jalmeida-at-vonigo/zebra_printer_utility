@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.45] - 2024-06-19
+
+### Changed
+- **Smart Print Workflow**: Now detects print data format (CPCL or ZPL) before printing, checks printer language, and sets the correct mode if needed before sending data.
+- **Status Logic**: Ensures printer is in the correct mode before sending print data, and only sends data after all checks pass.
+- **Code Quality**: Fixed all linter and analysis warnings; codebase is clean and up to standards.
+
+### Technical
+- Added atomic commands for printer language and status detection.
+- Implemented smart waiting logic based on print data size and language.
+- Updated command factory and print manager integration for robust, error-free operation.
+
 ## [2.0.44] - 2024-12-19
 
 ### Added

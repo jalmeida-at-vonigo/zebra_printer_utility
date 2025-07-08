@@ -23,6 +23,9 @@ import 'send_set_cpcl_mode_command.dart';
 import 'send_clear_alerts_command.dart';
 import 'get_printer_status_command.dart';
 import 'get_detailed_printer_status_command.dart';
+import 'get_printer_language_command.dart';
+import 'get_raw_printer_status_command.dart';
+import 'smart_printer_status_workflow.dart';
 
 /// Factory class for creating printer command instances
 class CommandFactory {
@@ -158,4 +161,22 @@ class CommandFactory {
     ZebraPrinter printer,
   ) =>
       GetDetailedPrinterStatusCommand(printer);
+
+  /// Creates a GetPrinterLanguageCommand for getting printer language
+  static GetPrinterLanguageCommand createGetPrinterLanguageCommand(
+    ZebraPrinter printer,
+  ) =>
+      GetPrinterLanguageCommand(printer);
+
+  /// Creates a GetRawPrinterStatusCommand for getting raw printer status
+  static GetRawPrinterStatusCommand createGetRawPrinterStatusCommand(
+    ZebraPrinter printer,
+  ) =>
+      GetRawPrinterStatusCommand(printer);
+
+  /// Creates a SmartPrinterStatusWorkflow for comprehensive status analysis
+  static SmartPrinterStatusWorkflow createSmartPrinterStatusWorkflow(
+    ZebraPrinter printer,
+  ) =>
+      SmartPrinterStatusWorkflow(printer);
 } 
