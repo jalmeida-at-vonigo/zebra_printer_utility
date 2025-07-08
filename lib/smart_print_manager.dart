@@ -567,12 +567,17 @@ class SmartPrintManager {
     List<Object>? formatArgs,
     StackTrace? stackTrace,
   }) async {
+    // Determine if recovery hint should be removed because SmartPrintManager auto-recovers
+    final shouldRemoveRecoveryHint = _shouldRemoveRecoveryHint(errorCode);
+    final recoveryHint =
+        shouldRemoveRecoveryHint ? null : errorCode.recoveryHint;
+    
     final errorInfo = PrintErrorInfo(
       message: errorCode.formatMessage(formatArgs),
       recoverability: _determineRecoverability(errorCode),
       errorCode: errorCode.code,
       stackTrace: stackTrace,
-      recoveryHint: _getRecoveryHint(errorCode),
+      recoveryHint: recoveryHint,
     );
     
     _logger.error('Print error: ${errorInfo.message}', null, stackTrace);
@@ -583,28 +588,6 @@ class SmartPrintManager {
       errorInfo: errorInfo,
       stepInfo: _createStepInfo(PrintStep.failed, errorInfo.message),
     ));
-  }
-
-  /// Get recovery hint for error
-  String? _getRecoveryHint(ErrorCode errorCode) {
-    switch (errorCode.code) {
-      case 'HEAD_OPEN':
-        return 'Close the printer head and try again';
-      case 'OUT_OF_PAPER':
-        return 'Add paper to the printer and try again';
-      case 'PRINTER_PAUSED':
-        return 'Resume the printer and try again';
-      case 'RIBBON_ERROR':
-        return 'Check the ribbon and try again';
-      case 'BLUETOOTH_DISABLED':
-        return 'Enable Bluetooth in device settings';
-      case 'NO_PERMISSION':
-        return 'Grant Bluetooth permissions in app settings';
-      case 'CONNECTION_TIMEOUT':
-        return 'Check network connection and printer power';
-      default:
-        return null;
-    }
   }
 
   /// Create step info for current state
@@ -726,4 +709,63 @@ class SmartPrintManager {
 
   /// Check if operation is cancelled
   bool get isCancelled => _isCancelled;
+
+  /// Determine if recovery hint should be removed because SmartPrintManager auto-recovers
+  bool _shouldRemoveRecoveryHint(ErrorCode errorCode) {
+    // Connection errors that SmartPrintManager auto-retries
+    if (errorCode.category == 'Connection') {
+      if (errorCode == ErrorCodes.connectionError ||
+          errorCode == ErrorCodes.connectionTimeout ||
+          errorCode == ErrorCodes.connectionLost ||
+          errorCode == ErrorCodes.networkError ||
+          errorCode == ErrorCodes.bluetoothDisabled ||
+          errorCode == ErrorCodes.noPermission ||
+          errorCode == ErrorCodes.invalidDeviceAddress) {
+        return true;
+      }
+    }
+
+    // Print errors that SmartPrintManager auto-retries
+    if (errorCode.category == 'Print') {
+      if (errorCode == ErrorCodes.printError ||
+          errorCode == ErrorCodes.printTimeout ||
+          errorCode == ErrorCodes.printerPaused) {
+        // SmartPrintManager can auto-unpause
+        return true;
+      }
+    }
+
+    // Operation errors that SmartPrintManager handles
+    if (errorCode.category == 'Operation') {
+      if (errorCode == ErrorCodes.operationTimeout ||
+          errorCode == ErrorCodes.operationError) {
+        return true;
+      }
+    }
+
+    // Status errors that SmartPrintManager retries
+    if (errorCode.category == 'Status') {
+      if (errorCode == ErrorCodes.statusCheckFailed ||
+          errorCode == ErrorCodes.statusTimeout ||
+          errorCode == ErrorCodes.statusUnknownError ||
+          errorCode == ErrorCodes.statusCheckUnknownError ||
+          errorCode == ErrorCodes.detailedStatusUnknownError) {
+        return true;
+      }
+    }
+
+    // Discovery errors that SmartPrintManager retries
+    if (errorCode.category == 'Discovery') {
+      if (errorCode == ErrorCodes.discoveryError ||
+          errorCode == ErrorCodes.discoveryTimeout ||
+          errorCode == ErrorCodes.networkError ||
+          errorCode == ErrorCodes.bluetoothDisabled ||
+          errorCode == ErrorCodes.noPermission) {
+        return true;
+      }
+    }
+
+    // Keep recovery hints for errors that require user intervention
+    return false;
+  }
 } 

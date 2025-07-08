@@ -1,5 +1,71 @@
 # Changelog
 
+## [2.0.43] - 2024-12-19
+
+### Fixed
+- **Hardcoded Error Codes**: Replaced all hardcoded error code strings in SmartPrintManager with centralized ErrorCodes constants from result.dart
+- **Code Quality**: Now uses proper ErrorCode constants instead of string literals for error code comparisons
+
+### Technical
+- Updated `_shouldRemoveRecoveryHint()` method to use `ErrorCodes.constant` instead of hardcoded strings
+- Fixed linter errors by using if-else statements instead of switch cases with non-constant expressions
+- Maintains centralized error code management as per architecture rules
+
+## [2.0.42] - 2024-12-19
+
+### Changed
+- **Smart Recovery Hint Management**: SmartPrintManager now intercepts and removes recovery hints from errors it automatically handles
+- **User Experience**: Users only see recovery hints for errors that actually require manual intervention
+- **Auto-Recovery Transparency**: Errors that SmartPrintManager auto-retries (connection, timeout, status, discovery) no longer show recovery hints
+
+### Technical
+- Added `_shouldRemoveRecoveryHint()` method to determine which error codes should have recovery hints removed
+- Recovery hints are removed for auto-recoverable errors:
+  - Connection errors (timeout, network, bluetooth, permission)
+  - Print errors (timeout, paused state)
+  - Operation errors (timeout, general)
+  - Status errors (check failures, timeouts)
+  - Discovery errors (timeout, network, bluetooth, permission)
+- Recovery hints are preserved for hardware issues requiring user intervention (head open, out of paper, ribbon errors, etc.)
+
+## [2.0.41] - 2024-12-19
+
+### Added
+- **Centralized Recovery Hints**: Added `recoveryHint` field to `ErrorCode` class for centralized user intervention guidance
+- **New Error Constants**: Added comprehensive set of new error constants with proper recovery hints:
+  - `printerBusy` - Printer processing another job
+  - `printerOffline` - Printer not available
+  - `printerJammed` - Paper jam detected
+  - `ribbonOut` - Ribbon needs replacement
+  - `mediaError` - Media-related issues
+  - `calibrationRequired` - Printer needs calibration
+  - `bufferFull` - Printer buffer overflow
+  - `languageMismatch` - Print language format mismatch
+  - `settingsConflict` - Conflicting printer settings
+  - `firmwareUpdateRequired` - Outdated firmware
+  - `temperatureError` - Temperature outside operating range
+  - `sensorError` - Sensor malfunction
+  - `printHeadError` - Print head issues
+  - `powerError` - Power-related problems
+  - `communicationError` - Communication protocol issues
+  - `authenticationError` - Authentication failures
+  - `encryptionError` - Encryption/decryption failures
+  - `dataCorruptionError` - Corrupted print data
+  - `unsupportedFeature` - Feature not supported
+  - `maintenanceRequired` - Maintenance needed
+  - `consumableLow` - Consumables running low
+  - `consumableEmpty` - Consumables completely empty
+
+### Changed
+- **ErrorInfo Enhancement**: Updated `ErrorInfo` class to include `recoveryHint` field from `ErrorCode`
+- **SmartPrintManager**: Removed local `_getRecoveryHint` method in favor of centralized recovery hints
+- **UI Integration**: Recovery hints now flow directly from error codes to UI for consistent user guidance
+
+### Technical
+- All error constants now include appropriate recovery hints where user intervention is possible
+- Recovery hints are null for errors that don't require user action
+- Enhanced error code lookup with comprehensive coverage of all error scenarios
+
 ## [2.0.40] - 2024-12-19
 
 ### Fixed
