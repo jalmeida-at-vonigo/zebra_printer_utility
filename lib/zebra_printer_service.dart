@@ -18,6 +18,9 @@ class ZebraPrinterService {
   StreamController<ZebraDevice?>? _connectionStreamController;
   StreamController<String>? _statusStreamController;
   final Logger _logger = Logger.withPrefix('ZebraPrinterService');
+  
+  // Smart print manager instance
+  SmartPrintManager? _smartPrintManager;
 
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter? get printer => _printer;
@@ -1087,7 +1090,47 @@ class ZebraPrinterService {
       );
     }
   }
-  
 
+  // ===== Smart Print Manager Integration =====
 
+  /// Get or create the smart print manager instance
+  SmartPrintManager get smartPrintManager {
+    _smartPrintManager ??= SmartPrintManager(this);
+    return _smartPrintManager!;
+  }
+
+  /// Smart print with comprehensive event system and automatic recovery
+  /// Returns a stream of print events for UI updates
+  Stream<PrintEvent> smartPrint(
+    String data, {
+    ZebraDevice? device,
+    int maxAttempts = 3,
+    Duration? connectionTimeout,
+    Duration? printTimeout,
+  }) {
+    _logger.info('Service: Starting smart print operation');
+    
+    // Start the smart print operation and return the events stream
+    smartPrintManager.smartPrint(
+      data,
+      device: device,
+      maxAttempts: maxAttempts,
+      connectionTimeout: connectionTimeout,
+      printTimeout: printTimeout,
+    );
+
+    return smartPrintManager.events;
+  }
+
+  /// Cancel the current smart print operation
+  Future<void> cancelSmartPrint() async {
+    _logger.info('Service: Cancelling smart print operation');
+    await smartPrintManager.cancel();
+  }
+
+  /// Dispose the smart print manager
+  void disposeSmartPrintManager() {
+    _smartPrintManager?.dispose();
+    _smartPrintManager = null;
+  }
 }

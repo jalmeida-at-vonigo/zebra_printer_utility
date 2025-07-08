@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.0.36] - 2025-07-08
+
+### Added
+- **SmartPrintManager**: Comprehensive event-driven printing system with step tracking and error classification
+  - Real-time events for step changes, errors, retry attempts, and progress updates
+  - Automatic error categorization as recoverable, non-recoverable, or unknown
+  - Progress tracking with elapsed time and estimated remaining time
+  - Enhanced error handling with actionable guidance for users
+  - Event-driven UI components that consume events from SmartPrintManager
+- **PrintEvent System**: Complete event system for print operations
+  - `PrintStep` enumeration: initializing, connecting, connected, sending, completed, failed, cancelled
+  - `ErrorRecoverability` classification: recoverable, nonRecoverable, unknown
+  - `PrintEventType` events: stepChanged, errorOccurred, retryAttempt, progressUpdate, completed, cancelled
+  - `PrintStepInfo`, `PrintErrorInfo`, `PrintProgressInfo` data classes
+  - Broadcast stream of `PrintEvent` objects with comprehensive metadata
+- **Enhanced Retry Information**: Comprehensive retry tracking and display
+  - `PrintStepInfo` properties: `isRetry`, `retryCount`, `isFinalAttempt`, `progress`
+  - Detailed retry messages: "Retry X of Y - Z attempts remaining" or "Final attempt"
+  - Visual retry indicators in UI with retry count and attempt information
+  - Retry information displayed in progress panel, error panel, and main status
+
+### Features
+- **Step Tracking**: Tracks all print operation states with detailed messages
+- **Automatic Retry**: Intelligently retries recoverable errors (connection issues, timeouts)
+- **Error Classification**: Analyzes error messages to determine recoverability
+- **Progress Visualization**: Shows progress bar, current operation, and time estimates
+- **Comprehensive Logging**: Detailed logging of all print operations and events
+- **Retry Visibility**: Prominent display of retry attempts with clear countdown and status
+
+### UI Enhancements
+- **Retry Indicator**: Dedicated retry badge showing "Retry X of Y" with warning color
+- **Progress Panel**: Enhanced with retry count display alongside time information
+- **Error Panel**: Shows retry attempt information when errors occur during retries
+- **Status Messages**: Detailed retry messages with remaining attempts or final attempt indication
+
+### Technical
+- **Event Stream**: Broadcast stream of PrintEvent objects with step, error, and progress information
+- **Timeout Handling**: Configurable connection and print timeouts with proper error handling
+- **Resource Management**: Proper disposal of timers and stream controllers
+- **Thread Safety**: Safe event emission and state management
+- **Retry Tracking**: Comprehensive retry state management with attempt counting and final attempt detection
+
 ## [2.0.35] - 2025-01-07
 
 ### Fixed

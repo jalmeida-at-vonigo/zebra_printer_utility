@@ -14,6 +14,7 @@ export 'models/readiness_options.dart';
 export 'models/readiness_result.dart';
 export 'internal/logger.dart';
 export 'internal/smart_device_selector.dart' show SmartDiscoveryResult;
+export 'internal/smart_print_manager.dart';
 export 'zebra_printer.dart';
 export 'zebra_printer_discovery.dart';
 export 'zebra_printer_service.dart';

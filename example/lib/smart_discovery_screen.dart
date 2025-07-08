@@ -646,13 +646,13 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           colors: [Colors.blue, Colors.blueAccent],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: const BorderRadius.only(
+        borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
         ),
@@ -697,12 +697,12 @@ class _ExamplePrintingPopupState extends State<_ExamplePrintingPopup>
           ),
           if (_isDiscovering && !_isPrinting)
             IconButton(
-              icon: Icon(Icons.stop, color: Colors.white, size: 24),
+              icon: const Icon(Icons.stop, color: Colors.white, size: 24),
               onPressed: _stopDiscovery,
               tooltip: 'Stop Discovery',
             ),
           IconButton(
-            icon: Icon(Icons.close, color: Colors.white, size: 24),
+            icon: const Icon(Icons.close, color: Colors.white, size: 24),
             onPressed: _isPrinting ? _cancelPrinting : _closePopup,
             tooltip: 'Close',
           ),
