@@ -12,6 +12,12 @@ Implement a nice animation the status move link a fluid ink to start to have a p
 Once done, fill in the done status on the progress indicator, and then animate the small done indicator becoming the bing green done of the last step.
 
 
-We have an issue with a black screen sliding from the right to the left after closing the popup, and are now
+We have an issue with a black screen sliding from the right to the left after closing the popup, and we now work to try to resolve this issue. Lets sstart by remove all and everything animation from the 
 
 Review and simplify all the animations code paths, even if it means removing some. Be agressive on the animation removal, as we do have a few issues to be fixed, that makes the application to be overlayed by a black screen on popup closeing. Maybe we do have a later animation (back/forward) that gets called after popup closing, therefore acts on the main screen.
+
+Create a ManualNetworkPrinterPanel.dart, PrintSelectionPanel.dart and PrintingPanel.dart and make the @ZebraPrintingPopup.dart to properly coordinate between all of them to make them to work
+
+Review once to check if the reference visuals and behavior (from the copy.dart files) are on the new @ZebraPrintingPopup.dart but spited on the proper panels
+
+Be careful to do not restore the double pop issue, and while reviewing remind that we now have proper widgets called panels instead of everything on the main popup, and the "same" must happen on the respective new widget
