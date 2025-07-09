@@ -126,6 +126,8 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
   }
 
   void _addLog(String method, String status, String message) {
+    if (!mounted) return;
+    
     setState(() {
       _logs.add(OperationLogEntry(
         operationId: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -145,8 +147,26 @@ class _SmartDiscoveryScreenState extends State<SmartDiscoveryScreen> {
 
   @override
   void dispose() {
+    // Cancel subscriptions first
     _discoverySubscription?.cancel();
-    _manager?.dispose();
+    _discoverySubscription = null;
+
+    // Stop discovery and dispose manager
+    if (_manager != null) {
+      try {
+        _manager!.discovery.stopDiscovery();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+
+      try {
+        _manager!.dispose();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+      _manager = null;
+    }
+    
     super.dispose();
   }
 

@@ -38,8 +38,28 @@ class _CPCLScreenState extends State<CPCLScreen> {
 
   @override
   void dispose() {
-    _manager?.dispose();
+    // Disconnect if connected before disposing
+    if (_manager != null && _isConnected) {
+      try {
+        _manager!.disconnect();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+    }
+
+    // Dispose the manager
+    if (_manager != null) {
+      try {
+        _manager!.dispose();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+      _manager = null;
+    }
+
+    // Dispose controllers
     _cpclController.dispose();
+    
     super.dispose();
   }
 
@@ -59,6 +79,8 @@ PRINT''';
   }
 
   void _addLog(String message, String status) {
+    if (!mounted) return;
+    
     setState(() {
       _logs.add(OperationLogEntry(
         operationId: DateTime.now().millisecondsSinceEpoch.toString(),

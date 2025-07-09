@@ -116,6 +116,12 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handlePrintEvent(PrintEvent event) {
+    // Check if widget is still mounted
+    if (!mounted) return;
+
+    // Check if manager is still available
+    if (_manager == null) return;
+    
     // Update UI based on the simple status
     setState(() {
       _currentStatus = event.status.displayName;
@@ -173,11 +179,13 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handleStepChange(PrintEvent event) {
+    if (!mounted) return;
     _addLog(
         'Step', 'info', '${event.status.displayName}: ${event.message ?? ''}');
   }
 
   void _handleError(PrintErrorInfo errorInfo) {
+    if (!mounted) return;
     setState(() {
       _currentStatus = 'Error: ${errorInfo.message}';
     });
@@ -192,12 +200,12 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handleRetry(PrintEvent event) {
+    if (!mounted) return;
     _addLog('Retry', 'warning', event.message ?? 'Retry attempt');
   }
 
-
-
   void _handleRealTimeStatusUpdate(PrintEvent event) {
+    if (!mounted) return;
     // Handle real-time status updates from printer polling
     final status = event.metadata['status'] as Map<String, dynamic>?;
     final issues = event.metadata['issues'] as List<String>?;
@@ -220,6 +228,7 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handleCompletion() {
+    if (!mounted) return;
     setState(() {
       _currentStatus = 'Print completed successfully!';
       _progress = 1.0;
@@ -228,6 +237,7 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _handleCancellation() {
+    if (!mounted) return;
     setState(() {
       _currentStatus = 'Print cancelled';
       _progress = 0.0;
@@ -247,6 +257,8 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   }
 
   void _addLog(String method, String status, String message) {
+    if (!mounted) return;
+    
     setState(() {
       _logs.add(OperationLogEntry(
         operationId: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -274,9 +286,30 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
 
   @override
   void dispose() {
+    // Cancel subscriptions first
     _printEventSubscription?.cancel();
-    _manager?.dispose();
+    _printEventSubscription = null;
+
+    // Cancel any ongoing operations before disposing
+    if (_manager != null) {
+      try {
+        _manager!.cancelSmartPrint();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+
+      // Dispose the manager
+      try {
+        _manager!.dispose();
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+      _manager = null;
+    }
+
+    // Dispose controllers
     _dataController.dispose();
+    
     super.dispose();
   }
 
