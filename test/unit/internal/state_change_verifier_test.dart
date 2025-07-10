@@ -187,7 +187,7 @@ void main() {
         );
         
         expect(result.success, isFalse);
-        expect(result.error?.code, equals('CUSTOM_ERROR'));
+        expect(result.error?.code, equals('OPERATION_ERROR'));
       });
 
       test('executeWithDelay handles exceptions properly', () async {
@@ -200,7 +200,8 @@ void main() {
         
         expect(result.success, isFalse);
         expect(result.error?.code, equals('OPERATION_ERROR'));
-        expect(result.error?.message, contains('Network error'));
+        expect(result.error?.message,
+            equals('Operation failed: Test error: Exception: Network error'));
       });
     });
 

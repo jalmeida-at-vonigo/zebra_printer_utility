@@ -53,14 +53,14 @@ class ReadinessOptions {
   
   /// Constructor with all options
   const ReadinessOptions({
-    this.checkConnection = true,
-    this.checkMedia = true,
-    this.checkHead = true,
-    this.checkPause = true,
-    this.checkErrors = true,
+    this.checkConnection = false,
+    this.checkMedia = false,
+    this.checkHead = false,
+    this.checkPause = false,
+    this.checkErrors = false,
     this.checkLanguage = false,
-    this.fixPausedPrinter = true,
-    this.fixPrinterErrors = true,
+    this.fixPausedPrinter = false,
+    this.fixPrinterErrors = false,
     this.fixMediaCalibration = false,
     this.fixLanguageMismatch = false,
     this.fixBufferIssues = false,
@@ -73,13 +73,22 @@ class ReadinessOptions {
   
   /// Quick readiness check with basic fixes
   factory ReadinessOptions.quick() => const ReadinessOptions(
-    checkConnection: true,
-    checkMedia: true,
-    checkHead: true,
-    checkPause: true,
-    fixPausedPrinter: true,
-    fixPrinterErrors: true,
+        checkLanguage: true,
+        checkConnection: true,
+        checkMedia: true,
+        checkHead: true,
+        checkPause: true,
+        fixLanguageMismatch: true,
+        fixPausedPrinter: true,
+        fixPrinterErrors: true,
   );
+
+  /// Quick readiness check with basic fixes
+  factory ReadinessOptions.quickWithLanguage() =>
+      ReadinessOptions.quick().copyWith(
+        checkLanguage: true,
+        fixLanguageMismatch: true,
+      );
   
   /// Comprehensive readiness check with all fixes
   factory ReadinessOptions.comprehensive() => const ReadinessOptions(

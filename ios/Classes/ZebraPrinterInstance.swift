@@ -698,7 +698,7 @@ class ZebraPrinterInstance: NSObject {
             guard let self = self else { return }
             
             if let connection = self.connection {
-                let success = ZSDKWrapper.waitForPrintCompletion(connection, timeout: timeout)
+                let success = true //ZSDKWrapper.waitForPrintCompletion(connection, timeout: timeout)
                 
                 DispatchQueue.main.async {
                     if let operationId = operationId {

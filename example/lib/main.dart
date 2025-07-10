@@ -3,6 +3,7 @@ import 'cpcl_screen.dart';
 import 'result_based_screen.dart';
 import 'smart_discovery_screen.dart';
 import 'smart_print_example_screen.dart';
+import 'direct_print_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -72,6 +73,10 @@ class _HomeScreenState extends State<HomeScreen>
               icon: Icon(Icons.smart_toy),
               text: 'Smart Print',
             ),
+            Tab(
+              icon: Icon(Icons.code),
+              text: 'Direct Print',
+            ),
           ],
         ),
       ),
@@ -82,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen>
           ResultBasedScreen(),
           SmartDiscoveryScreen(),
           SmartPrintExampleScreen(),
+          DirectPrintScreen(),
         ],
       ),
     );

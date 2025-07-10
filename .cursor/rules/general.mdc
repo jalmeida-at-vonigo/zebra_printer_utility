@@ -14,23 +14,33 @@ alwaysApply: true
 - All tests must be updated and passing with the proper implementation.
 - If you find unrelated lint or analysis issues, fix them as part of your change.
 
-# DOCUMENTATION
+# API MIGRATION AND CODE CLEANUP STANDARDS
 
-* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details
-* The docs are about:
-    - Usability of the API
-    - Standards about the development and architecture, and
-* There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.# General Project Standards
+## Zero Tolerance for Stub Code
+- **NEVER** leave commented-out code with explanatory comments like "These methods no longer exist in the new API"
+- **NEVER** use `skip: 'Method no longer exists in new API'` or similar excuses
+- **NEVER** leave TODO comments explaining why code was removed or changed
+- **ALWAYS** complete the migration properly or remove the code entirely
 
-- No TODOs or known incomplete work should remain at the end of any task. If you are not able to complete, ask for help.
-- All code must be clean, working, and free of lint or analysis warnings (`flutter analyze` must pass with no issues).
-- No deprecated code is allowed; all code must use the latest APIs and patterns.
-- Only Dart and iOS code need to be evaluated/changed; Android is not yet supported.
-- All changes must be documented as required in the documentation section.
-- Always update the version number (patch increments only).
-- Always update the `CHANGELOG.md` with the changes (no need to document migration, breaking changes, or unreleased, as nothing was released yet).
-- All tests must be updated and passing with the proper implementation.
-- If you find unrelated lint or analysis issues, fix them as part of your change.
+## Migration Requirements
+- **Complete Migration**: When APIs change, fully migrate all affected code to the new API
+- **Remove Legacy Code**: Delete old methods, classes, and interfaces that are no longer used
+- **Update Tests**: Rewrite tests to use the new API instead of skipping them
+- **Clean Imports**: Remove unused imports and dependencies
+- **Update Documentation**: Ensure all documentation reflects the current API
+
+## Code Cleanup Standards
+- **Remove Dead Code**: Delete unused methods, variables, and classes
+- **Clean Comments**: Remove outdated comments that reference old APIs
+- **Update Examples**: Ensure all examples use current APIs
+- **Fix Linting**: Address all lint warnings and errors
+- **Consistent Patterns**: Use consistent coding patterns throughout
+
+## Testing Standards
+- **No Skipped Tests**: All tests must be functional and passing
+- **Current API Usage**: Tests must use the current API, not legacy methods
+- **Proper Mocks**: Use proper mocking instead of skipping complex operations
+- **Complete Coverage**: Ensure new functionality has proper test coverage
 
 # DOCUMENTATION
 

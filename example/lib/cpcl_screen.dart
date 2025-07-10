@@ -121,11 +121,15 @@ PRINT''';
     _addLog('Sending CPCL data to printer', 'started');
 
     try {
+      // Use the primitive API for direct CPCL control
+      // This demonstrates manual control over the printing process
       final result = await _manager!.print(cpclData);
+      
       if (result.success) {
-        _addLog('CPCL data sent successfully', 'completed');
+        _addLog('CPCL print completed successfully', 'completed');
       } else {
-        _addLog('Print failed: ${result.error}', 'failed');
+        _addLog('Print failed: ${result.error?.message ?? 'Unknown error'}',
+            'failed');
       }
     } catch (e) {
       _addLog('Print error: $e', 'failed');

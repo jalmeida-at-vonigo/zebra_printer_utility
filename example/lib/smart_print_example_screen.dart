@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'operation_log_panel.dart';
+import 'bt_printer_selector.dart';
 
 /// Example screen demonstrating the refactored SmartPrintManager
 /// Shows proper architecture with ZebraPrinterService and instance-based events
@@ -21,6 +22,9 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
   bool _isPrinting = false;
   String _currentStatus = 'Ready';
   double _progress = 0.0;
+  ZebraDevice? _selectedPrinter;
+  bool _isConnected = false;
+  String _printerStatus = '';
 
   @override
   void initState() {
@@ -48,16 +52,43 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
     try {
       _manager = ZebraPrinterManager();
       await _manager!.initialize();
-
-      // Listen to status messages
       _manager!.status.listen((message) {
+        setState(() {
+          _printerStatus = message;
+        });
         _addLog('Status', 'info', message);
       });
-
       _addLog('Manager', 'success', 'Manager initialized successfully');
     } catch (e) {
       _addLog('Manager', 'error', 'Error initializing manager: $e');
     }
+  }
+
+  Future<void> _handleConnect(ZebraDevice device) async {
+    setState(() {
+      _selectedPrinter = device;
+      _isConnected = false;
+    });
+    final result = await _manager?.connect(device);
+    setState(() {
+      _isConnected = result?.success ?? false;
+    });
+    if (result?.success ?? false) {
+      _addLog('Printer', 'success',
+          'Connected to printer: ${device.name} (${device.address})');
+    } else {
+      _addLog('Printer', 'error',
+          'Failed to connect: ${result?.error?.message ?? 'Unknown error'}');
+    }
+  }
+
+  void _handleDisconnect() async {
+    await _manager?.disconnect();
+    setState(() {
+      _isConnected = false;
+      _selectedPrinter = null;
+    });
+    _addLog('Printer', 'info', 'Disconnected from printer');
   }
 
   Future<void> _startSmartPrint() async {
@@ -65,29 +96,28 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       _addLog('Print', 'error', 'Manager not initialized');
       return;
     }
-
+    if (!_isConnected || _selectedPrinter == null) {
+      _addLog('Print', 'error',
+          'No printer connected. Please connect to a printer first.');
+      return;
+    }
     if (_dataController.text.trim().isEmpty) {
       _addLog('Print', 'error', 'No print data provided');
       return;
     }
-
     setState(() {
       _isPrinting = true;
       _currentStatus = 'Initializing...';
       _progress = 0.0;
     });
-
     _addLog('Print', 'info', 'Starting smart print operation');
-
     try {
-      // Start smart print and get event stream
-      final eventStream = _manager!.smartPrint(
+      final eventStream = Zebra.smartPrint(
         _dataController.text.trim(),
+        device: _selectedPrinter,
         maxAttempts: 3,
         timeout: const Duration(seconds: 30),
       );
-
-      // Listen to print events
       _printEventSubscription = eventStream.listen(
         (event) {
           _handlePrintEvent(event);
@@ -143,9 +173,7 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       _currentStatus = stepInfo.message;
       _progress = stepInfo.progress;
     });
-
     _addLog('Step', 'info', '${stepInfo.step.name}: ${stepInfo.message}');
-
     if (stepInfo.isRetry) {
       _addLog('Retry', 'warning',
           'Retry ${stepInfo.retryCount} of ${stepInfo.maxAttempts - 1}');
@@ -156,10 +184,8 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
     setState(() {
       _currentStatus = 'Error: ${errorInfo.message}';
     });
-
     _addLog('Error', 'error',
         '${errorInfo.message} (${errorInfo.recoverability.name})');
-
     if (errorInfo.recoverability == ErrorRecoverability.nonRecoverable) {
       _addLog('Error', 'error',
           'Non-recoverable error - manual intervention required');
@@ -195,9 +221,8 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
 
   void _cancelPrint() {
     if (_manager == null) return;
-
     try {
-      _manager!.cancelSmartPrint();
+      Zebra.cancelSmartPrint();
       _addLog('Print', 'warning', 'Print cancellation requested');
     } catch (e) {
       _addLog('Print', 'error', 'Error cancelling print: $e');
@@ -216,8 +241,6 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
         duration: null,
         error: message,
       ));
-
-      // Keep only last 50 logs
       if (_logs.length > 50) {
         _logs.removeAt(0);
       }
@@ -248,6 +271,21 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
       ),
       body: Column(
         children: [
+          // Printer Selector at the top
+          BTPrinterSelector(
+            onDeviceSelected: (device) {
+              setState(() {
+                _selectedPrinter = device;
+              });
+            },
+            onConnect: (device) async {
+              await _handleConnect(device);
+            },
+            onDisconnect: _handleDisconnect,
+            selectedDevice: _selectedPrinter,
+            isConnected: _isConnected,
+            status: _printerStatus,
+          ),
           // Status Panel
           Container(
             padding: const EdgeInsets.all(16),
@@ -279,7 +317,6 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
               ],
             ),
           ),
-
           // Control Panel
           Container(
             padding: const EdgeInsets.all(16),
@@ -310,7 +347,6 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
               ],
             ),
           ),
-
           // Print Data Input
           Container(
             padding: const EdgeInsets.all(16),
@@ -336,7 +372,6 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
               ],
             ),
           ),
-
           // Log Panel
           Expanded(
             child: OperationLogPanel(

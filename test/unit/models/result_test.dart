@@ -96,7 +96,7 @@ void main() {
         final mapped = result.map((data) => data.toString());
 
         expect(mapped.success, isFalse);
-        expect(mapped.error!.message, equals('Unknown error'));
+        expect(mapped.error!.message, equals('Unknown error occurred'));
       });
 
       test('should handle type transformations correctly', () {
@@ -126,7 +126,7 @@ void main() {
             .map((data) => data.toString());
 
         expect(chained.success, isFalse);
-        expect(chained.error!.message, equals('Unknown error'));
+        expect(chained.error!.message, equals('Unknown error occurred'));
       });
     });
 

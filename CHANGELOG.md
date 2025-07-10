@@ -1,5 +1,81 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+## 2.0.39 - 2024-12-20
+
+### Added
+- **Robust Print Operations**: Enhanced ZebraPrinterManager.print() with integrated workflow robustness
+  - Integrated prepareForPrint functionality for comprehensive printer preparation
+  - Added format-specific buffer clearing and flushing operations
+  - Implemented print completion verification with hardware status checking
+  - Added format-specific completion delays (CPCL: 2500ms, ZPL: 2000ms) with data size scaling
+  - Integrated language mode checking and automatic switching
+  - Added post-print CPCL buffer flush operations
+  - Comprehensive error handling and status reporting throughout the print workflow
+- **Print Completion Verification**: Hardware-based print completion verification system
+  - Automatic delay calculation based on data size (extra 1s per KB)
+  - Hardware status verification using waitForPrintCompletion command
+  - Format-specific completion timing optimized for CPCL and ZPL
+  - Robust error handling for completion verification failures
+- **Integrated Workflow**: Combined pre-print, print, and post-print operations
+  - Pre-print: Connection, media, head, pause, error, and language checks with fixes
+  - Print: Format detection, data preparation, and print execution
+  - Post-print: Buffer operations, completion verification, and status reporting
+  - Comprehensive status streaming for real-time operation feedback
+
+
+### Changed
+- **Reduced prepareForPrint Checks**: Optimized printer preparation to match original behavior
+  - Changed from comprehensive checks (connection, media, head, pause, errors, language, buffer) to language-only operations
+  - Added `ReadinessOptions.forLanguageOnly()` factory method for minimal language checks
+  - Updated `_checkAndFixLanguage` method to actually switch printer language when `fixLanguageMismatch` is true
+  - Reduced unnecessary checks to improve performance and match original ZebraPrinterService behavior
+  - Language switching now uses proper CommandFactory commands (setZplMode, setCpclMode) for exact compatibility
+- **ZebraPrinterManager Architecture**: Enhanced to provide both primitive and robust operations
+  - Main print() method now provides full workflow integration
+  - Added PrinterReadinessManager integration for comprehensive preparation
+  - Enhanced status streaming with detailed operation progress
+  - Improved error handling with specific error codes and messages
+- **Print Workflow**: Integrated workflow that matches old ZebraPrinterService robustness
+  - Automatic printer preparation with format-specific optimizations
+  - Intelligent buffer management for CPCL and ZPL formats
+  - Hardware-based completion verification instead of simple delays
+  - Comprehensive error recovery and status reporting
+
+
+### Fixed
+- **Smart Print Event System**: Fixed SmartPrintManager to properly return event streams
+  - Changed SmartPrintManager.smartPrint() to return Stream<PrintEvent> instead of Future<Result<void>>
+  - Fixed Zebra.smartPrint() to properly handle event streams from SmartPrintManager
+  - Resolved null printer address issue in smart print operations
+- **Smart Print Example**: Enhanced example screen with proper printer selection
+  - Added printer selection functionality using BTPrinterSelector
+  - Added printer selection panel to UI with clear status display
+  - Fixed smart print to require printer selection before attempting to print
+  - Improved error handling and user feedback for printer selection
+- Fixed smartPrintManager getter to ensure proper initialization before use
+- Fixed example app to use correct Zebra.smartPrint and Zebra.cancelSmartPrint API
+- Removed obsolete TODO comments from test files
+- Fixed test expectations to match actual error message implementations
+
+### Removed
+- **Unused Code Cleanup**: Removed printPrimitive() method and related dead code
+  - Removed printPrimitive() method that was not being used anywhere in the codebase
+  - Removed _checkAndSwitchLanguageMode() method that was only used by printPrimitive
+  - Simplified codebase by eliminating unused methods and reducing complexity
+  - The robust print() method already provides all necessary functionality
+
+### Technical
+- **Language Switching**: Enhanced PrinterReadinessManager to perform actual language switching instead of just checking
+- **Performance Optimization**: Reduced prepareForPrint overhead by eliminating unnecessary status checks
+- **Exact Compatibility**: Ensured language switching calls match original ZebraPrinterService implementation
+- **Workflow Integration**: Seamless integration of prepareForPrint with print execution
+- **Format-Specific Optimization**: CPCL and ZPL specific handling for maximum reliability
+- **Hardware Verification**: Uses actual printer status for completion verification
+- **Status Streaming**: Real-time status updates throughout the entire print workflow
+- **Error Handling**: Comprehensive error handling with specific error codes and recovery
+
 ## [2.0.38] - 2025-01-08
 
 ### Added

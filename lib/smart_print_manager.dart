@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
+import 'models/print_enums.dart';
 import 'zebra_printer_manager.dart';
 import 'internal/logger.dart';
 
@@ -157,17 +158,18 @@ class SmartPrintManager {
 
   /// Get the event stream for monitoring print progress
   Stream<PrintEvent> get eventStream {
-    _eventStream ??= _eventController?.stream ?? Stream.empty();
+    _eventStream ??= _eventController?.stream ?? const Stream.empty();
     return _eventStream!;
   }
 
   /// Smart print with automatic retry and error handling
-  Future<Result<void>> smartPrint({
+  Stream<PrintEvent> smartPrint({
     required String data,
     ZebraDevice? device,
+    PrintFormat? format,
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
-  }) async {
+  }) {
     _logger.info('Starting smart print operation');
     _maxAttempts = maxAttempts;
     _currentAttempt = 1;
@@ -176,6 +178,24 @@ class SmartPrintManager {
     
     _eventController = StreamController<PrintEvent>.broadcast();
     
+    // Start the print operation asynchronously
+    _executeSmartPrint(
+      data: data,
+      device: device,
+      format: format,
+      timeout: timeout,
+    );
+
+    return _eventController!.stream;
+  }
+
+  /// Execute the smart print operation
+  Future<void> _executeSmartPrint({
+    required String data,
+    ZebraDevice? device,
+    PrintFormat? format,
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
     try {
       // Step 1: Initialize
       await _updateStep(PrintStep.initializing, 'Initializing print operation');
@@ -183,13 +203,33 @@ class SmartPrintManager {
       // Step 2: Connect to printer
       final connectResult = await _connectToPrinter(device);
       if (!connectResult.success) {
-        return connectResult;
+        _eventController?.add(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message: connectResult.error?.message ?? 'Connection failed',
+            recoverability: ErrorRecoverability.recoverable,
+            errorCode: connectResult.error?.code,
+          ),
+          stepInfo: _createStepInfo(PrintStep.failed, 'Connection failed'),
+        ));
+        return;
       }
       
       // Step 3: Send print data
-      final printResult = await _sendPrintData(data, timeout);
+      final printResult = await _sendPrintData(data, format, timeout);
       if (!printResult.success) {
-        return printResult;
+        _eventController?.add(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message: printResult.error?.message ?? 'Print failed',
+            recoverability: ErrorRecoverability.nonRecoverable,
+            errorCode: printResult.error?.code,
+          ),
+          stepInfo: _createStepInfo(PrintStep.failed, 'Print failed'),
+        ));
+        return;
       }
       
       // Step 4: Complete
@@ -200,19 +240,12 @@ class SmartPrintManager {
         stepInfo: _createStepInfo(PrintStep.completed, 'Print operation completed'),
       ));
       
-      return Result.success();
-      
     } catch (e, stack) {
       _logger.error('Unexpected error in smart print', e, stack);
       await _handleError(
         errorCode: ErrorCodes.operationError,
         formatArgs: [e.toString()],
         stackTrace: stack,
-      );
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
       );
     } finally {
       await _eventController?.close();
@@ -271,13 +304,18 @@ class SmartPrintManager {
   }
 
   /// Send print data with retry logic
-  Future<Result<void>> _sendPrintData(String data, Duration timeout) async {
+  Future<Result<void>> _sendPrintData(
+      String data, PrintFormat? format, Duration timeout) async {
     while (_currentAttempt <= _maxAttempts && !_isCancelled) {
       await _updateStep(PrintStep.sending, 'Sending print data (attempt $_currentAttempt/$_maxAttempts)');
       
       try {
-        final result = await _printerManager.print(data);
+        // Use the manager's print method which handles all data preparation, 
+        // CPCL flush commands, and completion delays
+        final result = await _printerManager.print(data, format: format);
+        
         if (result.success) {
+          _logger.info('Print operation completed successfully');
           return Result.success();
         } else {
           await _handleError(

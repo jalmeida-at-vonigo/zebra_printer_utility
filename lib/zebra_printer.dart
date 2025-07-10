@@ -433,4 +433,10 @@ class ZebraController extends ChangeNotifier {
         status: connectedString, color: Colors.green, isConnected: true);
     notifyListeners();
   }
+
+  @override
+  void dispose() {
+    _printers.clear();
+    super.dispose();
+  }
 }

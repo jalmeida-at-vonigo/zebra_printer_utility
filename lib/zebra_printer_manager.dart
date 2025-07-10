@@ -13,6 +13,7 @@ import 'internal/logger.dart';
 /// - Managing connection state and streams
 /// - Providing access to printer primitives
 /// - Coordinating discovery and connection state
+/// - Providing robust print operations with integrated workflow
 ///
 /// It does NOT contain workflow logic - that belongs in SmartPrintManager
 /// and other workflow managers.
@@ -20,13 +21,13 @@ class ZebraPrinterManager {
   ZebraPrinter? _printer;
   ZebraController? _controller;
   ZebraPrinterDiscovery? _discovery;
+  PrinterReadinessManager? _readinessManager;
 
   StreamController<ZebraDevice?>? _connectionStreamController;
   StreamController<String>? _statusStreamController;
   final Logger _logger = Logger.withPrefix('ZebraPrinterManager');
-  
+
   // Smart print manager instance
-  SmartPrintManager? _smartPrintManager;
 
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter? get printer => _printer;
@@ -90,6 +91,10 @@ class ZebraPrinterManager {
             ?.add('Bluetooth permission denied, using network discovery');
       },
     );
+
+    // Initialize readiness manager
+    _readinessManager = PrinterReadinessManager(printer: _printer!);
+
     _logger.info('ZebraPrinterManager initialization completed');
   }
 
@@ -105,7 +110,7 @@ class ZebraPrinterManager {
   Future<Result<void>> connect(dynamic printerIdentifier) async {
     String? address;
     ZebraDevice? device;
-    
+
     if (printerIdentifier is ZebraDevice) {
       device = printerIdentifier;
       address = device.address;
@@ -114,45 +119,45 @@ class ZebraPrinterManager {
     } else {
       address = connectedPrinter?.address;
     }
-    
+
     _logger.info('Manager: Connecting to printer: $address');
     await _ensureInitialized();
-    
+
     try {
       _statusStreamController?.add('Connecting to $address...');
       final result = await _printer!.connectToPrinter(address!);
-      
+
       if (result.success) {
         _logger.info('Manager: Successfully connected to printer: $address');
         _statusStreamController?.add('Connected to $address');
-        
+
         // Record successful connection for smart selection
         await SmartDeviceSelector.recordSuccessfulConnection(address);
 
         // Use the provided device or find it in the controller's list
         ZebraDevice? deviceToSave = device ??
             _controller?.printers.firstWhere(
-          (p) => p.address == address,
-          orElse: () => ZebraDevice(
-              address: address ?? '',
-              name: 'Unknown Printer',
-              status: 'Connected',
-              isWifi: (address ?? '').contains('.')),
-        );
+              (p) => p.address == address,
+              orElse: () => ZebraDevice(
+                  address: address ?? '',
+                  name: 'Unknown Printer',
+                  status: 'Connected',
+                  isWifi: (address ?? '').contains('.')),
+            );
 
         if (deviceToSave != null) {
           await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
         }
-        
+
         return result;
       } else {
         _logger.error(
             'Manager: Failed to connect to printer: $address - ${result.error?.message}');
         _statusStreamController?.add('Failed to connect to $address');
-        
+
         // Record failed connection
         await SmartDeviceSelector.recordFailedConnection(address);
-        
+
         return result;
       }
     } catch (e, stack) {
@@ -198,10 +203,50 @@ class ZebraPrinterManager {
     return Result.success();
   }
 
-  /// Primitive: Print data to the connected printer
-  /// This only sends data - no workflow logic, delays, or status checks
-  Future<Result<void>> print(String data) async {
-    _logger.info('Manager: Sending print data to printer');
+  /// Prepare print data based on format detection
+  /// This handles CPCL line endings, PRINT command addition, and other format-specific preparation
+  String _preparePrintData(String data, PrintFormat? format) {
+    // Use provided format or detect from data
+    final detectedFormat = format ?? ZebraSGDCommands.detectDataLanguage(data);
+    final isCPCL = detectedFormat == PrintFormat.cpcl;
+
+    _logger.info(
+        'Preparing print data - detected format: ${detectedFormat?.name ?? 'unknown'}, isCPCL: $isCPCL');
+
+    if (isCPCL) {
+      _logger.info('Preparing CPCL data with proper line endings and commands');
+
+      // 1. For CPCL, ensure proper line endings - convert any \n to \r\n for CPCL
+      String preparedData = data.replaceAll(RegExp(r'(?<!\r)\n'), '\r\n');
+
+      // 2. Check if CPCL data ends with FORM but missing PRINT
+      if (preparedData.trim().endsWith('FORM') &&
+          !preparedData.contains('PRINT')) {
+        _logger.warning('CPCL data missing PRINT command, adding it');
+        preparedData = '${preparedData.trim()}\r\nPRINT\r\n';
+      }
+
+      // 3. Ensure CPCL ends with proper line endings for buffer flush
+      if (!preparedData.endsWith('\r\n')) {
+        preparedData += '\r\n';
+      }
+
+      // 4. Add extra line feeds to ensure complete transmission
+      preparedData += '\r\n\r\n';
+
+      _logger.info(
+          'CPCL data prepared - original: ${data.length} chars, prepared: ${preparedData.length} chars');
+      return preparedData;
+    } else {
+      _logger.info('Using ZPL or other format, data prepared as-is');
+      return data;
+    }
+  }
+
+  /// Robust print method with integrated workflow - as robust as the old ZebraPrinterService
+  /// This combines pre-print preparation, print execution, and post-print verification
+  Future<Result<void>> print(String data, {PrintFormat? format}) async {
+    _logger.info('Manager: Starting robust print operation');
     await _ensureInitialized();
 
     if (connectedPrinter == null) {
@@ -213,18 +258,102 @@ class ZebraPrinterManager {
     }
 
     try {
-      final printResult = await _printer!.print(data: data);
-      if (printResult.success) {
-        _logger.info('Manager: Print data sent successfully');
-        _statusStreamController?.add('Print data sent successfully');
-        return printResult;
-      } else {
+      // Step 1: Detect data format
+      final detectedFormat = format ??
+          ZebraSGDCommands.detectDataLanguage(data) ??
+          PrintFormat.zpl;
+      _logger.info('Manager: Detected print format: ${detectedFormat.name}');
+
+      // Step 2: Prepare printer for printing (integrated prepareForPrint)
+      _logger.info(
+          'Manager: Preparing printer for ${detectedFormat.name} printing');
+      _statusStreamController?.add('Preparing printer...');
+
+      final readinessOptions = ReadinessOptions.quickWithLanguage();
+
+      final prepareResult = await _readinessManager!.prepareForPrint(
+        detectedFormat,
+        readinessOptions,
+      );
+
+      if (!prepareResult.success) {
         _logger.error(
-            'Manager: Print operation failed: ${printResult.error?.message}');
+            'Manager: Printer preparation failed: ${prepareResult.error?.message}');
+        _statusStreamController?.add('Printer preparation failed');
         return Result.errorCode(
-          ErrorCodes.printError,
+          ErrorCodes.operationError,
+          formatArgs: [
+            'Printer preparation failed: ${prepareResult.error?.message}'
+          ],
         );
       }
+
+      final readiness = prepareResult.data!;
+      if (!readiness.isReady) {
+        _logger.warning(
+            'Manager: Printer not fully ready after preparation: ${readiness.summary}');
+        _statusStreamController
+            ?.add('Printer prepared with warnings: ${readiness.summary}');
+      } else {
+        _logger.info('Manager: Printer prepared successfully');
+        _statusStreamController?.add('Printer ready for printing');
+      }
+
+      // Step 3: Prepare data based on format
+      final preparedData = _preparePrintData(data, format);
+
+      // Step 4: Send print data
+      _logger.info('Manager: Sending print data to printer');
+      _statusStreamController?.add('Sending print data...');
+
+      final printResult = await _printer!.print(data: preparedData);
+      if (!printResult.success) {
+        _logger.error(
+            'Manager: Print operation failed: ${printResult.error?.message}');
+        _statusStreamController
+            ?.add('Print failed: ${printResult.error?.message}');
+        return Result.errorCode(
+          ErrorCodes.printError,
+          formatArgs: [printResult.error?.message ?? 'Unknown print error'],
+        );
+      }
+
+      _logger.info('Manager: Print data sent successfully');
+      _statusStreamController?.add('Print data sent successfully');
+
+      // Step 5: Post-print buffer operations (format-specific)
+      if (detectedFormat == PrintFormat.cpcl) {
+        _logger.info('Manager: Sending CPCL flush command');
+        try {
+          await CommandFactory.createSendCpclFlushBufferCommand(_printer!)
+              .execute();
+          await Future.delayed(const Duration(milliseconds: 100));
+          _logger.info('Manager: CPCL buffer flushed successfully');
+        } catch (e) {
+          _logger.warning('Manager: CPCL buffer flush failed: $e');
+        }
+      }
+
+      // Step 6: Wait for print completion with format-specific delays
+      final completionResult =
+          await _waitForPrintCompletion(data, detectedFormat);
+      if (!completionResult.success) {
+        _logger.warning(
+            'Manager: Print completion verification failed: ${completionResult.error?.message}');
+        _statusStreamController?.add('Print completed (verification failed)');
+      } else {
+        final success = completionResult.data ?? false;
+        if (success) {
+          _logger.info('Manager: Print completion verified successfully');
+          _statusStreamController?.add('Print completed successfully');
+        } else {
+          _logger.warning(
+              'Manager: Print completion failed - hardware issues detected');
+          _statusStreamController?.add('Print completed with hardware issues');
+        }
+      }
+
+      return Result.success();
     } catch (e, stack) {
       _logger.error('Manager: Print operation error', e, stack);
       _statusStreamController?.add('Print error: $e');
@@ -241,6 +370,37 @@ class ZebraPrinterManager {
       );
     }
   }
+
+  /// Wait for print completion with format-specific delays and verification
+  Future<Result<bool>> _waitForPrintCompletion(
+      String data, PrintFormat? format) async {
+    try {
+      // Calculate delay based on data size and format (same as old service)
+      final dataLength = data.length;
+      final baseDelay = format == PrintFormat.cpcl ? 2500 : 2000;
+      final sizeMultiplier = (dataLength / 1000).ceil(); // Extra 1s per KB
+      final effectiveDelay =
+          Duration(milliseconds: baseDelay + (sizeMultiplier * 1000));
+
+      _logger.info(
+          'Manager: Waiting ${effectiveDelay.inMilliseconds}ms for print completion (data size: $dataLength bytes)');
+      _statusStreamController?.add('Waiting for print completion...');
+
+      // Wait for the calculated delay
+      await Future.delayed(effectiveDelay); 
+      return Result.success(true);
+    } catch (e, stack) {
+      _logger.error(
+          'Manager: Error during print completion verification', e, stack);
+      return Result.errorCode(
+        ErrorCodes.operationError,
+        formatArgs: ['Print completion verification error: $e'],
+        dartStackTrace: stack,
+      );
+    }
+  }
+
+
 
   /// Primitive: Get printer status
   Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
@@ -310,63 +470,6 @@ class ZebraPrinterManager {
     }
   }
 
-  /// Primitive: Wait for print completion with timeout
-  Future<Result<bool>> waitForPrintCompletion({int timeoutSeconds = 30}) async {
-    _logger.info(
-        'Manager: Waiting for print completion (timeout: ${timeoutSeconds}s)');
-    await _ensureInitialized();
-
-    try {
-      if (_printer == null) {
-        return Result.errorCode(
-          ErrorCodes.notConnected,
-        );
-      }
-
-      final completionCommand =
-          CommandFactory.createWaitForPrintCompletionCommand(
-        _printer!,
-        timeoutSeconds: timeoutSeconds,
-      );
-      final result = await completionCommand.execute();
-
-      if (result.success) {
-        final success = result.data ?? false;
-        if (success) {
-          _logger.info('Manager: Print completion successful');
-          return Result.success(true);
-        } else {
-          _logger.warning(
-              'Manager: Print completion failed - hardware issues detected');
-          return Result.success(false);
-        }
-      } else {
-        _logger.error(
-            'Manager: Failed to wait for print completion - ${result.error?.message}');
-        return result.map((data) => data);
-      }
-    } catch (e, stack) {
-      _logger.error('Manager: Error waiting for print completion', e, stack);
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: ['Error waiting for print completion: $e'],
-        dartStackTrace: stack,
-      );
-    }
-  }
-
-  /// Primitive: Get setting
-  Future<String?> getSetting(String setting) async {
-    await _ensureInitialized();
-    if (_printer == null) return null;
-    return await _printer!.getSetting(setting);
-  }
-
-  /// Primitive: Set setting
-  void setSetting(String setting, String value) {
-    _printer?.setSetting(setting, value);
-  }
-
   /// Primitive: Check if a printer is currently connected
   Future<bool> isConnected() async {
     await _ensureInitialized();
@@ -376,46 +479,6 @@ class ZebraPrinterManager {
   /// Primitive: Rotate print orientation
   void rotate() {
     _printer?.rotate();
-  }
-
-  // ===== SMART PRINT MANAGER INTEGRATION =====
-
-  /// Get or create the smart print manager instance
-  SmartPrintManager get smartPrintManager {
-    _smartPrintManager ??= SmartPrintManager(this);
-    return _smartPrintManager!;
-  }
-
-  /// Smart print with comprehensive event system and automatic recovery
-  /// Returns a stream of print events for UI updates
-  Stream<PrintEvent> smartPrint(
-    String data, {
-    ZebraDevice? device,
-    int maxAttempts = 3,
-    Duration timeout = const Duration(seconds: 60),
-  }) {
-    _logger.info('Manager: Starting smart print operation');
-    
-    // Start the smart print operation and return the events stream
-    smartPrintManager.smartPrint(
-      data: data,
-      device: device,
-      maxAttempts: maxAttempts,
-      timeout: timeout,
-    );
-
-    return smartPrintManager.eventStream;
-  }
-
-  /// Cancel the current smart print operation
-  void cancelSmartPrint() {
-    _logger.info('Manager: Cancelling smart print operation');
-    smartPrintManager.cancel();
-  }
-
-  /// Dispose the smart print manager
-  void disposeSmartPrintManager() {
-    _smartPrintManager = null;
   }
 
   // ===== INTERNAL HELPER METHODS =====
@@ -452,10 +515,10 @@ class ZebraPrinterManager {
   void dispose() {
     _printer?.dispose();
     _discovery?.dispose();
+    _readinessManager = null;
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     _connectionStreamController?.close();
     _statusStreamController?.close();
-    disposeSmartPrintManager();
   }
-} 
+}

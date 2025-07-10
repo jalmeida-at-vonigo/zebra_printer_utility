@@ -22,7 +22,6 @@ import 'send_set_zpl_mode_command.dart';
 import 'send_set_cpcl_mode_command.dart';
 import 'send_clear_alerts_command.dart';
 import 'get_printer_status_command.dart';
-import 'wait_for_print_completion_command.dart';
 import 'get_detailed_printer_status_command.dart';
 
 /// Factory class for creating printer command instances
@@ -153,14 +152,6 @@ class CommandFactory {
     ZebraPrinter printer,
   ) =>
       GetPrinterStatusCommand(printer);
-
-  /// Creates a WaitForPrintCompletionCommand for waiting for print completion
-  static WaitForPrintCompletionCommand createWaitForPrintCompletionCommand(
-    ZebraPrinter printer, {
-    int timeoutSeconds = 30,
-  }) =>
-      WaitForPrintCompletionCommand(printer, timeoutSeconds: timeoutSeconds);
-
   /// Creates a GetDetailedPrinterStatusCommand for getting detailed printer status with recommendations
   static GetDetailedPrinterStatusCommand createGetDetailedPrinterStatusCommand(
     ZebraPrinter printer,

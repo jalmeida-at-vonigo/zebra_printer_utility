@@ -3,6 +3,8 @@ import 'package:zebrautil/zebrautil.dart';
 import 'package:zebrautil/internal/smart_device_selector.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  
   group('SmartDeviceSelector', () {
     group('selectOptimalPrinter', () {
       test('returns null for empty list', () async {

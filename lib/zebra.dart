@@ -3,6 +3,13 @@ import 'package:zebrautil/zebrautil.dart';
 
 /// Simple static API for Zebra printer operations.
 ///
+/// This is the recommended entry point for most Zebra printer operations.
+/// It provides a clean, simplified interface that delegates to the appropriate
+/// managers for complex workflows.
+///
+/// For advanced customization and direct access to the command pattern,
+/// use the individual managers directly or import CommandFactory directly.
+///
 /// Example usage:
 /// ```dart
 /// // Discover printers
@@ -11,20 +18,41 @@ import 'package:zebrautil/zebrautil.dart';
 /// // Connect to a printer
 /// final connected = await Zebra.connect(printers.first.address);
 ///
-/// // Print ZPL data
+/// // Simple print operation
 /// if (connected) {
 ///   await Zebra.print('^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ');
 /// }
+///
+/// // Smart print with event monitoring
+/// final eventStream = Zebra.smartPrint(
+///   '^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ',
+///   maxAttempts: 3,
+/// );
+/// eventStream.listen((event) {
+///   print('Print event: ${event.type}');
+/// });
 ///
 /// // Disconnect when done
 /// await Zebra.disconnect();
 /// ```
 class Zebra {
   static final _manager = ZebraPrinterManager();
+  static SmartPrintManager? _smartPrintManager;
   static bool _initialized = false;
 
   /// Public getter for the singleton ZebraPrinterManager
+  /// Use this for advanced operations and direct manager access
   static ZebraPrinterManager get manager => _manager;
+
+  /// Public getter for the singleton SmartPrintManager
+  /// Use this for advanced smart print operations
+  static Future<SmartPrintManager> get smartPrintManager async {
+    await _ensureInitialized();
+    _smartPrintManager ??= SmartPrintManager(_manager);
+    return _smartPrintManager!;
+  }
+
+
 
   static Future<void> _ensureInitialized() async {
     if (!_initialized) {
@@ -41,6 +69,8 @@ class Zebra {
     }
   }
 
+  // ===== STREAMS AND STATE =====
+
   /// Stream of discovered devices
   static Future<Stream<List<ZebraDevice>>> get devices async {
     await _ensureInitialized();
@@ -55,7 +85,7 @@ class Zebra {
 
   /// Stream of status messages
   static Future<Stream<String>> get status async {
-    _ensureInitialized();
+    await _ensureInitialized();
     return _manager.status;
   }
 
@@ -71,6 +101,8 @@ class Zebra {
 
   /// Discovery service for direct access to discovery operations
   static ZebraPrinterDiscovery get discovery => _manager.discovery;
+
+  // ===== DISCOVERY OPERATIONS =====
 
   /// Discover available printers
   ///
@@ -120,6 +152,8 @@ class Zebra {
     );
   }
 
+  // ===== CONNECTION OPERATIONS =====
+
   /// Connect to a printer by address
   ///
   /// Returns Result indicating success or failure.
@@ -133,6 +167,14 @@ class Zebra {
     await _ensureInitialized();
     return await _manager.disconnect();
   }
+
+  /// Check if a printer is currently connected
+  static Future<bool> isConnected() async {
+    await _ensureInitialized();
+    return await _manager.isConnected();
+  }
+
+  // ===== PRINT OPERATIONS =====
 
   /// Print data to the connected printer (primitive operation)
   ///
@@ -159,30 +201,68 @@ class Zebra {
   /// FORM
   /// PRINT
   /// ```
-  static Future<Result<void>> print(String data) async {
+  static Future<Result<void>> print(String data, {PrintFormat? format}) async {
     await _ensureInitialized();
-    return await _manager.print(data);
+    return await _manager.print(data, format: format);
   }
 
   /// Smart print with comprehensive event system and automatic recovery
-  Stream<PrintEvent> smartPrint(
+  ///
+  /// This method provides a complete print workflow with:
+  /// - Automatic connection management
+  /// - Retry logic with exponential backoff
+  /// - Real-time progress events
+  /// - Error classification and recovery
+  /// - Format detection and optimization
+  ///
+  /// Returns a Stream of [PrintEvent] objects for monitoring progress.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// final eventStream = Zebra.smartPrint(
+  ///   '^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ',
+  ///   maxAttempts: 3,
+  ///   timeout: Duration(seconds: 60),
+  /// );
+  ///
+  /// eventStream.listen((event) {
+  ///   switch (event.type) {
+  ///     case PrintEventType.stepChanged:
+  ///       print('Step: ${event.stepInfo?.message}');
+  ///       break;
+  ///     case PrintEventType.errorOccurred:
+  ///       print('Error: ${event.errorInfo?.message}');
+  ///       break;
+  ///     case PrintEventType.completed:
+  ///       print('Print completed successfully');
+  ///       break;
+  ///   }
+  /// });
+  /// ```
+  static Stream<PrintEvent> smartPrint(
     String data, {
     ZebraDevice? device,
+    PrintFormat? format,
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
-  }) {
-    return _manager.smartPrint(
-      data,
+  }) async* {
+    final manager = await smartPrintManager;
+    yield* manager.smartPrint(
+      data: data,
       device: device,
+      format: format,
       maxAttempts: maxAttempts,
       timeout: timeout,
     );
   }
 
   /// Cancel the current smart print operation
-  void cancelSmartPrint() {
-    _manager.cancelSmartPrint();
+  static Future<void> cancelSmartPrint() async {
+    final manager = await smartPrintManager;
+    manager.cancel();
   }
+
+  // ===== STATUS OPERATIONS =====
 
   /// Get printer status
   static Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
@@ -196,45 +276,23 @@ class Zebra {
     return await _manager.getDetailedPrinterStatus();
   }
 
-  /// Wait for print completion with timeout
-  static Future<Result<bool>> waitForPrintCompletion(
-      {int timeoutSeconds = 30}) async {
-    await _ensureInitialized();
-    return await _manager.waitForPrintCompletion(
-        timeoutSeconds: timeoutSeconds);
-  }
-
-  /// Get a printer setting
-  static Future<String?> getSetting(String setting) async {
-    await _ensureInitialized();
-    return await _manager.getSetting(setting);
-  }
-
-  /// Set a printer setting
-  static void setSetting(String setting, String value) {
-    _manager.setSetting(setting, value);
-  }
-
-  /// Check if a printer is currently connected
-  static Future<bool> isConnected() async {
-    await _ensureInitialized();
-    return await _manager.isConnected();
-  }
+  // ===== UTILITY OPERATIONS =====
 
   /// Rotate print orientation (for ZPL)
   static void rotate() {
     _manager.rotate();
   }
 
-  /// Get the smart print manager for advanced workflows
-  static SmartPrintManager get smartPrintManager {
-    _ensureInitialized();
-    return _manager.smartPrintManager;
-  }
+  // ===== ADVANCED ACCESS =====
+
+  /// Get the underlying ZebraPrinter instance for advanced operations
+  /// Use this when you need direct access to the printer primitives
+  static ZebraPrinter? get printer => _manager.printer;
 
   /// Dispose of resources
   static void dispose() {
     _manager.dispose();
+    _smartPrintManager = null;
     _initialized = false;
   }
 }
