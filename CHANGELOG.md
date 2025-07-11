@@ -131,8 +131,8 @@ All notable changes to this project will be documented in this file.
 - **Zero Exception Tolerance**: All operations now return Result<T> types, never throw exceptions
   - Removed throw statement from zebra.dart initialization
   - Removed throw statement from get_detailed_printer_status_command.dart
-  - Deprecated dataOrThrow method in Result class
   - Added safer alternatives: getOrElse, getOrElseCall, dataOrNull
+  - dataOrThrow remains a public API for advanced consumers who want exception-based access, but is never used internally in the library
 - **Thread Safety Improvements**:
   - Added synchronization flags to prevent concurrent operations
   - Ensured proper disposal of StreamControllers and Timers with null-safety

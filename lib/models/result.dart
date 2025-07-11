@@ -196,6 +196,17 @@ class Result<T> {
     return this;
   }
 
+  /// Get data or throw exception if not successful.
+  ///
+  /// This is intended for advanced consumers who want exception-based access.
+  /// It must NOT be used anywhere in the library code itself.
+  T get dataOrThrow {
+    if (success) {
+      return data as T;
+    }
+    throw error?.toException() ?? Exception('Unknown error');
+  }
+
   /// Get data or default value
   T getOrElse(T defaultValue) {
     return success ? (data ?? defaultValue) : defaultValue;

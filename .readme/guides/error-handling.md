@@ -260,9 +260,10 @@ if (!result.success) {
 }
 
 // Or use dataOrThrow for compatibility
+// Note: dataOrThrow is available for advanced consumers who want exception-based access, but is never used internally by the library.
 try {
   await printer.connect(address).dataOrThrow;
 } catch (e) {
   print('Error: $e');
 }
-``` 
+```

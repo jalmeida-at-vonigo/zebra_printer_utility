@@ -264,6 +264,24 @@ void main() {
         expect(result.dataOrNull, isNull);
       });
     });
+
+    group('dataOrThrow getter', () {
+      test('should return data when successful', () {
+        final result = Result.success('test data');
+        expect(result.dataOrThrow, equals('test data'));
+      });
+
+      test('should throw exception when failed', () {
+        final error = ErrorInfo(message: 'Test error');
+        final result = Result.failure(error);
+        expect(() => result.dataOrThrow, throwsA(isA<ZebraPrinterException>()));
+      });
+
+      test('should throw exception when failed with error', () {
+        final result = Result.failure(ErrorInfo(message: 'Test error'));
+        expect(() => result.dataOrThrow, throwsA(isA<ZebraPrinterException>()));
+      });
+    });
   });
 
   group('ErrorInfo', () {
