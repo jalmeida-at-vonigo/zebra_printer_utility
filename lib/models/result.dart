@@ -196,19 +196,6 @@ class Result<T> {
     return this;
   }
 
-  /// Get data or throw exception
-  /// 
-  /// @Deprecated - Avoid using this method as it throws exceptions.
-  /// Use [getOrElse] or check [success] before accessing [data] instead.
-  @Deprecated(
-      'Use getOrElse or check success before accessing data to avoid exceptions')
-  T get dataOrThrow {
-    if (success) {
-      return data as T;
-    }
-    throw error?.toException() ?? Exception('Unknown error');
-  }
-
   /// Get data or default value
   T getOrElse(T defaultValue) {
     return success ? (data ?? defaultValue) : defaultValue;

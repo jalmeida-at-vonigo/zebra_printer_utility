@@ -198,27 +198,6 @@ void main() {
       });
     });
 
-    group('dataOrThrow getter', () {
-      test('should return data when successful', () {
-        final result = Result.success('test data');
-
-        expect(result.dataOrThrow, equals('test data'));
-      });
-
-      test('should throw exception when failed', () {
-        final error = ErrorInfo(message: 'Test error');
-        final result = Result.failure(error);
-
-        expect(() => result.dataOrThrow, throwsA(isA<ZebraPrinterException>()));
-      });
-
-      test('should throw exception when failed with error', () {
-        final result = Result.failure(ErrorInfo(message: 'Test error'));
-
-        expect(() => result.dataOrThrow, throwsA(isA<ZebraPrinterException>()));
-      });
-    });
-
     group('getOrElse method', () {
       test('should return data when successful', () {
         final result = Result.success('test data');
@@ -236,6 +215,53 @@ void main() {
         final result = Result.failure(ErrorInfo(message: 'Error'));
 
         expect(result.getOrElse('default'), equals('default'));
+      });
+    });
+
+    group('getOrElseCall method', () {
+      test('should return data when successful', () {
+        final result = Result.success('test data');
+
+        expect(result.getOrElseCall(() => 'default'), equals('test data'));
+      });
+
+      test('should return data when successful but data is null', () {
+        final result = Result<String?>.success(null);
+
+        expect(result.getOrElseCall(() => 'default'), equals('default'));
+      });
+
+      test('should call function when failed', () {
+        final result = Result.failure(ErrorInfo(message: 'Error'));
+        var callCount = 0;
+
+        final value = result.getOrElseCall(() {
+          callCount++;
+          return 'default';
+        });
+
+        expect(value, equals('default'));
+        expect(callCount, equals(1));
+      });
+    });
+
+    group('dataOrNull getter', () {
+      test('should return data when successful', () {
+        final result = Result.success('test data');
+
+        expect(result.dataOrNull, equals('test data'));
+      });
+
+      test('should return null when successful but data is null', () {
+        final result = Result<String?>.success(null);
+
+        expect(result.dataOrNull, isNull);
+      });
+
+      test('should return null when failed', () {
+        final result = Result.failure(ErrorInfo(message: 'Error'));
+
+        expect(result.dataOrNull, isNull);
       });
     });
   });
