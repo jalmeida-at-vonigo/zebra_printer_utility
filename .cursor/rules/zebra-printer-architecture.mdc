@@ -66,8 +66,11 @@ All operations are accessed through static methods on the `Zebra` class:
 - **Responsibilities:**
   - Pure native wrapper for ZSDK operations
   - Only primitive, low-level operations
+  - Forwards calls to native layer via method channels
 - **Must NOT:**
   - Contain any workflow, retry, or business logic
+- **See Also:**
+  - [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc) for native implementation guidelines
 
 ## 6. ZEBRA SGD COMMANDS - UTILITY ONLY
 
@@ -598,4 +601,5 @@ await printer.sendCommand(clearCommand);
 - [Command System Architecture](mdc:.cursor/rules/command-files.mdc)
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 - [Event System](mdc:.cursor/rules/event-system.mdc)
+- [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
 - [Platform-Specific Rules](mdc:.cursor/rules/ios/)

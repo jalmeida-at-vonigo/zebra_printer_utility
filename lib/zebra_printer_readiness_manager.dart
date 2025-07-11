@@ -105,6 +105,82 @@ class ZebraPrinterReadinessManager {
     );
     _statusCallback?.call(event);
   }
+
+  /// Helper method to report check result
+  void _reportCheckResult({
+    required PrinterReadiness readiness,
+    required ReadinessOperationType operationType,
+    required bool passed,
+    required String passMessage,
+    required String failMessage,
+    required List<String> failedFixes,
+    required Map<String, String> fixErrors,
+    required String fixKey,
+  }) {
+    if (passed) {
+      _log(passMessage);
+      _sendStatusEvent(
+        readiness: readiness,
+        message: passMessage,
+        operationType: operationType,
+        operationKind: ReadinessOperationKind.check,
+        result: ReadinessOperationResult.successful,
+      );
+    } else {
+      failedFixes.add(fixKey);
+      fixErrors[fixKey] = failMessage;
+      _log(failMessage);
+      _sendStatusEvent(
+        readiness: readiness,
+        message: failMessage,
+        operationType: operationType,
+        operationKind: ReadinessOperationKind.check,
+        result: ReadinessOperationResult.error,
+      );
+    }
+  }
+
+  /// Helper method to execute fix command and report result
+  Future<void> _executeFix({
+    required Future<Result> Function() commandExecutor,
+    required String commandName,
+    required String fixKey,
+    required ReadinessOperationType operationType,
+    required PrinterReadiness readiness,
+    required List<String> appliedFixes,
+    required List<String> failedFixes,
+    required Map<String, String> fixErrors,
+    required String successMessage,
+    required String failureMessagePrefix,
+  }) async {
+    final result =
+        await executeCommandWithAssurance(commandExecutor, commandName);
+
+    if (result.success) {
+      appliedFixes.add(fixKey);
+      _log(successMessage);
+      _sendStatusEvent(
+        readiness: readiness,
+        message: successMessage,
+        operationType: operationType,
+        operationKind: ReadinessOperationKind.fix,
+        result: ReadinessOperationResult.successful,
+      );
+    } else {
+      failedFixes.add(fixKey);
+      fixErrors[fixKey] =
+          result.error?.message ?? '$failureMessagePrefix failed';
+      _log('$failureMessagePrefix: ${fixErrors[fixKey]}');
+      _sendStatusEvent(
+        readiness: readiness,
+        message: '$failureMessagePrefix: ${fixErrors[fixKey]}',
+        operationType: operationType,
+        operationKind: ReadinessOperationKind.fix,
+        result: ReadinessOperationResult.error,
+        errorDetails: fixErrors[fixKey],
+      );
+    }
+  }
   
   /// Centralized connection assurance method for other managers to use
   /// This is the single point of truth for connection assurance
@@ -408,7 +484,7 @@ class ZebraPrinterReadinessManager {
     if (!result.success) {
       _logger.error(
           'ZebraPrinterReadinessManager: Failed to get detailed status for validation: ${result.error?.message}');
-      return Result.failure(result.error!);
+      return Result.errorFromResult(result);
     }
     
     final readiness = result.data!;
@@ -439,27 +515,16 @@ class ZebraPrinterReadinessManager {
     // Use cached value from readiness (this will trigger read if not cached)
     final connected = await readiness.isConnected;
 
-    if (!connected) {
-      failedFixes.add('connection');
-      fixErrors['connection'] = 'Connection failed';
-      _log('Connection check failed: Connection not available');
-      _sendStatusEvent(
-        readiness: readiness,
-        message: 'Connection check failed: Connection not available',
-        operationType: ReadinessOperationType.connection,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.error,
-      );
-    } else {
-      _log('Connection check passed');
-      _sendStatusEvent(
-        readiness: readiness,
-        message: 'Connection check passed',
-        operationType: ReadinessOperationType.connection,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.successful,
-      );
-    }
+    _reportCheckResult(
+      readiness: readiness,
+      operationType: ReadinessOperationType.connection,
+      passed: connected,
+      passMessage: 'Connection check passed',
+      failMessage: 'Connection failed',
+      failedFixes: failedFixes,
+      fixErrors: fixErrors,
+      fixKey: 'connection',
+    );
   }
   
   Future<void> _checkAndFixMedia(
@@ -482,57 +547,41 @@ class ZebraPrinterReadinessManager {
             .info(
             'ZebraPrinterReadinessManager: Attempting media calibration fix');
         
-        // Use centralized command execution with assurance
-        final calibrateResult = await executeCommandWithAssurance(
-            () =>
-                CommandFactory.createSendCalibrationCommand(_printer).execute(),
-            'Send Calibration');
-
-        if (calibrateResult.success) {
-          appliedFixes.add('mediaCalibration');
-          _log('Media calibration applied');
-          _sendStatusEvent(
-            readiness: readiness,
-            message: 'Media calibration applied',
-            operationType: ReadinessOperationType.media,
-            operationKind: ReadinessOperationKind.fix,
-            result: ReadinessOperationResult.successful,
-          );
-        } else {
-          failedFixes.add('mediaCalibration');
-          fixErrors['mediaCalibration'] =
-              calibrateResult.error?.message ?? 'Calibration failed';
-          _log('Media calibration failed: ${fixErrors['mediaCalibration']}');
-          _sendStatusEvent(
-            readiness: readiness,
-            message:
-                'Media calibration failed: ${fixErrors['mediaCalibration']}',
-            operationType: ReadinessOperationType.media,
-            operationKind: ReadinessOperationKind.fix,
-            result: ReadinessOperationResult.error,
-            errorDetails: fixErrors['mediaCalibration'],
-          );
-        }
-      } else {
-        failedFixes.add('media');
-        fixErrors['media'] = 'No media detected';
-        _log('No media detected');
-        _sendStatusEvent(
-          readiness: readiness,
-          message: 'No media detected',
+        await _executeFix(
+          commandExecutor: () =>
+              CommandFactory.createSendCalibrationCommand(_printer).execute(),
+          commandName: 'Send Calibration',
+          fixKey: 'mediaCalibration',
           operationType: ReadinessOperationType.media,
-          operationKind: ReadinessOperationKind.check,
-          result: ReadinessOperationResult.error,
+          readiness: readiness,
+          appliedFixes: appliedFixes,
+          failedFixes: failedFixes,
+          fixErrors: fixErrors,
+          successMessage: 'Media calibration applied',
+          failureMessagePrefix: 'Media calibration failed',
+        );
+      } else {
+        _reportCheckResult(
+          readiness: readiness,
+          operationType: ReadinessOperationType.media,
+          passed: false,
+          passMessage: '',
+          failMessage: 'No media detected',
+          failedFixes: failedFixes,
+          fixErrors: fixErrors,
+          fixKey: 'media',
         );
       }
     } else {
-      _log('Media check passed');
-      _sendStatusEvent(
+      _reportCheckResult(
         readiness: readiness,
-        message: 'Media check passed',
         operationType: ReadinessOperationType.media,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.successful,
+        passed: true,
+        passMessage: 'Media check passed',
+        failMessage: '',
+        failedFixes: failedFixes,
+        fixErrors: fixErrors,
+        fixKey: 'media',
       );
     }
   }
@@ -549,27 +598,16 @@ class ZebraPrinterReadinessManager {
     // Use cached value from readiness (this will trigger read if not cached)
     final headClosed = await readiness.headClosed;
 
-    if (headClosed == false) {
-      failedFixes.add('head');
-      fixErrors['head'] = 'Print head is open';
-      _log('Print head is open');
-      _sendStatusEvent(
-        readiness: readiness,
-        message: 'Print head is open',
-        operationType: ReadinessOperationType.head,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.error,
-      );
-    } else {
-      _log('Head check passed');
-      _sendStatusEvent(
-        readiness: readiness,
-        message: 'Head check passed',
-        operationType: ReadinessOperationType.head,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.successful,
-      );
-    }
+    _reportCheckResult(
+      readiness: readiness,
+      operationType: ReadinessOperationType.head,
+      passed: headClosed ?? false,
+      passMessage: 'Head check passed',
+      failMessage: 'Print head is open',
+      failedFixes: failedFixes,
+      fixErrors: fixErrors,
+      fixKey: 'head',
+    );
   }
   
   Future<void> _checkAndFixPause(
@@ -591,55 +629,41 @@ class ZebraPrinterReadinessManager {
         _logger.info(
             'ZebraPrinterReadinessManager: Attempting to unpause printer');
         
-        // Use centralized command execution with assurance
-        final unpauseResult = await executeCommandWithAssurance(
-            () => CommandFactory.createSendUnpauseCommand(_printer).execute(),
-            'Send Unpause');
-
-        if (unpauseResult.success) {
-          appliedFixes.add('unpause');
-          _log('Printer unpaused');
-          _sendStatusEvent(
-            readiness: readiness,
-            message: 'Printer unpaused',
-            operationType: ReadinessOperationType.pause,
-            operationKind: ReadinessOperationKind.fix,
-            result: ReadinessOperationResult.successful,
-          );
-        } else {
-          failedFixes.add('unpause');
-          fixErrors['unpause'] =
-              unpauseResult.error?.message ?? 'Unpause failed';
-          _log('Unpause failed: ${fixErrors['unpause']}');
-          _sendStatusEvent(
-            readiness: readiness,
-            message: 'Unpause failed: ${fixErrors['unpause']}',
-            operationType: ReadinessOperationType.pause,
-            operationKind: ReadinessOperationKind.fix,
-            result: ReadinessOperationResult.error,
-            errorDetails: fixErrors['unpause'],
-          );
-        }
-      } else {
-        failedFixes.add('pause');
-        fixErrors['pause'] = 'Printer is paused';
-        _log('Printer is paused');
-        _sendStatusEvent(
-          readiness: readiness,
-          message: 'Printer is paused',
+        await _executeFix(
+          commandExecutor: () =>
+              CommandFactory.createSendUnpauseCommand(_printer).execute(),
+          commandName: 'Send Unpause',
+          fixKey: 'unpause',
           operationType: ReadinessOperationType.pause,
-          operationKind: ReadinessOperationKind.check,
-          result: ReadinessOperationResult.error,
+          readiness: readiness,
+          appliedFixes: appliedFixes,
+          failedFixes: failedFixes,
+          fixErrors: fixErrors,
+          successMessage: 'Printer unpaused',
+          failureMessagePrefix: 'Unpause failed',
+        );
+      } else {
+        _reportCheckResult(
+          readiness: readiness,
+          operationType: ReadinessOperationType.pause,
+          passed: false,
+          passMessage: '',
+          failMessage: 'Printer is paused',
+          failedFixes: failedFixes,
+          fixErrors: fixErrors,
+          fixKey: 'pause',
         );
       }
     } else {
-      _log('Pause check passed');
-      _sendStatusEvent(
+      _reportCheckResult(
         readiness: readiness,
-        message: 'Pause check passed',
         operationType: ReadinessOperationType.pause,
-        operationKind: ReadinessOperationKind.check,
-        result: ReadinessOperationResult.successful,
+        passed: true,
+        passMessage: 'Pause check passed',
+        failMessage: '',
+        failedFixes: failedFixes,
+        fixErrors: fixErrors,
+        fixKey: 'pause',
       );
     }
   }

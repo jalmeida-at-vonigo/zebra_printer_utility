@@ -157,79 +157,97 @@ class PrintEvent {
 
 /// Smart print manager for handling complex print workflows
 class SmartPrintManager {
+  // Private fields
   final ZebraPrinterManager _printerManager;
-  final Logger _logger = Logger(prefix: 'SmartPrintManager');
+  final Logger _logger = Logger.withPrefix('SmartPrintManager');
   
+  // Event stream
   StreamController<PrintEvent>? _eventController;
-  Stream<PrintEvent>? _eventStream;
   
+  // Timers
+  Timer? _timeoutTimer;
+  Timer? _statusCheckTimer;
+
+  // State tracking
+  bool _isCancelled = false;
+  final bool _isConnected = false;
+  DateTime? _startTime;
+  Map<String, dynamic>? _lastPrinterStatus;
   PrintStep _currentStep = PrintStep.initializing;
   int _currentAttempt = 1;
   int _maxAttempts = 3;
-  DateTime? _startTime;
-  bool _isCancelled = false;
-  
-  // Enhanced state tracking
-  bool _isConnected = false;
-  Map<String, dynamic>? _lastPrinterStatus;
-  Timer? _statusCheckTimer;
-  Timer? _timeoutTimer;
-
-  // Print data tracking for completion logic
   String? _lastPrintData;
   PrintFormat? _lastPrintFormat;
+  
+  // Synchronization lock for thread safety
+  bool _isRunning = false;
   
   SmartPrintManager(this._printerManager);
 
   /// Get the event stream for monitoring print progress
   Stream<PrintEvent> get eventStream {
-    _eventStream ??= _eventController?.stream ?? const Stream.empty();
-    return _eventStream!;
+    _eventController ??= StreamController<PrintEvent>.broadcast();
+    return _eventController!.stream;
   }
 
-  /// Smart print with automatic retry and error handling
+  /// Smart print operation with comprehensive workflow
   Stream<PrintEvent> smartPrint({
     required String data,
     ZebraDevice? device,
     PrintFormat? format,
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
-    bool validateData = true,
     bool checkStatusBeforePrint = true,
     bool waitForCompletion = true,
-  }) {
-    _logger.info('Starting smart print operation');
-    _maxAttempts = maxAttempts;
-    _currentAttempt = 1;
-    _startTime = DateTime.now();
+  }) async* {
+    // Prevent concurrent smart print operations
+    if (_isRunning) {
+      yield PrintEvent(
+        type: PrintEventType.errorOccurred,
+        timestamp: DateTime.now(),
+        errorInfo: PrintErrorInfo(
+          message: 'Another print operation is already in progress',
+          recoverability: ErrorRecoverability.nonRecoverable,
+          errorCode: ErrorCodes.operationError.code,
+        ),
+      );
+      return;
+    }
+
+    _isRunning = true;
     _isCancelled = false;
-    _isConnected = false;
+    _currentAttempt = 1;
+    _maxAttempts = maxAttempts;
+    _startTime = DateTime.now();
+    _lastPrintData = null;
+    _lastPrintFormat = null;
     
+    // Create new event controller for this print operation
+    await _eventController?.close();
     _eventController = StreamController<PrintEvent>.broadcast();
     
-    // Start the print operation asynchronously
-    _executeSmartPrint(
+    // Start the print workflow
+    yield* eventStream;
+
+    // Run the print workflow in the background
+    _runPrintWorkflow(
       data: data,
       device: device,
       format: format,
       timeout: timeout,
-      validateData: validateData,
       checkStatusBeforePrint: checkStatusBeforePrint,
       waitForCompletion: waitForCompletion,
     );
-
-    return _eventController!.stream;
   }
 
-  /// Execute the smart print operation
-  Future<void> _executeSmartPrint({
+  /// Execute the smart print workflow
+  Future<void> _runPrintWorkflow({
     required String data,
     ZebraDevice? device,
     PrintFormat? format,
-    Duration timeout = const Duration(seconds: 60),
-    bool validateData = true,
-    bool checkStatusBeforePrint = true,
-    bool waitForCompletion = true,
+    required Duration timeout,
+    required bool checkStatusBeforePrint,
+    required bool waitForCompletion,
   }) async {
     // Set up timeout timer
     _timeoutTimer = Timer(timeout, () {
@@ -254,22 +272,20 @@ class SmartPrintManager {
 
       _logger.info('Smart print format: ${detectedFormat.name}');
 
-      // Step 2: Validate data (if enabled)
-      if (validateData) {
-        final validationResult = await _validatePrintData(data);
-        if (!validationResult.success) {
-          _eventController?.add(PrintEvent(
-            type: PrintEventType.errorOccurred,
-            timestamp: DateTime.now(),
-            errorInfo: PrintErrorInfo(
-              message: validationResult.error?.message ?? 'Validation failed',
-              recoverability: ErrorRecoverability.nonRecoverable,
-              errorCode: validationResult.error?.code,
-            ),
-            stepInfo: _createStepInfo(PrintStep.failed, 'Validation failed'),
-          ));
-          return;
-        }
+      // Step 2: Validate data
+      final validationResult = await _validatePrintData(data);
+      if (!validationResult.success) {
+        _eventController?.add(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message: validationResult.error?.message ?? 'Validation failed',
+            recoverability: ErrorRecoverability.nonRecoverable,
+            errorCode: validationResult.error?.code,
+          ),
+          stepInfo: _createStepInfo(PrintStep.failed, 'Validation failed'),
+        ));
+        return;
       }
 
       // Step 3: Connect to printer
@@ -314,9 +330,9 @@ class SmartPrintManager {
           fixPausedPrinter: true,
           fixPrinterErrors: true,
           fixLanguageMismatch: true,
+          fixMediaCalibration: true,
           clearBuffer: true,
           flushBuffer: true,
-          fixMediaCalibration: false,
         );
         final readinessResult = await readinessManager.prepareForPrint(
           detectedFormat,
@@ -715,6 +731,7 @@ class SmartPrintManager {
     _statusCheckTimer = null;
     _eventController?.close();
     _eventController = null;
+    _isRunning = false;
   }
 
   /// Get current progress as percentage

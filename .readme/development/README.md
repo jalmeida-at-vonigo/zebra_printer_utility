@@ -4,8 +4,7 @@ This section contains documentation for developers working on the Zebra Printer 
 
 ## Development Resources
 
-### 📋 [Future Improvements](TODO.md)
-Comprehensive roadmap and planned features for the plugin, including architectural improvements and code sharing strategies.
+
 
 ### 🏗️ [Architecture Improvements](ARCHITECTURE_IMPROVEMENTS.md)
 Recent architecture improvements including iOS bi-directional communication, enhanced autoPrint functionality, and operation queue enhancements.
@@ -27,7 +26,7 @@ Complete history of changes, bug fixes, and new features across all versions of 
 - **Dart**: Centralize printer operations, discovery, and connection management
 
 ### Contributing
-1. Review the [Future Improvements](TODO.md) for current priorities
+1. Review the recent changes and improvements
 2. Follow the established architecture patterns
 3. Add tests for new functionality
 4. Update documentation as needed

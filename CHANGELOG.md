@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.40] - 2024-12-19
+## [2.0.40] - 2025-01-10
 
 ### Redesigned
 - **CommunicationPolicy**: Complete redesign with optimistic execution workflow
@@ -33,6 +33,13 @@ All notable changes to this project will be documented in this file.
   - **Individual Resets**: `resetConnection()`, `resetMediaStatus()`, `resetHeadStatus()`, etc.
   - **Complete Reset**: `resetAllStatuses()` for comprehensive re-reading
   - **External Control**: Reset operations available for external code when hardware state changes
+- **Result API Enhancements**: Added overloaded constructors for better error/success propagation
+  - `Result.errorFromResult(Result source, [String? additionalMessage])` - Creates error Result copying all error details from another Result
+  - `Result.successFromResult(Result source, [T? data])` - Creates success Result preserving success info
+  - Preserves complete error context (code, stack traces, timestamps)
+  - Reduces boilerplate when propagating errors
+  - Maintains error chain for better debugging
+  - Allows adding context to errors without losing original details
 
 ### Enhanced
 - **PrinterReadinessManager Class**:
@@ -97,6 +104,97 @@ All notable changes to this project will be documented in this file.
 - **Smart Print Workflow**: Optimized connection logic to trust memory status and avoid redundant operations
 - **Legacy Code Cleanup**: Removed redundant `_checkPrinterStatus` method from SmartPrintManager in favor of centralized readiness management
 
+### iOS Native Code Refactoring
+- **ZSDKWrapper.m**: Removed all business logic to create a pure ZSDK wrapper
+  - Removed discovery data formatting, branding, and model querying logic
+  - Removed CPCL-specific delays (sleepForTimeInterval) from sendData method
+  - Removed complex response reading logic with multiple retries
+  - Removed language parsing business logic from getPrinterLanguage
+  - Removed status formatting and human-readable messages from getPrinterStatus
+  - Removed waitForPrintCompletion method with complex polling logic
+  - Removed status analysis and recommendations from getDetailedPrinterStatus
+  - Simplified all methods to just call ZSDK APIs and return raw data
+- **ZebraPrinterInstance.swift**: Refactored to be a thin channel communication wrapper
+  - Removed CPCL-specific delays in printData method
+  - Removed command parsing logic (key=value vs raw) from setSettings
+  - Removed broken waitForPrintCompletion implementation
+  - Kept error enrichment as appropriate for middleware layer
+  - Simplified all methods to just forward calls to ZSDKWrapper
+- **Dart Side Enhancements**: Moved all business logic to Dart for platform independence
+  - Enhanced printerFound handler to generate displayName and connectionType when not provided
+  - Added status analysis and recommendations to GetDetailedPrinterStatusCommand
+  - Added human-readable status description generation to GetPrinterStatusCommand
+  - All CPCL delays and format-specific handling remain in Dart (ZebraPrinterManager)
+  - Print completion verification logic remains in Dart (waitForPrintCompletion)
+
+### Thread Safety and Exception Handling
+- **Zero Exception Tolerance**: All operations now return Result<T> types, never throw exceptions
+  - Removed throw statement from zebra.dart initialization
+  - Removed throw statement from get_detailed_printer_status_command.dart
+  - Deprecated dataOrThrow method in Result class
+  - Added safer alternatives: getOrElse, getOrElseCall, dataOrNull
+- **Thread Safety Improvements**:
+  - Added synchronization flags to prevent concurrent operations
+  - Ensured proper disposal of StreamControllers and Timers with null-safety
+  - Fixed race conditions in SmartPrintManager
+  - Added _isRunning flag to prevent concurrent smart print operations
+- **UI Non-Blocking Guarantees**:
+  - All operations are properly async
+  - Event-based architecture for real-time updates
+  - No synchronous heavy operations that could block UI
+- **Library User Experience**:
+  - Users can call any method without try-catch blocks
+  - All async operations return Result<T> for safe error handling
+  - Proper cancellation support for long-running operations
+
+### Result-Based API Improvements
+- **zebra.dart Fully Result-Based**: All methods now properly return Result types
+  - _ensureInitialized now returns Result<void> with proper error propagation
+  - Stream getters (devices, connection, status) now return Result<Stream<T>>
+  - stopDiscovery now returns Result<void> instead of void
+  - discoverPrintersStream now returns Result<Stream<List<ZebraDevice>>>
+  - isConnected now returns Result<bool> instead of bool
+  - cancelSmartPrint now returns Result<void> instead of void
+  - smartPrintManager getter now returns Result<SmartPrintManager>
+- **Initialization Error Handling**: 
+  - Cached initialization result to avoid redundant attempts
+  - Proper error propagation from manager initialization
+  - Reset on dispose to allow re-initialization
+- **Breaking Changes**:
+  - Stream getters now return Result<Stream<T>> - users need to check Result before accessing stream
+  - isConnected returns Result<bool> - users need to check Result before accessing value
+  - cancelSmartPrint returns Result<void> - users can check if cancellation succeeded
+
+### Code Cleanup
+- **ZebraSGDCommands**: Converted to utility-only class as per architectural guidelines
+  - Removed all command methods (getCommand, setCommand, doCommand, etc.)
+  - Kept only utility methods: isZPLData, isCPCLData, detectDataLanguage, parseResponse, isLanguageMatch
+  - All command generation now uses CommandFactory pattern
+- **Command Pattern Refinement**: Removed generic SetSettingCommand in favor of specific commands
+  - Removed SetSettingCommand class and factory method
+  - Library uses specific commands (SendUnpauseCommand, SendSetZplModeCommand, etc.)
+  - ZebraPrinter.setSetting remains as public API for external use, sends SGD directly
+- **Media Calibration**: Enabled fixMediaCalibration in SmartPrintManager for comprehensive media handling
+- **DRY Improvements**: Refactored code to eliminate duplication
+  - Added helper methods in PrinterReadinessManager (_reportCheckResult, _reportFixResult)
+  - Centralized all command execution through CommunicationPolicy
+  - Removed duplicate connection checks and status operations
+- **Test Improvements**: Enhanced test coverage and implementation
+  - Removed skipped tests and implemented proper Mockito mocks
+  - Added test coverage for async operations in ZebraPrinter
+  - All tests now pass without warnings or errors
+- **Architecture Consistency**: Ensured all components use centralized patterns
+  - All command execution uses CommunicationPolicy for connection assurance
+  - Fixed ZebraPrinterManager to use CommunicationPolicy for all operations
+  - Fixed ZebraPrinter.setSetting to return proper Result type
+  - Removed direct command execution in favor of policy-wrapped execution
+- **Result Constructor Usage**: Applied new Result constructors throughout codebase
+  - Updated `zebra_printer.dart`: Use `Result.successFromResult` in `getPrinterStatus`
+  - Updated `zebra.dart`: Use `Result.errorFromResult` in `_ensureInitialized`
+  - Consistent use of new constructors for better error propagation
+  - Preserved complete error context when creating new Result objects
+- **Documentation**: Removed TODO.md file and all references as per no-TODOs rule
+
 ### Technical
 - **Architecture**: Clear separation between status caching (PrinterReadiness) and fix orchestration (PrinterReadinessManager)
 - **Efficiency**: Just-enough hardware communication with single read per property pattern
@@ -106,6 +204,9 @@ All notable changes to this project will be documented in this file.
 - **Standards**: Enforced single hardware read pattern and options-driven communication
 - **Event System**: Enhanced readiness events provide detailed operation tracking for UI and debugging
 - **Code Quality**: DRY, SRP, and KISS principles enforced throughout the architecture
+- **Platform Independence**: All business logic now resides in Dart for consistent behavior
+- **Error Handling**: Native layer provides enriched errors, Dart layer handles business logic
+- **No Breaking Changes**: All existing functionality preserved, just moved to appropriate layers
 
 ## [2.0.39] - 2024-12-19
 

@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/models/printer_readiness.dart';
 import 'package:zebrautil/zebra_printer.dart';
+import 'package:zebrautil/internal/communication_policy.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-class MockZebraPrinter extends Mock implements ZebraPrinter {}
+@GenerateMocks([ZebraPrinter, CommunicationPolicy])
+import 'printer_readiness_test.mocks.dart';
 
 void main() {
   group('PrinterReadiness', () {
@@ -11,6 +14,9 @@ void main() {
 
     setUp(() {
       mockPrinter = MockZebraPrinter();
+      
+      // Set up basic stubs to prevent null pointer exceptions
+      when(mockPrinter.instanceId).thenReturn('test-instance');
     });
     
     test('default values', () async {

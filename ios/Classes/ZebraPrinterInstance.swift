@@ -148,12 +148,6 @@ class ZebraPrinterInstance: NSObject {
             
         case "getPrinterStatus":
             getPrinterStatus(operationId: operationId, result: result)
-        case "waitForPrintCompletion":
-            if let timeout = args?["timeout"] as? Int {
-                waitForPrintCompletion(timeout: timeout, operationId: operationId, result: result)
-            } else {
-                waitForPrintCompletion(timeout: 30, operationId: operationId, result: result)
-            }
         case "getDetailedPrinterStatus":
             getDetailedPrinterStatus(operationId: operationId, result: result)
             
@@ -416,11 +410,6 @@ class ZebraPrinterInstance: NSObject {
                 let success = ZSDKWrapper.send(dataBytes, toConnection: connection)
                 
                 if success {
-                    // For CPCL data, add extra delay to ensure complete transmission
-                    if data.hasPrefix("!") || data.contains("! 0") {
-                        Thread.sleep(forTimeInterval: 1.0)
-                    }
-                    
                     DispatchQueue.main.async {
                         if let operationId = operationId {
                             self.channel.invokeMethod("onPrintComplete", arguments: [
@@ -491,16 +480,8 @@ class ZebraPrinterInstance: NSObject {
             }
             
             var success = false
-            
-            if command.contains("=") {
-                let components = command.components(separatedBy: "=")
-                if components.count == 2 {
-                    success = ZSDKWrapper.setSetting(components[0], value: components[1], onConnection: connection)
-                }
-            } else {
-                if let commandData = command.data(using: .utf8) {
-                    success = ZSDKWrapper.send(commandData, toConnection: connection)
-                }
+            if let commandData = command.data(using: .utf8) {
+                success = ZSDKWrapper.send(commandData, toConnection: connection)
             }
             
             DispatchQueue.main.async {
@@ -517,7 +498,7 @@ class ZebraPrinterInstance: NSObject {
                             message: "Failed to set printer settings",
                             code: "SETTINGS_ERROR",
                             operationId: operationId,
-                            additionalContext: ["operation": "setSettings", "command": command, "commandType": command.contains("=") ? "keyValue" : "raw"]
+                            additionalContext: ["operation": "setSettings", "command": command]
                         )
                         self.channel.invokeMethod("onSettingsError", arguments: enrichedError)
                     }
@@ -688,36 +669,6 @@ class ZebraPrinterInstance: NSObject {
                         ])
                     }
                     result(errorStatus)
-                }
-            }
-        }
-    }
-    
-    private func waitForPrintCompletion(timeout: Int, operationId: String?, result: @escaping FlutterResult) {
-        connectionQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            if let connection = self.connection {
-                let success = true //ZSDKWrapper.waitForPrintCompletion(connection, timeout: timeout)
-                
-                DispatchQueue.main.async {
-                    if let operationId = operationId {
-                        self.channel.invokeMethod("onPrintCompletionResult", arguments: [
-                            "operationId": operationId,
-                            "success": success
-                        ])
-                    }
-                    result(success)
-                }
-            } else {
-                DispatchQueue.main.async {
-                    if let operationId = operationId {
-                        self.channel.invokeMethod("onPrintCompletionResult", arguments: [
-                            "operationId": operationId,
-                            "success": false
-                        ])
-                    }
-                    result(false)
                 }
             }
         }

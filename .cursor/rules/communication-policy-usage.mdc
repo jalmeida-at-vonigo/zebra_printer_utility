@@ -1,0 +1,87 @@
+# CommunicationPolicy Usage Standards
+
+## Purpose
+The [CommunicationPolicy](mdc:lib/internal/communication_policy.dart) provides centralized connection assurance, timeout handling, and retry logic for all printer operations. **ALL** printer command execution should go through CommunicationPolicy.
+
+## Core Principles
+
+### 1. Never Execute Commands Directly
+❌ **WRONG**:
+```dart
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await command.execute(); // Direct execution
+```
+
+✅ **CORRECT**:
+```dart
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await communicationPolicy.execute(
+  () => command.execute(),
+  command.operationName,
+);
+```
+
+### 2. Use CommunicationPolicy in All Components
+
+#### In ZebraPrinterManager
+All command execution should use `_communicationPolicy`:
+```dart
+final result = await _communicationPolicy!.execute(
+  () => statusCommand.execute(),
+  statusCommand.operationName,
+  options: const CommunicationPolicyOptions(
+    skipConnectionCheck: false,
+    skipConnectionRetry: false,
+    maxAttempts: 2,
+  ),
+);
+```
+
+#### In PrinterReadiness
+All status reading should use `_communicationPolicy`:
+```dart
+final result = await _communicationPolicy.execute(
+  () => command.execute(),
+  command.operationName,
+);
+```
+
+#### In PrinterReadinessManager
+Use `executeCommandWithAssurance` which wraps CommunicationPolicy:
+```dart
+final result = await executeCommandWithAssurance(
+  () => CommandFactory.createSendUnpauseCommand(_printer).execute(),
+  'Send Unpause'
+);
+```
+
+### 3. Connection Status Checks
+Use CommunicationPolicy's connection status method:
+```dart
+final result = await _communicationPolicy.getConnectionStatus();
+```
+
+### 4. Optional Operations
+For non-critical operations (like buffer flush after print), use appropriate options:
+```dart
+options: const CommunicationPolicyOptions(
+  skipConnectionCheck: true,  // We just printed successfully
+  skipConnectionRetry: true,  // This is optional cleanup
+  maxAttempts: 1,
+),
+```
+
+## Benefits
+- **Connection Assurance**: Automatic connection checking before operations
+- **Retry Logic**: Intelligent retry for connection-related errors
+- **Timeout Handling**: Consistent timeout management across all operations
+- **Error Classification**: Automatic detection of connection vs other errors
+- **Status Updates**: Real-time operation feedback through callbacks
+
+## Implementation Checklist
+When implementing new printer operations:
+- [ ] Create command using CommandFactory
+- [ ] Execute through CommunicationPolicy, not directly
+- [ ] Provide descriptive operation name for logging
+- [ ] Configure appropriate CommunicationPolicyOptions
+ - [ ] Handle both success and error results properly

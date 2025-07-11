@@ -6,7 +6,6 @@ import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/internal/operation_callback_handler.dart';
 import 'package:zebrautil/internal/logger.dart';
-import 'internal/commands/command_factory.dart';
 import 'internal/permission_manager.dart';
 
 /// Printer language modes
@@ -47,15 +46,36 @@ class ZebraPrinter {
       final status = call.arguments?['Status'] ?? 'Found';
       final isWifi = call.arguments?['IsWifi'] == true ||
           call.arguments?['IsWifi'] == 'true';
-      final brand = call.arguments?['brand'];
+      final brand = call.arguments?['brand'] ?? 'Zebra';
       final model = call.arguments?['model'];
-      final displayName = call.arguments?['displayName'];
-      final manufacturer = call.arguments?['manufacturer'];
+      var displayName = call.arguments?['displayName'];
+      final manufacturer = call.arguments?['manufacturer'] ?? 'Zebra';
       final firmwareRevision = call.arguments?['firmwareRevision'];
       final hardwareRevision = call.arguments?['hardwareRevision'];
-      final connectionType = call.arguments?['connectionType'];
+      var connectionType = call.arguments?['connectionType'];
       final isBluetooth = call.arguments?['isBluetooth'] == true ||
           call.arguments?['isBluetooth'] == 'true';
+      
+      // Generate displayName if not provided
+      if (displayName == null || displayName.isEmpty) {
+        if (model != null && model.isNotEmpty) {
+          displayName = 'Zebra $model - $name';
+        } else {
+          displayName = 'Zebra Printer - $name';
+        }
+      }
+
+      // Generate connectionType if not provided
+      if (connectionType == null || connectionType.isEmpty) {
+        if (isBluetooth) {
+          connectionType = 'MFi Bluetooth';
+        } else if (isWifi) {
+          connectionType = 'Network';
+        } else {
+          connectionType = 'Unknown';
+        }
+      }
+      
       this.controller.addPrinter(ZebraDevice(
             address: address,
             name: name,
@@ -299,11 +319,26 @@ class ZebraPrinter {
 
   // Primitive: Get printer status
   Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
+    _logger.info('Getting printer status');
     try {
-      final statusCommand = CommandFactory.createGetPrinterStatusCommand(this);
-      return await statusCommand.execute();
-    } catch (e) {
-      return Result.error('Failed to get printer status: $e');
+      final result = await _operationManager.execute<Map<String, dynamic>>(
+        method: 'getPrinterStatus',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      if (result.success && result.data != null) {
+        _logger.info('Printer status retrieved successfully');
+        return Result.successFromResult(result);
+      } else {
+        _logger.error('Failed to get printer status: ${result.error?.message}');
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+        );
+      }
+    } catch (e, stack) {
+      _logger.error('Error getting printer status', e, stack);
+      return Result.error('Failed to get printer status: $e',
+          dartStackTrace: stack);
     }
   }
 
@@ -323,18 +358,35 @@ class ZebraPrinter {
     }
   }
 
-  // Primitive: Set setting
-  void setSetting(String setting, String value) {
+  // Primitive: Set setting (generic API for external use)
+  // Note: Internal library code should use specific commands from CommandFactory
+  // like SendUnpauseCommand, SendSetZplModeCommand, etc.
+  Future<Result<void>> setSetting(String setting, String value) async {
+    _logger.info('Setting printer setting: $setting = $value');
     try {
-      _operationManager.execute<bool>(
-        method: 'setSettings',
-        arguments: {'SettingCommand': '! U1 setvar "$setting" "$value"'},
-        timeout: const Duration(seconds: 5),
-      );
-    } catch (e) {
+      // Send the SGD command directly using print
+      final command = '! U1 setvar "$setting" "$value"';
+      final result = await print(data: command);
+      if (!result.success) {
+        _logger.error('Failed to set setting: ${result.error?.message}');
+        if (onDiscoveryError != null) {
+          onDiscoveryError!('SETTINGS_ERROR',
+              result.error?.message ?? 'Failed to set setting');
+        }
+        return result;
+      }
+      _logger.info('Successfully set $setting to $value');
+      return Result.success();
+    } catch (e, stack) {
+      _logger.error('Error setting printer setting', e, stack);
       if (onDiscoveryError != null) {
         onDiscoveryError!('SETTINGS_ERROR', e.toString());
       }
+      return Result.errorCode(
+        ErrorCodes.operationError,
+        formatArgs: ['Failed to set setting: $e'],
+        dartStackTrace: stack,
+      );
     }
   }
 

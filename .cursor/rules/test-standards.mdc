@@ -1,0 +1,176 @@
+# Test Standards
+
+## Core Principles
+
+### 1. No Skipped Tests
+❌ **WRONG**:
+```dart
+test('some test', () {
+  // Test implementation
+}, skip: 'Requires complex mocking');
+```
+
+✅ **CORRECT**:
+```dart
+test('some test', () {
+  // Implement with proper mocks
+});
+```
+
+**Exception**: Integration tests that require native platform support may be skipped with clear reason:
+```dart
+test('integration test', () {
+  // Test code
+}, skip: 'Requires native platform support');
+```
+
+### 2. Use Mockito for Mocking
+All mocks should be generated using Mockito:
+
+```dart
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+
+@GenerateMocks([ZebraPrinter, OperationManager])
+import 'my_test.mocks.dart';
+```
+
+Generate mocks with:
+```bash
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+### 3. Test Organization
+```dart
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized(); // For widget tests
+  
+  group('Component Name', () {
+    late MockDependency mockDependency;
+    late ComponentUnderTest component;
+    
+    setUp(() {
+      mockDependency = MockDependency();
+      component = ComponentUnderTest(mockDependency);
+    });
+    
+    tearDown(() {
+      // Cleanup if needed
+    });
+    
+    test('should do something', () {
+      // Arrange
+      when(mockDependency.method()).thenReturn(value);
+      
+      // Act
+      final result = component.doSomething();
+      
+      // Assert
+      expect(result, equals(expectedValue));
+      verify(mockDependency.method()).called(1);
+    });
+  });
+}
+```
+
+### 4. Test What You Can
+If dependency injection is not available, test what's accessible:
+
+```dart
+test('method returns correct type', () async {
+  final result = await component.method();
+  expect(result, isA<ExpectedType>());
+});
+
+test('method handles errors gracefully', () async {
+  // Test error scenarios if possible
+  expect(() => component.method(), returnsNormally);
+});
+```
+
+### 5. Command Testing Template
+```dart
+test('command has correct command string', () {
+  final command = CommandFactory.createMyCommand(mockPrinter);
+  expect(command.commandString, equals('expected command'));
+});
+
+test('command has descriptive operation name', () {
+  final command = CommandFactory.createMyCommand(mockPrinter);
+  expect(command.operationName, equals('Expected Operation'));
+});
+```
+
+### 6. Async Operation Testing
+```dart
+test('async operation completes', () async {
+  when(mockManager.execute<bool>(
+    method: anyNamed('method'),
+    arguments: anyNamed('arguments'),
+    timeout: anyNamed('timeout'),
+  )).thenAnswer((_) async => Result.success(true));
+  
+  final result = await component.asyncMethod();
+  
+  expect(result, isA<Result<void>>());
+  expect(result.success, isTrue);
+});
+```
+
+## Test Coverage Requirements
+
+### Unit Tests
+- All public methods should have tests
+- All command classes should have tests
+- Error scenarios should be tested
+- Edge cases should be covered
+
+### Integration Tests
+- May skip if platform support unavailable
+- Should test complete workflows when possible
+- Should verify component integration
+
+## Common Testing Patterns
+
+### Testing with CommunicationPolicy
+```dart
+final mockPolicy = MockCommunicationPolicy();
+when(mockPolicy.execute(
+  any,
+  any,
+  options: anyNamed('options'),
+)).thenAnswer((_) async => Result.success(data));
+```
+
+### Testing Commands
+```dart
+test('executes command successfully', () async {
+  final command = CommandFactory.createCommand(mockPrinter);
+  when(mockPrinter.sendCommand(any))
+      .thenAnswer((_) async => Result.success());
+  
+  final result = await command.execute();
+  
+  expect(result.success, isTrue);
+});
+```
+
+### Testing Event Streams
+```dart
+test('emits correct events', () async {
+  final events = <Event>[];
+  component.eventStream.listen(events.add);
+  
+  await component.triggerEvent();
+  
+  expect(events, hasLength(1));
+  expect(events.first.type, equals(EventType.expected));
+});
+```
+
+## Benefits
+- **Reliability**: All code paths are tested
+- **Confidence**: No skipped tests means full coverage
+- **Maintainability**: Mockito generates type-safe mocks
+- **Documentation**: Tests serve as usage examples
+ - **Quality**: Bugs are caught before deployment

@@ -3,41 +3,32 @@ import 'package:flutter/widgets.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/zebra_printer.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 
-class MockPrinter extends ZebraPrinter {
-  List<String> sentCommands = [];
-  dynamic printResult;
-  dynamic getSettingResult;
-  int getSettingCallCount = 0;
-
-  MockPrinter() : super('mock');
-
-  @override
-  Future<Result<void>> print({required String data}) async {
-    sentCommands.add(data);
-    if (printResult is Exception) throw printResult;
-    if (printResult is Result) return printResult;
-    return Result.success();
-  }
-
-  @override
-  Future<String?> getSetting(String key) async {
-    getSettingCallCount++;
-    if (getSettingResult is Exception) throw getSettingResult;
-    return getSettingResult;
-  }
-}
+@GenerateMocks([ZebraPrinter])
+import 'state_change_verifier_test.mocks.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   group('StateChangeVerifier', () {
-    late MockPrinter printer;
+    late MockZebraPrinter printer;
     late StateChangeVerifier verifier;
+    late List<String> sentCommands;
 
     setUp(() {
-      printer = MockPrinter();
+      printer = MockZebraPrinter();
       verifier = StateChangeVerifier(printer: printer);
+      sentCommands = [];
+
+      // Default stub for print to capture commands
+      when(printer.print(data: anyNamed('data')))
+          .thenAnswer((invocation) async {
+        final data = invocation.namedArguments[#data] as String;
+        sentCommands.add(data);
+        return Result.success();
+      });
     });
 
     test('executeAndVerify returns early if already valid', () async {
@@ -48,12 +39,13 @@ void main() {
         isStateValid: (s) => s == true,
       );
       expect(result.success, isTrue);
-      expect(printer.sentCommands, isEmpty);
+      expect(sentCommands, isEmpty);
+      verifyNever(printer.print(data: anyNamed('data')));
     });
 
     test('executeAndVerify sends command and verifies state', () async {
       int state = 0;
-      printer.printResult = Result.success();
+      
       final result = await verifier.executeAndVerify<int>(
         operationName: 'Test',
         command: 'CMD',
@@ -64,11 +56,14 @@ void main() {
       );
       expect(result.success, isTrue);
       expect(result.data, equals(2));
-      expect(printer.sentCommands, contains('CMD'));
+      expect(sentCommands, contains('CMD'));
+      verify(printer.print(data: 'CMD')).called(1);
     });
 
     test('executeAndVerify fails if command send fails', () async {
-      printer.printResult = Result.error('fail');
+      when(printer.print(data: anyNamed('data')))
+          .thenAnswer((_) async => Result.error('fail'));
+          
       final result = await verifier.executeAndVerify<bool>(
         operationName: 'Test',
         command: 'CMD',
@@ -80,7 +75,6 @@ void main() {
     });
 
     test('executeAndVerify fails after max attempts', () async {
-      printer.printResult = Result.success();
       final result = await verifier.executeAndVerify<int>(
         operationName: 'Test',
         command: 'CMD',
@@ -94,7 +88,8 @@ void main() {
     });
 
     test('executeAndVerify catches exceptions', () async {
-      printer.printResult = Exception('fail');
+      when(printer.print(data: anyNamed('data'))).thenThrow(Exception('fail'));
+          
       final result = await verifier.executeAndVerify<bool>(
         operationName: 'Test',
         command: 'CMD',
@@ -106,8 +101,8 @@ void main() {
     });
 
     test('setBooleanState works for true/false', () async {
-      printer.printResult = Result.success();
-      printer.getSettingResult = 'true';
+      when(printer.getSetting(any)).thenAnswer((_) async => 'true');
+      
       final result = await verifier.setBooleanState(
         operationName: 'Pause',
         command: 'CMD',
@@ -118,7 +113,6 @@ void main() {
     });
 
     test('setStringState works for string', () async {
-      printer.printResult = Result.success();
       final result = await verifier.setStringState(
         operationName: 'Mode',
         command: 'CMD',
@@ -129,17 +123,19 @@ void main() {
     });
 
     test('executeWithDelay returns success if command sent', () async {
-      printer.printResult = Result.success();
       final result = await verifier.executeWithDelay(
         operationName: 'Delay',
         command: 'CMD',
         delay: const Duration(milliseconds: 1),
       );
       expect(result.success, isTrue);
+      verify(printer.print(data: 'CMD')).called(1);
     });
 
     test('executeWithDelay returns error if command fails', () async {
-      printer.printResult = Result.error('fail');
+      when(printer.print(data: anyNamed('data')))
+          .thenAnswer((_) async => Result.error('fail'));
+          
       final result = await verifier.executeWithDelay(
         operationName: 'Delay',
         command: 'CMD',
@@ -150,7 +146,6 @@ void main() {
 
     group('timeout scenarios', () {
       test('executeAndVerify respects checkDelay timing', () async {
-        printer.printResult = Result.success();
         int checkCount = 0;
         final stopwatch = Stopwatch()..start();
         
@@ -175,7 +170,6 @@ void main() {
 
     group('error code handling', () {
       test('executeAndVerify uses custom error code on failure', () async {
-        printer.printResult = Result.success();
         final result = await verifier.executeAndVerify<bool>(
           operationName: 'Test',
           command: 'CMD',
@@ -191,7 +185,9 @@ void main() {
       });
 
       test('executeWithDelay handles exceptions properly', () async {
-        printer.printResult = Exception('Network error');
+        when(printer.print(data: anyNamed('data')))
+            .thenThrow(Exception('Network error'));
+            
         final result = await verifier.executeWithDelay(
           operationName: 'Test',
           command: 'CMD',
@@ -207,10 +203,8 @@ void main() {
 
     group('boolean state parsing', () {
       test('setBooleanState parses various boolean representations', () async {
-        printer.printResult = Result.success();
-        
         // Test "1" as true
-        printer.getSettingResult = '1';
+        when(printer.getSetting(any)).thenAnswer((_) async => '1');
         var result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
@@ -220,7 +214,7 @@ void main() {
         expect(result.success, isTrue);
         
         // Test "on" as true
-        printer.getSettingResult = 'on';
+        when(printer.getSetting(any)).thenAnswer((_) async => 'on');
         result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
@@ -230,7 +224,7 @@ void main() {
         expect(result.success, isTrue);
         
         // Test "0" as false
-        printer.getSettingResult = '0';
+        when(printer.getSetting(any)).thenAnswer((_) async => '0');
         result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
@@ -243,8 +237,7 @@ void main() {
 
     group('string state validation', () {
       test('setStringState handles null values correctly', () async {
-        printer.printResult = Result.success();
-        printer.getSettingResult = null;
+        when(printer.getSetting(any)).thenAnswer((_) async => null);
         
         final result = await verifier.setStringState(
           operationName: 'Test',
@@ -258,7 +251,6 @@ void main() {
       });
 
       test('setStringState validates with custom logic', () async {
-        printer.printResult = Result.success();
         int callCount = 0;
         
         final result = await verifier.setStringState(
@@ -281,7 +273,6 @@ void main() {
 
     group('edge cases', () {
       test('handles rapid state changes', () async {
-        printer.printResult = Result.success();
         final states = ['starting', 'processing', 'complete'];
         int stateIndex = 0;
         
@@ -304,8 +295,6 @@ void main() {
       });
 
       test('handles concurrent operations', () async {
-        printer.printResult = Result.success();
-        
         // Start multiple operations simultaneously
         final futures = List.generate(3, (index) {
           return verifier.executeWithDelay(
@@ -318,7 +307,8 @@ void main() {
         final results = await Future.wait(futures);
         
         expect(results.every((r) => r.success), isTrue);
-        expect(printer.sentCommands.length, equals(3));
+        expect(sentCommands.length, equals(3));
+        verify(printer.print(data: anyNamed('data'))).called(3);
       });
     });
   });

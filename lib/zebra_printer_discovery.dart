@@ -491,10 +491,16 @@ class ZebraPrinterDiscovery {
   /// Dispose of resources
   void dispose() {
     _discoveryTimer?.cancel();
+    _discoveryTimer = null;
     _printer?.dispose();
+    _printer = null;
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
+    _controller = null;
     _devicesStreamController?.close();
+    _devicesStreamController = null;
     _statusStreamController?.close();
+    _statusStreamController = null;
+    _communicationPolicy = null;
   }
 } 

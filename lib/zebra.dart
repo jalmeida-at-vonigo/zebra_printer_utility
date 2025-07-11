@@ -38,7 +38,7 @@ import 'package:zebrautil/zebrautil.dart';
 class Zebra {
   static final _manager = ZebraPrinterManager();
   static SmartPrintManager? _smartPrintManager;
-  static bool _initialized = false;
+  static Result<void>? _initializationResult;
 
   /// Public getter for the singleton ZebraPrinterManager
   /// Use this for advanced operations and direct manager access
@@ -46,47 +46,70 @@ class Zebra {
 
   /// Public getter for the singleton SmartPrintManager
   /// Use this for advanced smart print operations
-  static Future<SmartPrintManager> get smartPrintManager async {
-    await _ensureInitialized();
+  static Future<Result<SmartPrintManager>> get smartPrintManager async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
     _smartPrintManager ??= SmartPrintManager(_manager);
-    return _smartPrintManager!;
+    return Result.success(_smartPrintManager!);
   }
 
-
-
-  static Future<void> _ensureInitialized() async {
-    if (!_initialized) {
-      try {
-        await _manager.initialize();
-        _initialized = true;
-      } catch (e, stack) {
-        // Log the error but don't let it propagate as an unhandled exception
-        print('Error initializing Zebra manager: $e');
-        print('Stack trace: $stack');
-        // Re-throw as a Result.error to be handled by the calling code
-        throw Exception('Failed to initialize Zebra manager: $e');
-      }
+  /// Ensures the manager is initialized, returning Result<void>
+  static Future<Result<void>> _ensureInitialized() async {
+    // Return cached result if already attempted
+    if (_initializationResult != null) {
+      return _initializationResult!;
     }
+
+    try {
+      final result = await _manager.initialize();
+      if (result.success) {
+        _initializationResult = Result.success();
+      } else {
+        _initializationResult = Result.errorFromResult(result);
+      }
+    } catch (e, stack) {
+      // Log the error but don't let it propagate as an unhandled exception
+      print('Error initializing Zebra manager: $e');
+      print('Stack trace: $stack');
+      _initializationResult = Result.error(
+        'Failed to initialize Zebra manager: $e',
+        code: ErrorCodes.operationError.code,
+        dartStackTrace: stack,
+      );
+    }
+    
+    return _initializationResult!;
   }
 
   // ===== STREAMS AND STATE =====
 
   /// Stream of discovered devices
-  static Future<Stream<List<ZebraDevice>>> get devices async {
-    await _ensureInitialized();
-    return _manager.discovery.devices;
+  static Future<Result<Stream<List<ZebraDevice>>>> get devices async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
+    return Result.success(_manager.discovery.devices);
   }
 
   /// Stream of current connection state
-  static Future<Stream<ZebraDevice?>> get connection async {
-    await _ensureInitialized();
-    return _manager.connection;
+  static Future<Result<Stream<ZebraDevice?>>> get connection async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
+    return Result.success(_manager.connection);
   }
 
   /// Stream of status messages
-  static Future<Stream<String>> get status async {
-    await _ensureInitialized();
-    return _manager.status;
+  static Future<Result<Stream<String>>> get status async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
+    return Result.success(_manager.status);
   }
 
   /// Currently connected printer
@@ -113,14 +136,21 @@ class Zebra {
   static Future<Result<List<ZebraDevice>>> discoverPrinters({
     Duration timeout = const Duration(seconds: 10),
   }) async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
     return await _manager.discovery.discoverPrinters(timeout: timeout);
   }
 
   /// Stop printer discovery
-  static Future<void> stopDiscovery() async {
-    await _ensureInitialized();
+  static Future<Result<void>> stopDiscovery() async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return initResult; // Pass through the initialization error
+    }
     await _manager.discovery.stopDiscovery();
+    return Result.success();
   }
 
   /// Discover available printers with streaming approach
@@ -135,21 +165,25 @@ class Zebra {
   /// [includeBluetooth] whether to include Bluetooth printers
   ///
   /// Returns a Stream of discovered [ZebraDevice] lists.
-  static Future<Stream<List<ZebraDevice>>> discoverPrintersStream({
+  static Future<Result<Stream<List<ZebraDevice>>>> discoverPrintersStream({
     Duration timeout = const Duration(seconds: 10),
     int? stopAfterCount,
     bool stopOnFirstPrinter = false,
     bool includeWifi = true,
     bool includeBluetooth = true,
   }) async {
-    await _ensureInitialized();
-    return _manager.discovery.discoverPrintersStream(
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
+    final stream = _manager.discovery.discoverPrintersStream(
       timeout: timeout,
       stopAfterCount: stopAfterCount,
       stopOnFirstPrinter: stopOnFirstPrinter,
       includeWifi: includeWifi,
       includeBluetooth: includeBluetooth,
     );
+    return Result.success(stream);
   }
 
   // ===== CONNECTION OPERATIONS =====
@@ -158,20 +192,30 @@ class Zebra {
   ///
   /// Returns Result indicating success or failure.
   static Future<Result<void>> connect(String address) async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return initResult; // Pass through the initialization error
+    }
     return await _manager.connect(address);
   }
 
   /// Disconnect from current printer
   static Future<Result<void>> disconnect() async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return initResult; // Pass through the initialization error
+    }
     return await _manager.disconnect();
   }
 
   /// Check if a printer is currently connected
-  static Future<bool> isConnected() async {
-    await _ensureInitialized();
-    return await _manager.isConnected();
+  static Future<Result<bool>> isConnected() async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
+    final connected = await _manager.isConnected();
+    return Result.success(connected);
   }
 
   // ===== PRINT OPERATIONS =====
@@ -203,7 +247,10 @@ class Zebra {
   /// ```
   static Future<Result<void>> print(String data,
       {PrintOptions? options}) async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return initResult; // Pass through the initialization error
+    }
     return await _manager.print(data, options: options);
   }
 
@@ -247,8 +294,33 @@ class Zebra {
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
   }) async* {
-    final manager = await smartPrintManager;
-    yield* manager.smartPrint(
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      yield PrintEvent(
+        type: PrintEventType.errorOccurred,
+        timestamp: DateTime.now(),
+        errorInfo: PrintErrorInfo(
+          message: initResult.error!.message,
+          recoverability: ErrorRecoverability.nonRecoverable,
+          errorCode: initResult.error!.code,
+        ),
+      );
+      return;
+    }
+    final managerResult = await smartPrintManager;
+    if (!managerResult.success) {
+      yield PrintEvent(
+        type: PrintEventType.errorOccurred,
+        timestamp: DateTime.now(),
+        errorInfo: PrintErrorInfo(
+          message: managerResult.error!.message,
+          recoverability: ErrorRecoverability.nonRecoverable,
+          errorCode: managerResult.error!.code,
+        ),
+      );
+      return;
+    }
+    yield* managerResult.data!.smartPrint(
       data: data,
       device: device,
       format: format,
@@ -258,22 +330,36 @@ class Zebra {
   }
 
   /// Cancel the current smart print operation
-  static Future<void> cancelSmartPrint() async {
-    final manager = await smartPrintManager;
-    manager.cancel();
+  static Future<Result<void>> cancelSmartPrint() async {
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return initResult; // Pass through the initialization error
+    }
+    final managerResult = await smartPrintManager;
+    if (!managerResult.success) {
+      return Result.errorFromResult(managerResult);
+    }
+    managerResult.data!.cancel();
+    return Result.success();
   }
 
   // ===== STATUS OPERATIONS =====
 
   /// Get printer status
   static Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
     return await _manager.getPrinterStatus();
   }
 
   /// Get detailed printer status with recommendations
   static Future<Result<Map<String, dynamic>>> getDetailedPrinterStatus() async {
-    await _ensureInitialized();
+    final initResult = await _ensureInitialized();
+    if (!initResult.success) {
+      return Result.errorFromResult(initResult);
+    }
     return await _manager.getDetailedPrinterStatus();
   }
 
@@ -294,6 +380,6 @@ class Zebra {
   static void dispose() {
     _manager.dispose();
     _smartPrintManager = null;
-    _initialized = false;
+    _initializationResult = null; // Reset to allow re-initialization
   }
 }

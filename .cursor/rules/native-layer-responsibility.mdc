@@ -1,0 +1,83 @@
+---
+alwaysApply: true
+---
+# Native Layer Responsibility Standards
+
+## Purpose
+The native layer (iOS and Android) should be a **thin wrapper** around the platform-specific SDKs (ZSDK for Zebra). All platform-independent business logic must reside in the Dart layer.
+
+## Native Layer MUST Only:
+1. **SDK Calls**: Direct calls to platform SDKs (ZSDK) without modification
+2. **Data Marshalling**: Convert between platform types and Dart types
+3. **Error Enrichment**: Add platform-specific error context for debugging
+4. **Channel Communication**: Handle method channel communication with Dart
+
+## Native Layer MUST NOT:
+1. **Business Logic**: No data analysis, formatting, or decision making
+2. **Delays/Timing**: No sleeps, delays, or timing logic (e.g., CPCL delays)
+3. **Data Formatting**: No formatting for display (e.g., branding, display names)
+4. **Status Analysis**: No interpreting status to generate recommendations
+5. **Retry Logic**: No retry attempts or polling loops
+6. **Command Parsing**: No parsing or modifying command strings
+7. **Language Detection**: No business logic for language/format detection
+
+## Examples of Violations to Fix:
+
+### ❌ WRONG - Business Logic in Native:
+```objc
+// ZSDKWrapper.m
+if (status.isReadyToPrint) {
+    statusDescription = @"Ready to print";
+} else if (messages && messages.count > 0) {
+    statusDescription = [messages componentsJoinedByString:@"; "];
+}
+```
+
+### ✅ CORRECT - Raw Data from Native:
+```objc
+// ZSDKWrapper.m
+return @{
+    @"isReadyToPrint": @(status.isReadyToPrint),
+    @"isHeadOpen": @(status.isHeadOpen),
+    // ... just raw status flags
+};
+```
+
+### ❌ WRONG - Delays in Native:
+```swift
+// ZebraPrinterInstance.swift
+if data.hasPrefix("!") || data.contains("! 0") {
+    Thread.sleep(forTimeInterval: 1.0)
+}
+```
+
+### ✅ CORRECT - Delays in Dart:
+```dart
+// zebra_printer_manager.dart
+if (detectedFormat == PrintFormat.cpcl) {
+    await Future.delayed(const Duration(seconds: 1));
+}
+```
+
+## Dart Layer Responsibilities:
+All business logic belongs in the Dart layer, specifically:
+
+1. **Discovery Formatting**: [zebra_printer.dart](mdc:lib/zebra_printer.dart) - printerFound handler
+2. **Status Analysis**: [get_detailed_printer_status_command.dart](mdc:lib/internal/commands/get_detailed_printer_status_command.dart)
+3. **Status Descriptions**: [get_printer_status_command.dart](mdc:lib/internal/commands/get_printer_status_command.dart)
+4. **CPCL Delays**: [zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart) - waitForPrintCompletion
+5. **Command Logic**: [command_factory.dart](mdc:lib/internal/commands/command_factory.dart)
+6. **Retry Logic**: [communication_policy.dart](mdc:lib/internal/communication_policy.dart)
+
+## Key Files to Monitor:
+- **iOS**: [ZSDKWrapper.m](mdc:ios/Classes/ZSDKWrapper.m), [ZebraPrinterInstance.swift](mdc:ios/Classes/ZebraPrinterInstance.swift)
+- **Android**: Similar wrapper files when implemented
+- **Dart**: All files in [lib/](mdc:lib/) contain business logic
+
+## Enforcement:
+When reviewing changes to native code, ensure:
+1. Methods are simple pass-throughs to SDK calls
+2. No conditional logic beyond null checks
+3. No string manipulation or formatting
+4. No delays or timing logic
+5. Return raw SDK data without interpretation

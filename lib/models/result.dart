@@ -96,6 +96,80 @@ class Result<T> {
     );
   }
 
+  /// Create a failed result from another Result's error
+  /// This preserves all error details from the source Result
+  factory Result.errorFromResult(Result source, [String? additionalMessage]) {
+    if (source.success || source.error == null) {
+      // If source is successful or has no error, create a generic error
+      return Result._(
+        success: false,
+        error: ErrorInfo(
+          message: additionalMessage ?? 'Error created from successful result',
+          code: ErrorCodes.internalError.code,
+          dartStackTrace: StackTrace.current,
+        ),
+      );
+    }
+
+    // Copy all error details
+    final sourceError = source.error!;
+    final message = additionalMessage != null
+        ? '$additionalMessage: ${sourceError.message}'
+        : sourceError.message;
+
+    return Result._(
+      success: false,
+      error: ErrorInfo(
+        message: message,
+        code: sourceError.code,
+        errorNumber: sourceError.errorNumber,
+        nativeError: sourceError.nativeError,
+        dartStackTrace: sourceError.dartStackTrace,
+        nativeStackTrace: sourceError.nativeStackTrace,
+        timestamp: sourceError.timestamp,
+        originalErrorCode: sourceError.originalErrorCode,
+      ),
+    );
+  }
+
+  /// Create a successful result from another Result
+  /// This can be used to transform data while preserving success info
+  factory Result.successFromResult(Result source, [T? data]) {
+    if (!source.success) {
+      // If source is not successful, this is likely a programming error
+      // but we'll create a success anyway as requested
+      return Result._(
+        success: true,
+        data: data,
+        successInfo: SuccessInfo(
+          message: 'Success created from failed result',
+          code: SuccessCodes.operationSuccess.code,
+        ),
+      );
+    }
+
+    // Copy success info if available
+    if (source.successInfo != null) {
+      final sourceInfo = source.successInfo!;
+      return Result._(
+        success: true,
+        data: data,
+        successInfo: SuccessInfo(
+          message: sourceInfo.message,
+          code: sourceInfo.code,
+          timestamp: sourceInfo.timestamp,
+          originalSuccessCode: sourceInfo.originalSuccessCode,
+        ),
+      );
+    }
+
+    // No success info, just create plain success
+    return Result._(
+      success: true,
+      data: data,
+    );
+  }
+
   /// Transform the data if successful
   Result<R> map<R>(R Function(T data) transform) {
     if (success && data != null) {
@@ -123,6 +197,11 @@ class Result<T> {
   }
 
   /// Get data or throw exception
+  /// 
+  /// @Deprecated - Avoid using this method as it throws exceptions.
+  /// Use [getOrElse] or check [success] before accessing [data] instead.
+  @Deprecated(
+      'Use getOrElse or check success before accessing data to avoid exceptions')
   T get dataOrThrow {
     if (success) {
       return data as T;
@@ -134,6 +213,14 @@ class Result<T> {
   T getOrElse(T defaultValue) {
     return success ? (data ?? defaultValue) : defaultValue;
   }
+  
+  /// Get data or execute a function that returns a default value
+  T getOrElseCall(T Function() defaultFunc) {
+    return success ? (data ?? defaultFunc()) : defaultFunc();
+  }
+
+  /// Get data or null
+  T? get dataOrNull => success ? data : null;
 }
 
 /// Structured success code with formatable message template

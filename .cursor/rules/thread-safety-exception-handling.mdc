@@ -1,0 +1,141 @@
+# Thread Safety and Exception Handling Standards
+
+## Zero Exception Tolerance
+The library MUST NEVER throw exceptions. All operations must return Result<T> types.
+
+### Exception Handling Requirements:
+1. **No throw statements**: Replace all `throw` with `Result.error()`
+2. **All async operations return Result<T>**: Never throw from async functions
+3. **Catch all exceptions**: Every try-catch must return Result.error()
+4. **No unhandled promises**: All Future operations must have error handling
+5. **Deprecated dangerous methods**: Methods like `dataOrThrow` must be marked @Deprecated
+
+### Safe Patterns:
+```dart
+// ✅ CORRECT - Return Result
+Future<Result<String>> doOperation() async {
+  try {
+    final result = await someOperation();
+    return Result.success(result);
+  } catch (e, stack) {
+    return Result.error('Operation failed: $e', 
+      dartStackTrace: stack);
+  }
+}
+
+// ❌ WRONG - Throwing exceptions
+Future<String> doOperation() async {
+  if (!valid) {
+    throw Exception('Invalid state'); // NEVER DO THIS
+  }
+  return await someOperation();
+}
+```
+
+## Thread Safety Requirements
+
+### Stream Controllers:
+1. **Always use broadcast streams**: `StreamController<T>.broadcast()`
+2. **Null-safe disposal**: Set to null after closing
+3. **Check before emitting**: Verify controller is not closed
+4. **Single owner principle**: One class owns and manages each controller
+
+### Timers:
+1. **Cancel in dispose/cleanup**: Always cancel timers
+2. **Set to null after cancel**: Prevent use after disposal
+3. **No overlapping timers**: Cancel existing before creating new
+
+### State Management:
+1. **Synchronization flags**: Use `_isRunning` flags to prevent concurrent operations
+2. **Atomic operations**: Complete state changes in single operations
+3. **Defensive cleanup**: Always cleanup in finally blocks
+
+### Safe Disposal Pattern:
+```dart
+void dispose() {
+  // Cancel timers first
+  _timer?.cancel();
+  _timer = null;
+  
+  // Close streams
+  _streamController?.close();
+  _streamController = null;
+  
+  // Clear references
+  _reference = null;
+}
+```
+
+## UI Non-Blocking Requirements
+
+### All Operations Must Be Async:
+1. **No synchronous heavy operations**: All I/O, network, and heavy computation must be async
+2. **Use compute() for heavy processing**: Offload CPU-intensive work
+3. **Stream updates to UI**: Use streams for real-time updates without blocking
+
+### Event-Based Architecture:
+```dart
+// ✅ CORRECT - Non-blocking with events
+Stream<PrintEvent> smartPrint(String data) async* {
+  yield PrintEvent(type: PrintEventType.started);
+  
+  final result = await _performPrint(data);
+  
+  if (result.success) {
+    yield PrintEvent(type: PrintEventType.completed);
+  } else {
+    yield PrintEvent(type: PrintEventType.failed);
+  }
+}
+
+// ❌ WRONG - Blocking operation
+void print(String data) {
+  while (!printerReady) {
+    Thread.sleep(100); // BLOCKS UI!
+  }
+  sendData(data);
+}
+```
+
+## Library User Experience
+
+Users should be able to:
+1. **Call any method without try-catch**: All methods return Result
+2. **Await operations safely**: No exceptions will be thrown
+3. **Cancel operations**: Provide cancellation for long-running ops
+4. **Monitor progress**: Use streams for real-time updates
+
+### Example User Code:
+```dart
+// Simple, safe usage - no exception handling needed
+final result = await Zebra.print(myData);
+if (result.success) {
+  print('Success!');
+} else {
+  print('Failed: ${result.error?.message}');
+}
+
+// Stream-based with cancellation
+final stream = Zebra.smartPrint(myData);
+final subscription = stream.listen((event) {
+  updateUI(event);
+});
+
+// User can cancel anytime
+await userClicksCancel();
+Zebra.cancelSmartPrint();
+subscription.cancel();
+```
+
+## Key Files to Monitor:
+- [zebra.dart](mdc:lib/zebra.dart) - Main API entry point
+- [zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart) - Core manager
+- [smart_print_manager.dart](mdc:lib/smart_print_manager.dart) - Event streaming
+- [operation_manager.dart](mdc:lib/internal/operation_manager.dart) - Async operations
+- [result.dart](mdc:lib/models/result.dart) - Result type definition
+
+## Enforcement:
+- No PR with `throw` statements (except in deprecated methods)
+- All async functions must return `Result<T>` or be `void`/`Stream`
+- All StreamControllers must be `.broadcast()`
+- All cleanup must null out references

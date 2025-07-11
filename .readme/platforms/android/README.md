@@ -47,7 +47,7 @@ The Android implementation currently has limited functionality compared to iOS.
 
 - [Main README](../../../README.md)
 - [API Reference](../../api/README.md)
-- [Development TODO](../../development/TODO.md)
+
 
 ---
 

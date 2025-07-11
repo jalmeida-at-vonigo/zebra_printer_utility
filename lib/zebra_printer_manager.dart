@@ -421,10 +421,24 @@ class ZebraPrinterManager {
       if (detectedFormat == PrintFormat.cpcl) {
         _logger.info('Manager: Sending CPCL flush command');
         try {
-          await CommandFactory.createSendCpclFlushBufferCommand(_printer!)
-              .execute();
-          await Future.delayed(const Duration(milliseconds: 100));
-          _logger.info('Manager: CPCL buffer flushed successfully');
+          final flushCommand =
+              CommandFactory.createSendCpclFlushBufferCommand(_printer!);
+          final flushResult = await _communicationPolicy!.execute(
+            () => flushCommand.execute(),
+            flushCommand.operationName,
+            options: const CommunicationPolicyOptions(
+              skipConnectionCheck: true, // We just printed successfully
+              skipConnectionRetry: true, // This is optional cleanup
+              maxAttempts: 1,
+            ),
+          );
+          if (flushResult.success) {
+            await Future.delayed(const Duration(milliseconds: 100));
+            _logger.info('Manager: CPCL buffer flushed successfully');
+          } else {
+            _logger.warning(
+                'Manager: CPCL buffer flush failed: ${flushResult.error?.message}');
+          }
         } catch (e) {
           _logger.warning('Manager: CPCL buffer flush failed: $e');
         }
@@ -512,7 +526,15 @@ class ZebraPrinterManager {
 
       final statusCommand =
           CommandFactory.createGetPrinterStatusCommand(_printer!);
-      final result = await statusCommand.execute();
+      final result = await _communicationPolicy!.execute(
+        () => statusCommand.execute(),
+        statusCommand.operationName,
+        options: const CommunicationPolicyOptions(
+          skipConnectionCheck: false,
+          skipConnectionRetry: false,
+          maxAttempts: 2,
+        ),
+      );
 
       if (result.success) {
         _logger.info('Manager: Printer status retrieved successfully');
@@ -546,7 +568,15 @@ class ZebraPrinterManager {
 
       final statusCommand =
           CommandFactory.createGetDetailedPrinterStatusCommand(_printer!);
-      final result = await statusCommand.execute();
+      final result = await _communicationPolicy!.execute(
+        () => statusCommand.execute(),
+        statusCommand.operationName,
+        options: const CommunicationPolicyOptions(
+          skipConnectionCheck: false,
+          skipConnectionRetry: false,
+          maxAttempts: 2,
+        ),
+      );
 
       if (result.success) {
         _logger.info('Manager: Detailed printer status retrieved successfully');
@@ -614,7 +644,11 @@ class ZebraPrinterManager {
     _readinessManager = null;
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
+    
+    // Close stream controllers safely
     _connectionStreamController?.close();
+    _connectionStreamController = null;
     _statusStreamController?.close();
+    _statusStreamController = null;
   }
 }

@@ -125,7 +125,8 @@ class CommunicationPolicy {
       if (!connectionResult.success) {
         _logger.warning('Preemptive connection check failed: ${connectionResult.error?.message}');
         onStatusUpdate?.call('Connection check failed');
-        return Result.error('Connection check failed: ${connectionResult.error?.message}');
+        return Result.errorFromResult(
+            connectionResult, 'Connection check failed');
       }
     }
     // Step 2: Optimistic execution (run first, react to failures)
@@ -249,7 +250,8 @@ class CommunicationPolicy {
       _logger.debug('Connection check attempt $attempts/${_maxRetries + 1}');
       
       try {
-        final isConnected = await _printer.isPrinterConnected().timeout(_connectionCheckTimeout);
+        final isConnected =
+            await _printer.isPrinterConnected().timeout(_operationTimeout);
         
         if (isConnected) {
           _logger.info('Connection verified successfully');
@@ -289,7 +291,7 @@ class CommunicationPolicy {
     if (!reconnectResult.success) {
       _logger.error('Failed to reconnect: ${reconnectResult.error?.message}');
       onStatusUpdate?.call('Reconnection failed');
-      return Result.error('Failed to reconnect: ${reconnectResult.error?.message}');
+      return Result.errorFromResult(reconnectResult, 'Failed to reconnect');
     }
     
     _logger.info('Successfully reconnected, retrying $operationName');
@@ -317,19 +319,52 @@ class CommunicationPolicy {
   
   /// Attempt to reconnect to the printer
   Future<Result<bool>> _attemptReconnection() async {
-    // This would need to be implemented based on how reconnection works
-    // For now, we'll use a simple approach
     try {
-      // Attempt to check connection again
+      // First check if connection is actually lost
       final connectionResult = await _checkConnection();
       if (connectionResult.success) {
         return Result.success(true);
       }
       
-      // If still not connected, we might need to trigger a reconnection
-      // This depends on the printer implementation
-      _logger.warning('Connection still not available after reconnection attempt');
-      return Result.success(false);
+      // Try to force reconnection
+      _logger.info('Attempting to reconnect to printer');
+      try {
+        // Call disconnect to clean up any stale connections
+        await _printer.disconnect();
+      } catch (e) {
+        _logger.debug('Disconnect during reconnection attempt: $e');
+        // Ignore disconnect errors as connection may already be lost
+      }
+
+      // Wait a moment before reconnecting
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Attempt to reconnect - Since ZebraPrinter manages its own connection
+      // we'll just check if it can re-establish connection
+      try {
+        // Get the currently selected address from the printer controller
+        final selectedAddress = _printer.controller.selectedAddress;
+        if (selectedAddress == null) {
+          _logger.warning('No printer address available for reconnection');
+          return Result.error('No printer address available for reconnection');
+        }
+
+        // Attempt to reconnect to the same printer
+        final reconnectResult =
+            await _printer.connectToPrinter(selectedAddress);
+
+        if (reconnectResult.success) {
+          _logger.info('Successfully reconnected to printer');
+          return Result.success(true);
+        } else {
+          _logger.warning(
+              'Reconnection failed: ${reconnectResult.error?.message}');
+          return Result.success(false);
+        }
+      } catch (e) {
+        _logger.error('Failed to reconnect: $e');
+        return Result.error('Failed to reconnect: $e');
+      }
     } catch (e) {
       _logger.error('Reconnection error: $e');
       return Result.error('Reconnection error: $e');

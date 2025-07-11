@@ -47,11 +47,14 @@ class _BTPrinterSelectorState extends State<BTPrinterSelector> {
   }
 
   Future<void> _initPrinterState() async {
-    _statusSubscription = (await Zebra.status).listen((status) {
-      if (mounted) {
-        setState(() => _status = status);
-      }
-    });
+    final statusResult = await Zebra.status;
+    if (statusResult.success) {
+      _statusSubscription = statusResult.data!.listen((status) {
+        if (mounted) {
+          setState(() => _status = status);
+        }
+      });
+    }
     _discover();
   }
 
