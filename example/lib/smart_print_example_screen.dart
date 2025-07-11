@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
 import 'operation_log_panel.dart';
 import 'bt_printer_selector.dart';
 
@@ -167,6 +166,11 @@ class _SmartPrintExampleScreenState extends State<SmartPrintExampleScreen> {
         break;
       case PrintEventType.cancelled:
         _handleCancellation();
+        break;
+      case PrintEventType.discovery:
+      case PrintEventType.connected:
+      case PrintEventType.disconnected:
+        // These events are not used in smart print
         break;
     }
   }

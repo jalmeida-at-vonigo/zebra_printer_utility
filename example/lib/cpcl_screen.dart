@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
 import 'bt_printer_selector.dart';
 import 'operation_log_panel.dart';
 

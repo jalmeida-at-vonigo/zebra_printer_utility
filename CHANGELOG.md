@@ -208,6 +208,24 @@ All notable changes to this project will be documented in this file.
 - **Error Handling**: Native layer provides enriched errors, Dart layer handles business logic
 - **No Breaking Changes**: All existing functionality preserved, just moved to appropriate layers
 
+### Code Quality Improvements
+- **DRY Improvements**: Added helper methods _reportCheckResult and _reportFixResult in PrinterReadinessManager for consistent check/fix result handling
+- **Test Improvements**: 
+  - Removed all skipped tests
+  - Added proper mocking with Mockito
+  - Created MockOperationManager for testing
+  - Removed obsolete connection test
+- **Model Extraction**: Extracted all model classes to dedicated `lib/models/` folder for better organization
+  - Moved `ReadinessOperationEvent` and related enums from zebra_printer_readiness_manager.dart
+  - Moved `CommunicationPolicyEvent` and `CommunicationPolicyOptions` from communication_policy.dart
+  - Moved `OperationLogEntry` from operation_manager.dart
+  - Moved `HostStatusInfo` from parser_util.dart
+  - Moved `PrintOptions` from zebra_printer_manager.dart
+  - Moved print event models (`PrintStepInfo`, `PrintErrorInfo`, `PrintProgressInfo`, `PrintEvent`) from smart_print_manager.dart
+  - Moved `SmartDiscoveryResult` and `ScoredDevice` from smart_device_selector.dart
+  - Created `models.dart` barrel export file for all models
+  - Updated all imports throughout the codebase
+
 ## [2.0.39] - 2024-12-19
 
 ### Added

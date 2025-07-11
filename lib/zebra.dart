@@ -1,39 +1,42 @@
 import 'dart:async';
-import 'package:zebrautil/zebrautil.dart';
+import 'zebra_printer.dart';
+import 'zebra_printer_manager.dart';
+import 'zebra_printer_discovery.dart';
+import 'smart_print_manager.dart';
+import 'models/result.dart';
+import 'models/zebra_device.dart';
+import 'models/print_options.dart';
+import 'models/print_event.dart';
+import 'models/print_enums.dart';
 
-/// Simple static API for Zebra printer operations.
+/// Main entry point for Zebra printer operations
 ///
-/// This is the recommended entry point for most Zebra printer operations.
-/// It provides a clean, simplified interface that delegates to the appropriate
-/// managers for complex workflows.
+/// This class provides a unified API for:
+/// - Printer discovery and connection
+/// - Print operations with smart workflows
+/// - Status monitoring and diagnostics
 ///
-/// For advanced customization and direct access to the command pattern,
-/// use the individual managers directly or import CommandFactory directly.
-///
-/// Example usage:
+/// **Basic Usage:**
 /// ```dart
+/// // Initialize
+/// await Zebra.initialize();
+///
 /// // Discover printers
-/// final printers = await Zebra.discoverPrinters();
+/// final devices = await Zebra.discoverPrinters();
 ///
 /// // Connect to a printer
-/// final connected = await Zebra.connect(printers.first.address);
+/// await Zebra.connect(devices.first);
 ///
-/// // Simple print operation
-/// if (connected) {
-///   await Zebra.print('^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ');
+/// // Print data
+/// await Zebra.print('^XA^FO50,50^FDHello World^FS^XZ');
+/// ```
+///
+/// **Smart Print Workflow:**
+/// ```dart
+/// final events = Zebra.smartPrint(data: zplData);
+/// await for (final event in events) {
+///   print('Print progress: ${event.type}');
 /// }
-///
-/// // Smart print with event monitoring
-/// final eventStream = Zebra.smartPrint(
-///   '^XA^FO50,50^ADN,36,20^FDHello World^FS^XZ',
-///   maxAttempts: 3,
-/// );
-/// eventStream.listen((event) {
-///   print('Print event: ${event.type}');
-/// });
-///
-/// // Disconnect when done
-/// await Zebra.disconnect();
 /// ```
 class Zebra {
   static final _manager = ZebraPrinterManager();

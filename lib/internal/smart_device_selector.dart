@@ -1,5 +1,6 @@
 import 'dart:async';
 import '../models/zebra_device.dart';
+import '../models/smart_discovery_result.dart';
 import '../zebra_printer_discovery.dart';
 import 'printer_preferences.dart';
 import 'logger.dart';
@@ -67,7 +68,7 @@ class SmartDeviceSelector {
   }
   
   /// Score printers based on multiple criteria
-  static Future<List<_ScoredDevice>> _scorePrinters(
+  static Future<List<ScoredDevice>> _scorePrinters(
     List<ZebraDevice> printers, {
     required bool preferWiFi,
   }) async {
@@ -97,7 +98,7 @@ class SmartDeviceSelector {
       // Availability score (0-10 points)
       score += _getAvailabilityScore(printer);
       
-      return _ScoredDevice(printer, score);
+      return ScoredDevice(printer, score);
     }).toList();
   }
   
@@ -271,41 +272,5 @@ class SmartDeviceSelector {
     );
     
     _logger.info('Smart discovery completed. Found ${allPrinters.length} printers');
-  }
-}
-
-/// Helper class to store device with score
-class _ScoredDevice {
-  final ZebraDevice device;
-  final double score;
-  
-  _ScoredDevice(this.device, this.score);
-}
-
-/// Result of smart discovery
-class SmartDiscoveryResult {
-  final ZebraDevice? selectedPrinter;
-  final List<ZebraDevice> allPrinters;
-  final bool isComplete;
-  final Duration discoveryDuration;
-  
-  SmartDiscoveryResult({
-    required this.selectedPrinter,
-    required this.allPrinters,
-    required this.isComplete,
-    required this.discoveryDuration,
-  });
-  
-  /// Get printers sorted by smart selection score
-  List<ZebraDevice> get sortedPrinters {
-    if (selectedPrinter == null) return allPrinters;
-    
-    // Put selected printer first, then sort others
-    final others = allPrinters.where((p) => p.address != selectedPrinter!.address).toList();
-    
-    return [
-      selectedPrinter!,
-      ...others,
-    ];
   }
 } 

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart' as _i3;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i5;
 import 'package:zebrautil/internal/communication_policy.dart' as _i7;
+import 'package:zebrautil/models/communication_policy_options.dart' as _i8;
 import 'package:zebrautil/models/result.dart' as _i4;
 import 'package:zebrautil/zebra_printer.dart' as _i2;
 
@@ -340,7 +341,7 @@ class MockCommunicationPolicy extends _i1.Mock
   _i6.Future<_i4.Result<T>> execute<T>(
     _i6.Future<_i4.Result<T>> Function()? operation,
     String? operationName, {
-    _i7.CommunicationPolicyOptions? options,
+    _i8.CommunicationPolicyOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(

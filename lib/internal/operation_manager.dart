@@ -1,65 +1,8 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'native_operation.dart';
 import '../models/result.dart';
-
-/// Operation log entry for tracking and display
-class OperationLogEntry {
-  final String operationId;
-  final String method;
-  final String status; // 'started', 'completed', 'failed', 'timeout'
-  final DateTime timestamp;
-  final Map<String, dynamic>? arguments;
-  final dynamic result;
-  final String? error;
-  final Duration? duration;
-  final String? channelName;
-  final StackTrace? stackTrace;
-
-  OperationLogEntry({
-    required this.operationId,
-    required this.method,
-    required this.status,
-    required this.timestamp,
-    this.arguments,
-    this.result,
-    this.error,
-    this.duration,
-    this.channelName,
-    this.stackTrace,
-  });
-
-  Color get statusColor {
-    switch (status) {
-      case 'started':
-        return Colors.blue;
-      case 'completed':
-        return Colors.green;
-      case 'failed':
-        return Colors.red;
-      case 'timeout':
-        return Colors.orange;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String get statusIcon {
-    switch (status) {
-      case 'started':
-        return '▶️';
-      case 'completed':
-        return '✅';
-      case 'failed':
-        return '❌';
-      case 'timeout':
-        return '⏰';
-      default:
-        return '❓';
-    }
-  }
-}
+import '../models/operation_log_entry.dart';
 
 /// Result-based OperationManager with logging capabilities
 class OperationManager {

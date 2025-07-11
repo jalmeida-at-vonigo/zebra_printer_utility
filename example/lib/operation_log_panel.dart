@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
+import 'package:zebrautil/zebrautil.dart';
 
 /// Widget to display operation logs with colors and details
 class OperationLogPanel extends StatefulWidget {

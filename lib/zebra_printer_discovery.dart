@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:zebrautil/zebrautil.dart';
 import 'internal/logger.dart';
 
-
-/// Handles printer discovery and scanning operations
+/// Service for discovering Zebra printers on the network and via Bluetooth
 class ZebraPrinterDiscovery {
   ZebraPrinter? _printer;
   ZebraController? _controller;

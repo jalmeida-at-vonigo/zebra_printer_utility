@@ -3,11 +3,12 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i5;
+import 'dart:async' as _i6;
 
 import 'package:flutter/services.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:zebrautil/internal/operation_manager.dart' as _i4;
+import 'package:zebrautil/models/operation_log_entry.dart' as _i5;
 import 'package:zebrautil/models/result.dart' as _i3;
 
 // ignore_for_file: type=lint
@@ -62,10 +63,10 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
       ) as _i2.MethodChannel);
 
   @override
-  List<_i4.OperationLogEntry> get operationLog => (super.noSuchMethod(
+  List<_i5.OperationLogEntry> get operationLog => (super.noSuchMethod(
         Invocation.getter(#operationLog),
-        returnValue: <_i4.OperationLogEntry>[],
-      ) as List<_i4.OperationLogEntry>);
+        returnValue: <_i5.OperationLogEntry>[],
+      ) as List<_i5.OperationLogEntry>);
 
   @override
   int get activeOperationCount => (super.noSuchMethod(
@@ -89,7 +90,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
       );
 
   @override
-  _i5.Future<_i3.Result<T>> execute<T>({
+  _i6.Future<_i3.Result<T>> execute<T>({
     required String? method,
     Map<String, dynamic>? arguments,
     Duration? timeout = const Duration(seconds: 30),
@@ -104,7 +105,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
             #timeout: timeout,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<T>>.value(_FakeResult_1<T>(
+        returnValue: _i6.Future<_i3.Result<T>>.value(_FakeResult_1<T>(
           this,
           Invocation.method(
             #execute,
@@ -116,7 +117,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
             },
           ),
         )),
-      ) as _i5.Future<_i3.Result<T>>);
+      ) as _i6.Future<_i3.Result<T>>);
 
   @override
   void completeOperation(

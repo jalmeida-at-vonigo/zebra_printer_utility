@@ -1,26 +1,9 @@
 import 'dart:async';
 import '../models/result.dart';
+import '../models/communication_policy_event.dart';
+import '../models/communication_policy_options.dart';
 import '../zebra_printer.dart';
 import 'logger.dart';
-
-/// Event types for CommunicationPolicy
-enum CommunicationPolicyEventType { attempt, retry, success, error, failed }
-
-/// Event object for CommunicationPolicy
-class CommunicationPolicyEvent {
-  final CommunicationPolicyEventType type;
-  final int attempt;
-  final int maxAttempts;
-  final String message;
-  final dynamic error;
-  CommunicationPolicyEvent({
-    required this.type,
-    required this.attempt,
-    required this.maxAttempts,
-    required this.message,
-    this.error,
-  });
-}
 
 /// Centralized communication policy for printer operations with optimistic execution
 /// 
@@ -410,31 +393,3 @@ class CommunicationPolicy {
     };
   }
 } 
-
-class CommunicationPolicyOptions {
-  final bool? skipConnectionCheck;
-  final bool? skipConnectionRetry;
-  final int? maxAttempts;
-  final Duration? timeout;
-  final void Function(CommunicationPolicyEvent event)? onEvent;
-
-  const CommunicationPolicyOptions({
-    this.skipConnectionCheck,
-    this.skipConnectionRetry,
-    this.maxAttempts,
-    this.timeout,
-    this.onEvent,
-  });
-
-  /// Returns a new options object where non-null values from [overrides] replace those in this instance
-  CommunicationPolicyOptions mergeWith(CommunicationPolicyOptions? overrides) {
-    if (overrides == null) return this;
-    return CommunicationPolicyOptions(
-      skipConnectionCheck: overrides.skipConnectionCheck ?? skipConnectionCheck,
-      skipConnectionRetry: overrides.skipConnectionRetry ?? skipConnectionRetry,
-      maxAttempts: overrides.maxAttempts ?? maxAttempts,
-      timeout: overrides.timeout ?? timeout,
-      onEvent: overrides.onEvent ?? onEvent,
-    );
-  }
-}

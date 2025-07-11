@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 import 'operation_log_panel.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
 
 class SmartDiscoveryScreen extends StatefulWidget {
   const SmartDiscoveryScreen({super.key});

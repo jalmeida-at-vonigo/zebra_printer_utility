@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/internal/parser_util.dart';
+import 'package:zebrautil/models/host_status_info.dart';
 
 void main() {
   group('ParserUtil - Host Status Parsing', () {
