@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/zebra_device.dart';
+import '../../models/zebra_device.dart';
 import 'logger.dart';
 
 /// Manages persistent storage for printer preferences

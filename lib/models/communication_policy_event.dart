@@ -1,13 +1,8 @@
 /// Event types for CommunicationPolicy
 enum CommunicationPolicyEventType { attempt, retry, success, error, failed }
 
-/// Event object for CommunicationPolicy
+/// Event that occurs during communication policy execution
 class CommunicationPolicyEvent {
-  final CommunicationPolicyEventType type;
-  final int attempt;
-  final int maxAttempts;
-  final String message;
-  final dynamic error;
   CommunicationPolicyEvent({
     required this.type,
     required this.attempt,
@@ -15,4 +10,10 @@ class CommunicationPolicyEvent {
     required this.message,
     this.error,
   });
+
+  final CommunicationPolicyEventType type;
+  final int attempt;
+  final int maxAttempts;
+  final String message;
+  final dynamic error;
 } 

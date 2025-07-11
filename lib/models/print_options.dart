@@ -3,15 +3,6 @@ import 'readiness_options.dart';
 
 /// Options for configuring print operations
 class PrintOptions {
-  /// Whether to wait for print completion after sending data
-  final bool waitForPrintCompletion;
-
-  /// Readiness options for printer preparation
-  final ReadinessOptions readinessOptions;
-
-  /// Print format to use (null for auto-detection)
-  final PrintFormat? format;
-
   const PrintOptions({
     this.waitForPrintCompletion = true,
     this.readinessOptions = const ReadinessOptions(),
@@ -36,6 +27,15 @@ class PrintOptions {
         readinessOptions: ReadinessOptions.quickWithLanguage(),
         format: format,
       );
+
+  /// Whether to wait for print completion after sending data
+  final bool waitForPrintCompletion;
+
+  /// Readiness options for printer preparation
+  final ReadinessOptions readinessOptions;
+
+  /// Print format to use (null for auto-detection)
+  final PrintFormat? format;
 
   /// Creates a copy with modified options
   PrintOptions copyWith({

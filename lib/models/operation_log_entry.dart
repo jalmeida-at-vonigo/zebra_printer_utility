@@ -2,6 +2,19 @@ import 'package:flutter/material.dart';
 
 /// Operation log entry for tracking and display
 class OperationLogEntry {
+  OperationLogEntry({
+    required this.operationId,
+    required this.method,
+    required this.status, // 'started', 'completed', 'failed', 'timeout'
+    required this.timestamp,
+    this.arguments,
+    this.result,
+    this.error,
+    this.duration,
+    this.channelName,
+    this.stackTrace,
+  });
+
   final String operationId;
   final String method;
   final String status; // 'started', 'completed', 'failed', 'timeout'
@@ -12,19 +25,6 @@ class OperationLogEntry {
   final Duration? duration;
   final String? channelName;
   final StackTrace? stackTrace;
-
-  OperationLogEntry({
-    required this.operationId,
-    required this.method,
-    required this.status,
-    required this.timestamp,
-    this.arguments,
-    this.result,
-    this.error,
-    this.duration,
-    this.channelName,
-    this.stackTrace,
-  });
 
   Color get statusColor {
     switch (status) {

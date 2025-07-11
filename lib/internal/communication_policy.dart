@@ -1,8 +1,8 @@
 import 'dart:async';
-import '../models/result.dart';
-import '../models/communication_policy_event.dart';
-import '../models/communication_policy_options.dart';
-import '../zebra_printer.dart';
+import '../../models/communication_policy_event.dart';
+import '../../models/communication_policy_options.dart';
+import '../../models/result.dart';
+import '../../zebra_printer.dart';
 import 'logger.dart';
 
 /// Centralized communication policy for printer operations with optimistic execution
@@ -29,6 +29,9 @@ import 'logger.dart';
 /// );
 /// ```
 class CommunicationPolicy {
+  /// Constructor
+  CommunicationPolicy(this._printer, {this.onStatusUpdate});
+  
   /// The printer instance to manage
   final ZebraPrinter _printer;
   
@@ -46,9 +49,6 @@ class CommunicationPolicy {
   
   /// Last connection check timestamp
   DateTime? _lastConnectionCheck;
-  
-  /// Constructor
-  CommunicationPolicy(this._printer, {this.onStatusUpdate});
   
   /// Unified public execute method for all command execution scenarios
   Future<Result<T>> execute<T>(

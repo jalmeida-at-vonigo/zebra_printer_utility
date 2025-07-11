@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
-import 'package:zebrautil/zebrautil.dart';
 import 'internal/logger.dart';
+import 'zebrautil.dart';
 
 /// Service for discovering Zebra printers on the network and via Bluetooth
 class ZebraPrinterDiscovery {
@@ -154,7 +154,7 @@ class ZebraPrinterDiscovery {
     });
 
     // Track initial count to detect new printers
-    int initialCount = _controller!.printers.length;
+    final int initialCount = _controller!.printers.length;
     int lastYieldedCount = initialCount;
 
     // Create a completer to handle the stream completion
@@ -168,7 +168,8 @@ class ZebraPrinterDiscovery {
       // Only yield if we have new printers
       if (currentCount > lastYieldedCount) {
         // Filter printers based on criteria
-        List<ZebraDevice> filteredPrinters = currentPrinters.where((printer) {
+        final List<ZebraDevice> filteredPrinters =
+            currentPrinters.where((printer) {
           if (!includeWifi && printer.isWifi) return false;
           if (!includeBluetooth && !printer.isWifi) return false;
           return true;
@@ -204,7 +205,8 @@ class ZebraPrinterDiscovery {
 
     // Yield initial state if we already have printers
     if (initialCount > 0) {
-      List<ZebraDevice> initialPrinters = _controller!.printers.where((printer) {
+      final List<ZebraDevice> initialPrinters =
+          _controller!.printers.where((printer) {
         if (!includeWifi && printer.isWifi) return false;
         if (!includeBluetooth && !printer.isWifi) return false;
         return true;
@@ -232,7 +234,8 @@ class ZebraPrinterDiscovery {
     }
 
     // Yield current state
-    List<ZebraDevice> currentPrinters = _controller!.printers.where((printer) {
+    final List<ZebraDevice> currentPrinters =
+        _controller!.printers.where((printer) {
       if (!includeWifi && printer.isWifi) return false;
       if (!includeBluetooth && !printer.isWifi) return false;
       return true;

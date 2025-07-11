@@ -1,6 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:zebrautil/zebrautil.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zebrautil/models/result.dart';
+import 'package:zebrautil/zebra_printer_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'operation_manager.dart';
 
 /// Handles method calls from native side and routes them to appropriate operations
 class OperationCallbackHandler {
+  /// Constructor
+  OperationCallbackHandler({required this.manager});
+
   final OperationManager manager;
 
   /// Callbacks for events that don't belong to specific operations
   final Map<String, Function(MethodCall)> eventHandlers = {};
-
-  OperationCallbackHandler({required this.manager});
 
   /// Handle a method call from native side
   Future<void> handleMethodCall(MethodCall call) async {

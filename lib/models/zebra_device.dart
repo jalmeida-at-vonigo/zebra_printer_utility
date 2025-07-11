@@ -12,23 +12,6 @@ ZebraDevice zebraDeviceModelFromJson(String str) =>
     ZebraDevice.fromJson(jsonDecode(str));
 
 class ZebraDevice {
-  final String address;
-  final String name;
-  final String status;
-  final bool isWifi;
-  final Color color;
-  final bool isConnected;
-  
-  // Zebra branding properties
-  final String? brand;
-  final String? model;
-  final String? displayName;
-  final String? manufacturer;
-  final String? firmwareRevision;
-  final String? hardwareRevision;
-  final String? connectionType;
-  final bool? isBluetooth;
-
   ZebraDevice({
     required this.address,
       required this.name,
@@ -47,53 +30,71 @@ class ZebraDevice {
       });
       
   factory ZebraDevice.empty() =>
-      ZebraDevice(address: "", name: "", isWifi: false, status: '');
+      ZebraDevice(address: '', name: '', isWifi: false, status: '');
 
+  /// Creates a ZebraDevice from a JSON string
   factory ZebraDevice.fromJson(Map<String, dynamic> json) => ZebraDevice(
-      address: json["address"] ?? json["ipAddress"] ?? json["macAddress"] ?? "",
-      name: json["name"] ?? "",
-      isWifi: json["isWifi"] == null 
+      address: json['address'] ?? json['ipAddress'] ?? json['macAddress'] ?? '',
+      name: json['name'] ?? '',
+      isWifi: json['isWifi'] == null 
           ? false 
-          : (json["isWifi"] is bool 
-              ? json["isWifi"] 
-              : json["isWifi"].toString() == "true"),
-      isConnected: json["isConnected"] == null 
+          : (json['isWifi'] is bool
+              ? json['isWifi']
+              : json['isWifi'].toString() == 'true'),
+      isConnected: json['isConnected'] == null 
           ? false 
-          : (json["isConnected"] is bool 
-              ? json["isConnected"] 
-              : json["isConnected"].toString() == "true"),
-      status: json["status"] ?? "",
-      color: json["color"] != null
-          ? Color(json["color"] as int)
+          : (json['isConnected'] is bool
+              ? json['isConnected']
+              : json['isConnected'].toString() == 'true'),
+      status: json['status'] ?? '',
+      color: json['color'] != null
+          ? Color(json['color'] as int)
           : const Color.fromARGB(255, 255, 0, 0),
-      brand: json["brand"],
-      model: json["model"],
-      displayName: json["displayName"],
-      manufacturer: json["manufacturer"],
-      firmwareRevision: json["firmwareRevision"],
-      hardwareRevision: json["hardwareRevision"],
-      connectionType: json["connectionType"],
-      isBluetooth: json["isBluetooth"] == null
+      brand: json['brand'],
+      model: json['model'],
+      displayName: json['displayName'],
+      manufacturer: json['manufacturer'],
+      firmwareRevision: json['firmwareRevision'],
+      hardwareRevision: json['hardwareRevision'],
+      connectionType: json['connectionType'],
+      isBluetooth: json['isBluetooth'] == null
           ? null
-          : (json["isBluetooth"] is bool
-              ? json["isBluetooth"]
-              : json["isBluetooth"].toString() == "true"));
+          : (json['isBluetooth'] is bool
+              ? json['isBluetooth']
+              : json['isBluetooth'].toString() == 'true'));
+
+  final String address;
+  final String name;
+  final String status;
+  final bool isWifi;
+  final Color color;
+  final bool isConnected;
+
+  // Zebra branding properties
+  final String? brand;
+  final String? model;
+  final String? displayName;
+  final String? manufacturer;
+  final String? firmwareRevision;
+  final String? hardwareRevision;
+  final String? connectionType;
+  final bool? isBluetooth;
 
   Map<String, dynamic> toJson() => {
-        "address": address,
-        "name": name,
-        "isWifi": isWifi,
-        "status": status,
-        "isConnected": isConnected,
-        "color": color.toARGB32(),
-        "brand": brand,
-        "model": model,
-        "displayName": displayName,
-        "manufacturer": manufacturer,
-        "firmwareRevision": firmwareRevision,
-        "hardwareRevision": hardwareRevision,
-        "connectionType": connectionType,
-        "isBluetooth": isBluetooth,
+        'address': address,
+        'name': name,
+        'isWifi': isWifi,
+        'status': status,
+        'isConnected': isConnected,
+        'color': color.toARGB32(),
+        'brand': brand,
+        'model': model,
+        'displayName': displayName,
+        'manufacturer': manufacturer,
+        'firmwareRevision': firmwareRevision,
+        'hardwareRevision': hardwareRevision,
+        'connectionType': connectionType,
+        'isBluetooth': isBluetooth,
       };
 
   @override

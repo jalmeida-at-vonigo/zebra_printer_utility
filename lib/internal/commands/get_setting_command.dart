@@ -4,11 +4,11 @@ import 'printer_command.dart';
 
 /// Command to get a printer setting using SGD protocol
 class GetSettingCommand extends PrinterCommand<String?> {
-  /// The setting to retrieve
-  final String setting;
-  
   /// Constructor
   GetSettingCommand(super.printer, this.setting);
+  
+  /// The setting to retrieve
+  final String setting;
   
   @override
   String get operationName => 'Get Setting: $setting';

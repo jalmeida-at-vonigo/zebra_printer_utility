@@ -1,10 +1,21 @@
 import 'dart:async';
-import 'package:zebrautil/zebrautil.dart';
+
 import 'internal/logger.dart';
+import 'zebrautil.dart';
 
 /// Manager for printer readiness operations using command pattern
 /// Centralized connection assurance and retry logic
 class ZebraPrinterReadinessManager {
+
+  /// Constructor with instantiation count check
+  ZebraPrinterReadinessManager({
+    required ZebraPrinter printer,
+    void Function(ReadinessOperationEvent)? statusCallback,
+  })  : _printer = printer,
+        _statusCallback = statusCallback {
+    _communicationPolicy = CommunicationPolicy(printer);
+    _logger.debug('ZebraPrinterReadinessManager instantiated');
+  }
   /// The printer instance to manage
   final ZebraPrinter _printer;
   
@@ -16,16 +27,6 @@ class ZebraPrinterReadinessManager {
   
   /// Communication policy for connection assurance and retry logic
   late final CommunicationPolicy _communicationPolicy;
-
-  /// Constructor with instantiation count check
-  ZebraPrinterReadinessManager({
-    required ZebraPrinter printer,
-    void Function(ReadinessOperationEvent)? statusCallback,
-  }) : _printer = printer,
-        _statusCallback = statusCallback {
-    _communicationPolicy = CommunicationPolicy(printer);
-    _logger.debug('ZebraPrinterReadinessManager instantiated');
-  }
   
   /// Log a message to both callback and logger
   void _log(String message) {

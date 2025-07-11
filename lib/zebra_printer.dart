@@ -1,31 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:zebrautil/models/zebra_device.dart';
-import 'package:zebrautil/models/result.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
-import 'package:zebrautil/internal/operation_callback_handler.dart';
-import 'package:zebrautil/internal/logger.dart';
+import 'internal/logger.dart';
+import 'internal/operation_callback_handler.dart';
+import 'internal/operation_manager.dart';
 import 'internal/permission_manager.dart';
+import 'models/result.dart';
+import 'models/zebra_device.dart';
 
 /// Printer language modes
 enum PrinterMode { zpl, cpcl }
 
 class ZebraPrinter {
-  final String instanceId;
-  final ZebraController controller;
-  bool isRotated = false;
-  bool isScanning = false;
-  bool shouldSync = false;
-
-  Function(String, String?)? onDiscoveryError;
-  Function()? onPermissionDenied;
-
-  late final MethodChannel channel;
-  late final OperationManager _operationManager;
-  late final OperationCallbackHandler _callbackHandler;
-  final Logger _logger;
-
   ZebraPrinter(
     this.instanceId, {
     ZebraController? controller,
@@ -111,6 +97,20 @@ class ZebraPrinter {
     });
   }
 
+  final String instanceId;
+  final ZebraController controller;
+  void Function(String code, String message)? onDiscoveryError;
+  void Function()? onPermissionDenied;
+
+  late final MethodChannel channel;
+  late final OperationManager _operationManager;
+  late final OperationCallbackHandler _callbackHandler;
+  final Logger _logger;
+
+  bool isRotated = false;
+  bool isScanning = false;
+  bool shouldSync = false;
+
   // Primitive: Start scanning
   void startScanning() async {
     _logger.info('Starting printer discovery process');
@@ -194,7 +194,7 @@ class ZebraPrinter {
         if (!controller.printers.any((p) => p.address == address)) {
           controller.addPrinter(existingPrinter);
         }
-        controller.updatePrinterStatus("Connected", "G");
+        controller.updatePrinterStatus('Connected', 'G');
         return Result.success();
       } else {
         _logger.error('Failed to establish connection to printer: $address');
@@ -241,7 +241,7 @@ class ZebraPrinter {
         timeout: const Duration(seconds: 5),
       );
       if (controller.selectedAddress != null) {
-        controller.updatePrinterStatus("Disconnected", "R");
+        controller.updatePrinterStatus('Disconnected', 'R');
         _logger.info('Updated printer status to disconnected');
       }
       if (result.success) {
@@ -365,7 +365,7 @@ class ZebraPrinter {
     _logger.info('Setting printer setting: $setting = $value');
     try {
       // Send the SGD command directly using print
-      final command = '! U1 setvar "$setting" "$value"';
+      final command = '! U1 setvar \'$setting\' \'$value\'';
       final result = await print(data: command);
       if (!result.success) {
         _logger.error('Failed to set setting: ${result.error?.message}');

@@ -1,4 +1,4 @@
-import 'package:zebrautil/models/print_enums.dart';
+import 'models/print_enums.dart';
 
 /// SGD (Set Get Do) command builder for Zebra printers - UTILITY ONLY
 ///

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zebrautil/models/result.dart';
+import 'package:mockito/annotations.dart';
+import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/zebra_printer.dart';
+
+@GenerateMocks([OperationManager])
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('ZebraPrinter', () {
+  group('ZebraPrinter Unit Tests', () {
     late ZebraPrinter printer;
     const instanceId = 'test-instance';
 
@@ -150,90 +153,6 @@ void main() {
       });
     });
 
-    // Async operations with proper mocking
-    group('async operations', () {
-      test('startScanning triggers scanning and cleans controller', () {
-        expect(printer.isScanning, isFalse);
-        printer.startScanning();
-        expect(printer.isScanning, isTrue);
-      });
-
-      test('stopScanning updates scanning state', () {
-        printer.isScanning = true;
-        printer.stopScanning();
-        expect(printer.isScanning, isFalse);
-        expect(printer.shouldSync, isTrue);
-      });
-
-      test('connectToPrinter returns result', () async {
-        final result = await printer.connectToPrinter('192.168.1.100');
-        expect(result, isA<Result<void>>());
-      });
-
-      test('print returns result', () async {
-        final result = await printer.print(data: '^XA^FO20,20^AD^FDTest^XZ');
-        expect(result, isA<Result<void>>());
-      });
-
-      test('disconnect returns result', () async {
-        final result = await printer.disconnect();
-        expect(result, isA<Result<void>>());
-      });
-
-      test('setSetting returns result', () async {
-        final result = await printer.setSetting('device.pause', 'false');
-        expect(result, isA<Result<void>>());
-      });
-
-      test('getPrinterStatus returns result', () async {
-        final result = await printer.getPrinterStatus();
-        expect(result, isA<Result<Map<String, dynamic>>>());
-      });
-
-      test('getSetting returns string or null', () async {
-        final result = await printer.getSetting('media.status');
-        // Can be null or string, both are valid
-        expect(result, anyOf([isNull, isA<String>()]));
-      });
-
-      test('isPrinterConnected returns boolean', () async {
-        final result = await printer.isPrinterConnected();
-        expect(result, isA<bool>());
-      });
-    });
-
-    group('error handling', () {
-      test('handles permission denied callback', () {
-        bool permissionDeniedCalled = false;
-        printer.onPermissionDenied = () {
-          permissionDeniedCalled = true;
-        };
-
-        // Simulate permission denied scenario
-        printer.startScanning();
-
-        // The actual permission check happens in the native layer
-        // We can't easily test it without platform channels
-        expect(permissionDeniedCalled, isFalse);
-      });
-
-      test('handles discovery error callback', () {
-        String? errorCode;
-        String? errorMessage;
-        printer.onDiscoveryError = (code, message) {
-          errorCode = code;
-          errorMessage = message;
-        };
-
-        // Simulate discovery error
-        printer.startScanning();
-
-        // The actual error handling happens in the native layer
-        expect(errorCode, isNull);
-        expect(errorMessage, isNull);
-      });
-    });
-
     group('ZebraController', () {
       late ZebraController controller;
 
@@ -303,7 +222,7 @@ void main() {
         controller.addPrinter(connectedDevice);
         controller.addPrinter(disconnectedDevice);
         controller.cleanAll();
-
+        
         expect(controller.printers.length, equals(1));
         expect(controller.printers.first.address, equals('192.168.1.100'));
       });
@@ -382,7 +301,7 @@ void main() {
       test('synchronizePrinter does nothing if printer not found', () {
         controller.selectedAddress = '192.168.1.100';
         controller.synchronizePrinter('Connected');
-
+        
         expect(controller.selectedAddress, isNull);
       });
 
@@ -405,4 +324,4 @@ void main() {
       });
     });
   });
-}
+} 

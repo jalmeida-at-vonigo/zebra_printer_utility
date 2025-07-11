@@ -1,10 +1,10 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/state_change_verifier.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/zebra_printer.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
 
 @GenerateMocks([ZebraPrinter])
 import 'state_change_verifier_test.mocks.dart';

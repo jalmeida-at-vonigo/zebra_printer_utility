@@ -1,10 +1,5 @@
 /// Result class for consistent error handling across the plugin
 class Result<T> {
-  final bool success;
-  final T? data;
-  final ErrorInfo? error;
-  final SuccessInfo? successInfo;
-
   const Result._({
     required this.success,
     this.data,
@@ -170,6 +165,11 @@ class Result<T> {
     );
   }
 
+  final bool success;
+  final T? data;
+  final ErrorInfo? error;
+  final SuccessInfo? successInfo;
+
   /// Transform the data if successful
   Result<R> map<R>(R Function(T data) transform) {
     if (success && data != null) {
@@ -223,10 +223,6 @@ class Result<T> {
 
 /// Structured success code with formatable message template
 class SuccessCode {
-  final String code;
-  final String messageTemplate;
-  final String category;
-  final String description;
 
   const SuccessCode({
     required this.code,
@@ -234,6 +230,10 @@ class SuccessCode {
     required this.category,
     required this.description,
   });
+  final String code;
+  final String messageTemplate;
+  final String category;
+  final String description;
 
   /// Format the message template with provided arguments
   String formatMessage(List<Object>? args) {
@@ -274,18 +274,6 @@ class SuccessCode {
 
 /// Success information with comprehensive details
 class SuccessInfo {
-  /// Human-readable success message
-  final String message;
-
-  /// Success code (e.g., 'CONNECTION_SUCCESS', 'PRINT_SUCCESS')
-  final String? code;
-
-  /// Timestamp when success occurred
-  final DateTime timestamp;
-
-  /// Original success code if created from SuccessCode
-  final SuccessCode? originalSuccessCode;
-
   SuccessInfo({
     required this.message,
     this.code,
@@ -306,6 +294,18 @@ class SuccessInfo {
       originalSuccessCode: successCode,
     );
   }
+
+  /// Human-readable success message
+  final String message;
+
+  /// Success code (e.g., 'CONNECTION_SUCCESS', 'PRINT_SUCCESS')
+  final String? code;
+
+  /// Timestamp when success occurred
+  final DateTime timestamp;
+
+  /// Original success code if created from SuccessCode
+  final SuccessCode? originalSuccessCode;
 
   /// Convert to map for serialization
   Map<String, dynamic> toMap() {
@@ -337,10 +337,6 @@ class SuccessInfo {
 
 /// Structured error code with formatable message template
 class ErrorCode {
-  final String code;
-  final String messageTemplate;
-  final String category;
-  final String description;
 
   const ErrorCode({
     required this.code,
@@ -348,6 +344,10 @@ class ErrorCode {
     required this.category,
     required this.description,
   });
+  final String code;
+  final String messageTemplate;
+  final String category;
+  final String description;
 
   /// Format the message template with provided arguments
   String formatMessage(List<Object>? args) {
@@ -388,30 +388,6 @@ class ErrorCode {
 
 /// Error information with comprehensive details
 class ErrorInfo {
-  /// Human-readable error message
-  final String message;
-
-  /// Error code (e.g., 'CONNECTION_ERROR', 'PRINT_ERROR')
-  final String? code;
-
-  /// Numeric error code from native layer
-  final int? errorNumber;
-
-  /// Native error object (platform specific)
-  final dynamic nativeError;
-
-  /// Dart stack trace
-  final StackTrace? dartStackTrace;
-
-  /// Native stack trace as string
-  final String? nativeStackTrace;
-
-  /// Timestamp when error occurred
-  final DateTime timestamp;
-
-  /// Original error code if created from ErrorCode
-  final ErrorCode? originalErrorCode;
-
   ErrorInfo({
     required this.message,
     this.code,
@@ -444,6 +420,30 @@ class ErrorInfo {
       originalErrorCode: errorCode,
     );
   }
+
+  /// Human-readable error message
+  final String message;
+
+  /// Error code (e.g., 'CONNECTION_ERROR', 'PRINT_ERROR')
+  final String? code;
+
+  /// Numeric error code from native layer
+  final int? errorNumber;
+
+  /// Native error object (platform specific)
+  final dynamic nativeError;
+
+  /// Dart stack trace
+  final StackTrace? dartStackTrace;
+
+  /// Native stack trace as string
+  final String? nativeStackTrace;
+
+  /// Timestamp when error occurred
+  final DateTime timestamp;
+
+  /// Original error code if created from ErrorCode
+  final ErrorCode? originalErrorCode;
 
   /// Convert to exception for throwing
   Exception toException() {
@@ -496,10 +496,10 @@ class ErrorInfo {
 
 /// Custom exception for Zebra printer errors
 class ZebraPrinterException implements Exception {
-  final ErrorInfo error;
 
   ZebraPrinterException(this.error);
 
+  final ErrorInfo error;
   @override
   String toString() => error.toString();
 }

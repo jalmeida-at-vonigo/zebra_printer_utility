@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:zebrautil/internal/operation_callback_handler.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:zebrautil/internal/operation_callback_handler.dart';
+import 'package:zebrautil/internal/operation_manager.dart';
 
 @GenerateMocks([OperationManager])
 import 'operation_callback_handler_test.mocks.dart';

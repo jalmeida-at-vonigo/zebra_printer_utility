@@ -2,6 +2,15 @@ import 'dart:async';
 
 /// Represents a native method call operation with tracking capabilities
 class NativeOperation {
+  /// Constructor
+  NativeOperation({
+    required this.id,
+    required this.method,
+    required this.arguments,
+    required this.timeout,
+  })  : completer = Completer<dynamic>(),
+        startTime = DateTime.now();
+
   /// Unique identifier for this operation
   final String id;
 
@@ -22,14 +31,6 @@ class NativeOperation {
 
   /// Whether this operation has been cancelled
   bool isCancelled = false;
-
-  NativeOperation({
-    required this.id,
-    required this.method,
-    required this.arguments,
-    required this.timeout,
-  })  : completer = Completer<dynamic>(),
-        startTime = DateTime.now();
 
   /// Complete the operation successfully
   void complete(dynamic result) {

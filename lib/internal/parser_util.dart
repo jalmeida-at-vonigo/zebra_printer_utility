@@ -1,4 +1,4 @@
-import '../models/host_status_info.dart';
+import '../../models/host_status_info.dart';
 
 /// Utility class for parsing Zebra printer responses
 class ParserUtil {

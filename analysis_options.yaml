@@ -2,3 +2,42 @@ include: package:flutter_lints/flutter.yaml
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
+
+# Custom rules for this project
+linter:
+  rules:
+    # Enforce clean import/export structure
+    - directives_ordering
+    - prefer_relative_imports
+    
+    # Additional code quality rules
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_single_quotes
+    - sort_child_properties_last
+    - sort_constructors_first
+    - sort_unnamed_constructors_first
+    - use_key_in_widget_constructors
+
+# Analyzer settings
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/*.mocks.dart"
+    - "**/*.gr.dart"
+  
+  # Enable all error rules
+  errors:
+    # Treat missing required parameters as errors
+    missing_required_param: error
+    missing_return: error
+    
+    # Treat unused imports as errors
+    unused_import: error
+    unused_shown_name: error
+    
+    # Treat duplicate exports as errors (built-in analyzer rule)
+    duplicate_export: error

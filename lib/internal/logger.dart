@@ -13,23 +13,23 @@ enum LogLevel {
 /// Provides consistent logging with levels and prefixes.
 /// In release mode, only warnings and errors are logged.
 class Logger {
-  final String prefix;
-  final LogLevel minimumLevel;
-  final void Function(String message)? customLogger;
-
   Logger({
     this.prefix = 'ZebraPrinter',
     this.minimumLevel = LogLevel.info,
     this.customLogger,
   });
 
-  /// Global logger instance
-  static final Logger instance = Logger();
-
   /// Create a logger with a specific prefix
   factory Logger.withPrefix(String prefix) {
     return Logger(prefix: prefix);
   }
+
+  final String prefix;
+  final LogLevel minimumLevel;
+  final void Function(String message)? customLogger;
+
+  /// Global logger instance
+  static final Logger instance = Logger();
 
   void debug(String message) {
     _log(LogLevel.debug, message);

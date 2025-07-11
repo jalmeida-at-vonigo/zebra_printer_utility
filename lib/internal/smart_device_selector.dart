@@ -1,9 +1,9 @@
 import 'dart:async';
-import '../models/zebra_device.dart';
-import '../models/smart_discovery_result.dart';
-import '../zebra_printer_discovery.dart';
-import 'printer_preferences.dart';
+import '../../models/smart_discovery_result.dart';
+import '../../models/zebra_device.dart';
+import '../../zebra_printer_discovery.dart';
 import 'logger.dart';
+import 'printer_preferences.dart';
 
 /// Smart device selector for dynamic field service environments
 /// 

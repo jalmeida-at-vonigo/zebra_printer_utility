@@ -1,6 +1,6 @@
+import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/models/zebra_device.dart';
-import 'dart:ui';
 
 void main() {
   group('ZebraDevice', () {

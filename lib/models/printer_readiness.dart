@@ -1,13 +1,21 @@
-import 'dart:async';
-import 'readiness_options.dart';
 import '../internal/commands/command_factory.dart';
-import '../internal/parser_util.dart';
-import '../internal/logger.dart';
 import '../internal/communication_policy.dart';
+import '../internal/logger.dart';
+import '../internal/parser_util.dart';
 import '../zebra_printer.dart';
+import 'readiness_options.dart';
 
 /// Lazy printer readiness status that only calls commands when first accessed
 class PrinterReadiness {
+
+  /// Constructor
+  PrinterReadiness({
+    required ZebraPrinter printer,
+    ReadinessOptions? options,
+  })  : _printer = printer,
+        _options = options {
+    _communicationPolicy = CommunicationPolicy(printer);
+  }
   final ZebraPrinter _printer;
   final Logger _logger = Logger.withPrefix('PrinterReadiness');
   
@@ -44,15 +52,6 @@ class PrinterReadiness {
 
   // Readiness options to control what gets read
   final ReadinessOptions? _options;
-
-  /// Constructor
-  PrinterReadiness({
-    required ZebraPrinter printer,
-    ReadinessOptions? options,
-  })  : _printer = printer,
-        _options = options {
-    _communicationPolicy = CommunicationPolicy(printer);
-  }
 
   /// Get connection status (lazy)
   Future<bool> get isConnected async {
@@ -654,6 +653,15 @@ class PrinterReadiness {
 
 /// Represents printer readiness with correction tracking metadata
 class CorrectedReadiness extends PrinterReadiness {
+
+  CorrectedReadiness({
+    required super.printer,
+    required super.options,
+    required this.appliedCorrections,
+    required this.correctionResults,
+    required this.correctionErrors,
+    DateTime? correctionTimestamp,
+  }) : correctionTimestamp = correctionTimestamp ?? DateTime.now();
   /// List of correction operations that were attempted
   final List<String> appliedCorrections;
 
@@ -665,15 +673,6 @@ class CorrectedReadiness extends PrinterReadiness {
 
   /// Error messages for failed corrections
   final Map<String, String> correctionErrors;
-
-  CorrectedReadiness({
-    required super.printer,
-    required super.options,
-    required this.appliedCorrections,
-    required this.correctionResults,
-    required this.correctionErrors,
-    DateTime? correctionTimestamp,
-  }) : correctionTimestamp = correctionTimestamp ?? DateTime.now();
 
   /// Correction-specific computed properties
   bool get isPausedFixed => correctionResults['unpause'] ?? false;

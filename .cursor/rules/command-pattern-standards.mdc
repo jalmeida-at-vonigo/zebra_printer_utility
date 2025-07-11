@@ -1,132 +1,110 @@
 # Command Pattern Standards
 
-## Purpose
-All printer operations are encapsulated as commands using the command pattern. Commands are created via [CommandFactory](mdc:lib/internal/commands/command_factory.dart) and follow strict architectural guidelines.
+## MANDATORY: Use CommandFactory for ALL Command Creation
 
-## Core Principles
+**CRITICAL RULE**: Commands must NEVER be instantiated directly outside of the CommandFactory and test files.
 
-### 1. One Command Per File
-Each command class must be in its own file with a descriptive name:
-```
-lib/internal/commands/
-├── send_zpl_clear_buffer_command.dart
-├── send_cpcl_clear_buffer_command.dart
-├── get_printer_status_command.dart
-└── ...
-```
-
-### 2. Command Creation via Factory
-❌ **WRONG**:
+### ✅ CORRECT - Use CommandFactory
 ```dart
+// Always use CommandFactory.create* methods
+final command = CommandFactory.createGetMediaStatusCommand(printer);
+final result = await command.execute();
+
+// Or inline
+final result = await CommandFactory.createSendUnpauseCommand(printer).execute();
+```
+
+### ❌ FORBIDDEN - Direct Command Instantiation
+```dart
+// NEVER do this in production code
 final command = SendZplClearBufferCommand(printer); // Direct instantiation
+final command = GetMediaStatusCommand(printer);     // Direct instantiation
+final command = new SendUnpauseCommand(printer);    // Direct instantiation
 ```
 
-✅ **CORRECT**:
+## Command Factory Location
+- **CommandFactory**: [lib/internal/commands/command_factory.dart](mdc:lib/internal/commands/command_factory.dart)
+- **Import**: `import 'internal/commands/command_factory.dart';`
+
+## Enforcement Rules
+
+### 1. Production Code Requirements
+- **MUST** import only `command_factory.dart` for command creation
+- **MUST NOT** import individual command classes (e.g., `send_unpause_command.dart`)
+- **MUST NOT** use direct command instantiation (`new` or constructor calls)
+
+### 2. Allowed Direct Instantiation
+- **Test files only**: Direct instantiation is allowed in `test/**/*.dart` files
+- **Command classes themselves**: For inheritance (e.g., `extends PrinterCommand`)
+- **CommandFactory class**: For creating instances to return
+
+### 3. Code Review Checklist
+- [ ] No direct command imports outside of commands folder and tests
+- [ ] All command creation uses `CommandFactory.create*` methods
+- [ ] No `new CommandName()` or `CommandName()` calls in production code
+- [ ] CommandFactory is imported where commands are needed
+
+## Available Factory Methods
+All command creation should use these methods from [CommandFactory](mdc:lib/internal/commands/command_factory.dart):
+
 ```dart
-final command = CommandFactory.createSendZplClearBufferCommand(printer);
-```
+// Status Commands
+CommandFactory.createGetMediaStatusCommand(printer)
+CommandFactory.createGetHeadStatusCommand(printer)
+CommandFactory.createGetPauseStatusCommand(printer)
+CommandFactory.createGetLanguageCommand(printer)
+CommandFactory.createGetPrinterStatusCommand(printer)
+CommandFactory.createGetDetailedPrinterStatusCommand(printer)
 
-### 3. Command Naming Convention
-Commands follow this pattern:
-- **Action + Target + Command**: `SendZplClearBufferCommand`
-- **Get + Property + Command**: `GetPrinterStatusCommand`
-- **Send + Format + Action + Command**: `SendCpclFlushBufferCommand`
-
-### 4. Format-Specific Commands
-When operations differ by format, create separate commands:
-```dart
-// ZPL-specific
-CommandFactory.createSendZplClearBufferCommand(printer)
-CommandFactory.createSendZplClearErrorsCommand(printer)
-
-// CPCL-specific
-CommandFactory.createSendCpclClearBufferCommand(printer)
-CommandFactory.createSendCpclClearErrorsCommand(printer)
-```
-
-### 5. No Generic Commands
-Avoid generic commands that take settings as parameters. Instead, create specific commands:
-```dart
-// ❌ WRONG - Generic command
-CommandFactory.createSetSettingCommand(printer, "device.pause", "false")
-
-// ✅ CORRECT - Specific command
+// Action Commands
 CommandFactory.createSendUnpauseCommand(printer)
+CommandFactory.createSendCalibrationCommand(printer)
+CommandFactory.createSendClearErrorsCommand(printer)
+CommandFactory.createSendClearBufferCommand(printer)
+CommandFactory.createSendFlushBufferCommand(printer)
+
+// Format-Specific Commands
+CommandFactory.createSendZplClearErrorsCommand(printer)
+CommandFactory.createSendCpclClearErrorsCommand(printer)
+CommandFactory.createSendZplClearBufferCommand(printer)
+CommandFactory.createSendCpclClearBufferCommand(printer)
+CommandFactory.createSendZplFlushBufferCommand(printer)
+CommandFactory.createSendCpclFlushBufferCommand(printer)
+CommandFactory.createSendSetZplModeCommand(printer)
+CommandFactory.createSendSetCpclModeCommand(printer)
+
+// Generic Commands
+CommandFactory.createGetSettingCommand(printer, setting)
+CommandFactory.createSendCommandCommand(printer, command)
+CommandFactory.createCheckConnectionCommand(printer)
 ```
 
-### 6. Command Implementation Template
-```dart
-import '../../zebra_printer.dart';
-import 'send_command_command.dart';
+## Architecture Benefits
+- **Centralized Creation**: All command instantiation in one place
+- **Easier Testing**: Mock the factory instead of individual commands
+- **Consistent Interface**: Uniform creation patterns
+- **Future Flexibility**: Easy to add logging, caching, or validation
+- **Dependency Injection**: Can inject different implementations
 
-/// Command to [describe what it does]
-class MySpecificCommand extends SendCommandCommand {
-  MySpecificCommand(ZebraPrinter printer)
-      : super(printer, 'actual command string');
-      
-  @override
-  String get operationName => 'Descriptive Operation Name';
-}
+## Violation Examples to Avoid
+```dart
+// ❌ Don't import individual commands
+import 'internal/commands/send_unpause_command.dart';
+
+// ❌ Don't instantiate directly
+final cmd = SendUnpauseCommand(printer);
+
+// ❌ Don't use new keyword
+final cmd = new GetMediaStatusCommand(printer);
 ```
 
-## CommandFactory Guidelines
+## Integration with Communication Policy
+Always use CommandFactory with [CommunicationPolicy](mdc:lib/internal/communication_policy.dart):
 
-### Adding New Commands
-1. Create command class in its own file
-2. Add factory method to CommandFactory:
 ```dart
-static MySpecificCommand createMySpecificCommand(
-  ZebraPrinter printer,
-  [parameters...]
-) => MySpecificCommand(printer, parameters...);
-```
-3. Add import to CommandFactory
-4. Write unit test for the command
-
-### Command Categories in Factory
-- **Status Commands**: Getting printer information
-- **Control Commands**: Clearing, pausing, mode switching
-- **Settings Commands**: Getting/setting printer settings
-- **Print Commands**: Sending print data
-
-## Usage Examples
-
-### Status Check
-```dart
-final command = CommandFactory.createGetPrinterStatusCommand(printer);
-final result = await communicationPolicy.execute(
-  () => command.execute(),
-  command.operationName,
+final result = await _communicationPolicy.execute(
+  () => CommandFactory.createSendUnpauseCommand(printer).execute(),
 );
 ```
 
-### Format-Specific Operation
-```dart
-// Automatically choose based on format
-final command = format == PrintFormat.zpl
-    ? CommandFactory.createSendZplClearBufferCommand(printer)
-    : CommandFactory.createSendCpclClearBufferCommand(printer);
-```
-
-### Multiple Commands
-```dart
-final commands = [
-  CommandFactory.createSendClearErrorsCommand(printer),
-  CommandFactory.createSendClearBufferCommand(printer),
-  CommandFactory.createSendUnpauseCommand(printer),
-];
-
-for (final command in commands) {
-  await executeCommandWithAssurance(
-    () => command.execute(),
-    command.operationName,
-  );
-}
-```
-
-## Benefits
-- **Encapsulation**: Commands encapsulate operation details
-- **Testability**: Each command can be tested independently
-- **Maintainability**: One command per file makes changes easy
-- **Discoverability**: CommandFactory shows all available operations
- - **Type Safety**: Compile-time checking of command usage
+This pattern ensures proper error handling, retries, and logging through the communication policy.

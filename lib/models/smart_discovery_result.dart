@@ -2,25 +2,25 @@ import 'zebra_device.dart';
 
 /// Helper class to store device with score
 class ScoredDevice {
+  ScoredDevice(this.device, this.score);
+  
   final ZebraDevice device;
   final double score;
-  
-  ScoredDevice(this.device, this.score);
 }
 
-/// Result of smart discovery
+/// Result of smart discovery operation
 class SmartDiscoveryResult {
-  final ZebraDevice? selectedPrinter;
-  final List<ZebraDevice> allPrinters;
-  final bool isComplete;
-  final Duration discoveryDuration;
-  
   SmartDiscoveryResult({
     required this.selectedPrinter,
     required this.allPrinters,
     required this.isComplete,
     required this.discoveryDuration,
   });
+
+  final ZebraDevice? selectedPrinter;
+  final List<ZebraDevice> allPrinters;
+  final bool isComplete;
+  final Duration discoveryDuration;
   
   /// Get printers sorted by smart selection score
   List<ZebraDevice> get sortedPrinters {

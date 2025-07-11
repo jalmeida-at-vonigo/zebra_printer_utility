@@ -36,13 +36,6 @@ enum ErrorRecoverability {
 
 /// Print step information
 class PrintStepInfo {
-  final PrintStep step;
-  final String message;
-  final int attempt;
-  final int maxAttempts;
-  final Duration elapsed;
-  final Map<String, dynamic> metadata;
-
   const PrintStepInfo({
     required this.step,
     required this.message,
@@ -51,6 +44,13 @@ class PrintStepInfo {
     required this.elapsed,
     this.metadata = const {},
   });
+
+  final PrintStep step;
+  final String message;
+  final int attempt;
+  final int maxAttempts;
+  final Duration elapsed;
+  final Map<String, dynamic> metadata;
 
   bool get isRetry => attempt > 1;
   int get retryCount => attempt > 1 ? attempt - 1 : 0;
@@ -85,14 +85,6 @@ class PrintStepInfo {
 
 /// Print error information
 class PrintErrorInfo {
-  final String message;
-  final ErrorRecoverability recoverability;
-  final String? errorCode;
-  final dynamic nativeError;
-  final StackTrace? stackTrace;
-  final Map<String, dynamic> metadata;
-  final String? recoveryHint;
-
   const PrintErrorInfo({
     required this.message,
     required this.recoverability,
@@ -102,6 +94,14 @@ class PrintErrorInfo {
     this.metadata = const {},
     this.recoveryHint,
   });
+
+  final String message;
+  final ErrorRecoverability recoverability;
+  final String? errorCode;
+  final dynamic nativeError;
+  final StackTrace? stackTrace;
+  final Map<String, dynamic> metadata;
+  final String? recoveryHint;
   
   @override
   String toString() => 'PrintErrorInfo($recoverability: $message)';
@@ -109,12 +109,6 @@ class PrintErrorInfo {
 
 /// Print progress information
 class PrintProgressInfo {
-  final double progress;
-  final String currentOperation;
-  final Duration elapsed;
-  final Duration estimatedRemaining;
-  final Map<String, dynamic> metadata;
-
   const PrintProgressInfo({
     required this.progress,
     required this.currentOperation,
@@ -122,6 +116,12 @@ class PrintProgressInfo {
     required this.estimatedRemaining,
     this.metadata = const {},
   });
+
+  final double progress;
+  final String currentOperation;
+  final Duration elapsed;
+  final Duration estimatedRemaining;
+  final Map<String, dynamic> metadata;
   
   @override
   String toString() => 'PrintProgressInfo($progress: $currentOperation)';
@@ -129,13 +129,6 @@ class PrintProgressInfo {
 
 /// Print event
 class PrintEvent {
-  final PrintEventType type;
-  final DateTime timestamp;
-  final PrintStepInfo? stepInfo;
-  final PrintErrorInfo? errorInfo;
-  final PrintProgressInfo? progressInfo;
-  final Map<String, dynamic> metadata;
-
   const PrintEvent({
     required this.type,
     required this.timestamp,
@@ -144,6 +137,13 @@ class PrintEvent {
     this.progressInfo,
     this.metadata = const {},
   });
+
+  final PrintEventType type;
+  final DateTime timestamp;
+  final PrintStepInfo? stepInfo;
+  final PrintErrorInfo? errorInfo;
+  final PrintProgressInfo? progressInfo;
+  final Map<String, dynamic> metadata;
   
   @override
   String toString() => 'PrintEvent($type at $timestamp)';

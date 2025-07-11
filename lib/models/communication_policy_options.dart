@@ -1,13 +1,7 @@
 import 'communication_policy_event.dart';
 
-/// Options for configuring CommunicationPolicy behavior
+/// Options for configuring communication policy behavior
 class CommunicationPolicyOptions {
-  final bool? skipConnectionCheck;
-  final bool? skipConnectionRetry;
-  final int? maxAttempts;
-  final Duration? timeout;
-  final void Function(CommunicationPolicyEvent event)? onEvent;
-
   const CommunicationPolicyOptions({
     this.skipConnectionCheck,
     this.skipConnectionRetry,
@@ -15,6 +9,12 @@ class CommunicationPolicyOptions {
     this.timeout,
     this.onEvent,
   });
+
+  final bool? skipConnectionCheck;
+  final bool? skipConnectionRetry;
+  final int? maxAttempts;
+  final Duration? timeout;
+  final void Function(CommunicationPolicyEvent event)? onEvent;
 
   /// Returns a new options object where non-null values from [overrides] replace those in this instance
   CommunicationPolicyOptions mergeWith(CommunicationPolicyOptions? overrides) {

@@ -1,56 +1,5 @@
 /// Options for configuring printer readiness operations
 class ReadinessOptions {
-  // Check options
-  /// Whether to check printer connection
-  final bool checkConnection;
-  
-  /// Whether to check media status
-  final bool checkMedia;
-  
-  /// Whether to check head status
-  final bool checkHead;
-  
-  /// Whether to check pause status
-  final bool checkPause;
-  
-  /// Whether to check for errors
-  final bool checkErrors;
-  
-  /// Whether to check printer language
-  final bool checkLanguage;
-  
-  // Fix options
-  /// Whether to fix paused printer
-  final bool fixPausedPrinter;
-  
-  /// Whether to fix printer errors
-  final bool fixPrinterErrors;
-  
-  /// Whether to fix media calibration
-  final bool fixMediaCalibration;
-  
-  /// Whether to fix language mismatch
-  final bool fixLanguageMismatch;
-  
-  /// Whether to fix buffer issues
-  final bool fixBufferIssues;
-  
-  /// Whether to clear buffer
-  final bool clearBuffer;
-  
-  /// Whether to flush buffer
-  final bool flushBuffer;
-  
-  // Behavior options
-  /// Delay between checks
-  final Duration checkDelay;
-  
-  /// Maximum number of attempts for operations
-  final int maxAttempts;
-  
-  /// Whether to enable verbose logging
-  final bool verboseLogging;
-  
   /// Constructor with all options
   const ReadinessOptions({
     this.checkConnection = false,
@@ -136,7 +85,58 @@ class ReadinessOptions {
     clearBuffer: true,
     flushBuffer: true,
   );
-  
+
+  // Check options
+  /// Whether to check printer connection
+  final bool checkConnection;
+
+  /// Whether to check media status
+  final bool checkMedia;
+
+  /// Whether to check head status
+  final bool checkHead;
+
+  /// Whether to check pause status
+  final bool checkPause;
+
+  /// Whether to check for errors
+  final bool checkErrors;
+
+  /// Whether to check printer language
+  final bool checkLanguage;
+
+  // Fix options
+  /// Whether to fix paused printer
+  final bool fixPausedPrinter;
+
+  /// Whether to fix printer errors
+  final bool fixPrinterErrors;
+
+  /// Whether to fix media calibration
+  final bool fixMediaCalibration;
+
+  /// Whether to fix language mismatch
+  final bool fixLanguageMismatch;
+
+  /// Whether to fix buffer issues
+  final bool fixBufferIssues;
+
+  /// Whether to clear buffer
+  final bool clearBuffer;
+
+  /// Whether to flush buffer
+  final bool flushBuffer;
+
+  // Behavior options
+  /// Delay between checks
+  final Duration checkDelay;
+
+  /// Maximum number of attempts for operations
+  final int maxAttempts;
+
+  /// Whether to enable verbose logging
+  final bool verboseLogging;
+
   /// Creates a copy with modified options
   ReadinessOptions copyWith({
     bool? checkConnection,

@@ -1,0 +1,140 @@
+# CommandFactory Enforcement Rule
+
+## 🚨 CRITICAL ENFORCEMENT: No Direct Command Instantiation
+
+**ZERO TOLERANCE**: Commands must NEVER be instantiated directly in production code.
+
+### Immediate Red Flags
+If you see any of these patterns in production code (not test files), it's a **CRITICAL VIOLATION**:
+
+```dart
+// 🚨 VIOLATIONS - Stop and fix immediately
+final cmd = SendUnpauseCommand(printer);           // Direct instantiation
+final cmd = new GetMediaStatusCommand(printer);    // Using 'new' keyword
+final cmd = SendZplClearBufferCommand(printer);    // Any direct command creation
+import 'internal/commands/send_unpause_command.dart'; // Direct command import
+```
+
+### Required Pattern
+```dart
+// ✅ ONLY ACCEPTABLE PATTERN
+import 'internal/commands/command_factory.dart';
+
+final command = CommandFactory.createSendUnpauseCommand(printer);
+final result = await command.execute();
+```
+
+## File-Level Rules
+
+### ❌ FORBIDDEN in Production Code
+1. **Direct Command Imports**: `import 'internal/commands/[specific_command].dart'`
+2. **Direct Instantiation**: `CommandName(printer)` or `new CommandName(printer)`
+3. **Command Class References**: Using command class names except in factory
+
+### ✅ ALLOWED Locations for Direct Instantiation
+1. **Test Files**: `test/**/*.dart` - Direct instantiation OK for testing
+2. **Command Classes**: Internal inheritance (e.g., `extends SendCommandCommand`)
+3. **CommandFactory**: Creating instances to return from factory methods
+
+## Enforcement Checklist
+
+### Code Review Questions
+- [ ] Does the file import `command_factory.dart` instead of individual commands?
+- [ ] Are all commands created via `CommandFactory.create*` methods?
+- [ ] No direct command class usage outside of factory and tests?
+- [ ] No `new` keyword used with command classes?
+
+### Search Patterns to Avoid
+Use these patterns to find violations:
+```bash
+# Find direct command instantiation
+grep -r "= [A-Z]\w*Command(" lib/
+grep -r "new [A-Z]\w*Command(" lib/
+
+# Find direct command imports (excluding command_factory)
+grep -r "import.*commands/[^c].*command\.dart" lib/
+```
+
+## Factory Method Reference
+
+### Status Commands
+```dart
+CommandFactory.createGetMediaStatusCommand(printer)
+CommandFactory.createGetHeadStatusCommand(printer)
+CommandFactory.createGetPauseStatusCommand(printer)
+CommandFactory.createGetHostStatusCommand(printer)
+CommandFactory.createGetLanguageCommand(printer)
+CommandFactory.createGetPrinterStatusCommand(printer)
+CommandFactory.createGetDetailedPrinterStatusCommand(printer)
+CommandFactory.createCheckConnectionCommand(printer)
+```
+
+### Action Commands
+```dart
+CommandFactory.createSendUnpauseCommand(printer)
+CommandFactory.createSendCalibrationCommand(printer)
+CommandFactory.createSendClearErrorsCommand(printer)
+CommandFactory.createSendClearBufferCommand(printer)
+CommandFactory.createSendFlushBufferCommand(printer)
+CommandFactory.createSendClearAlertsCommand(printer)
+```
+
+### Format-Specific Commands
+```dart
+// ZPL Commands
+CommandFactory.createSendZplClearErrorsCommand(printer)
+CommandFactory.createSendZplClearBufferCommand(printer)
+CommandFactory.createSendZplFlushBufferCommand(printer)
+CommandFactory.createSendSetZplModeCommand(printer)
+
+// CPCL Commands
+CommandFactory.createSendCpclClearErrorsCommand(printer)
+CommandFactory.createSendCpclClearBufferCommand(printer)
+CommandFactory.createSendCpclFlushBufferCommand(printer)
+CommandFactory.createSendSetCpclModeCommand(printer)
+```
+
+### Generic Commands
+```dart
+CommandFactory.createGetSettingCommand(printer, setting)
+CommandFactory.createSendCommandCommand(printer, command)
+```
+
+## Integration Requirements
+
+### With Communication Policy
+```dart
+final result = await _communicationPolicy.execute(
+  () => CommandFactory.createSendUnpauseCommand(printer).execute(),
+);
+```
+
+### With Error Handling
+```dart
+try {
+  final command = CommandFactory.createGetMediaStatusCommand(printer);
+  final result = await command.execute();
+  if (result.success) {
+    // Handle success
+  }
+} catch (e) {
+  // Handle error
+}
+```
+
+## Benefits of This Pattern
+- **Centralized Control**: All command creation in one place
+- **Easier Refactoring**: Change implementation without touching client code
+- **Better Testing**: Mock the factory instead of individual commands
+- **Consistent Interface**: Uniform creation patterns across codebase
+- **Future Flexibility**: Easy to add logging, caching, or validation
+
+## Violation Consequences
+- **Code Review Rejection**: Direct instantiation will be rejected
+- **Architecture Violation**: Breaks the command pattern implementation
+- **Testing Difficulty**: Makes mocking and testing harder
+- **Maintenance Issues**: Scattered command creation across codebase
+description:
+globs:
+alwaysApply: false
+---

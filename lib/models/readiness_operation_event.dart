@@ -23,16 +23,9 @@ enum ReadinessOperationResult {
   error,
 }
 
-/// Event data for readiness operations
+/// Event that occurs during readiness operations
 class ReadinessOperationEvent {
-  final PrinterReadiness readiness;
-  final String message;
-  final ReadinessOperationType operationType;
-  final ReadinessOperationKind operationKind;
-  final ReadinessOperationResult result;
-  final String? errorDetails;
-
-  const ReadinessOperationEvent({
+  ReadinessOperationEvent({
     required this.readiness,
     required this.message,
     required this.operationType,
@@ -40,6 +33,13 @@ class ReadinessOperationEvent {
     required this.result,
     this.errorDetails,
   });
+
+  final PrinterReadiness readiness;
+  final String message;
+  final ReadinessOperationType operationType;
+  final ReadinessOperationKind operationKind;
+  final ReadinessOperationResult result;
+  final String? errorDetails;
 
   @override
   String toString() =>

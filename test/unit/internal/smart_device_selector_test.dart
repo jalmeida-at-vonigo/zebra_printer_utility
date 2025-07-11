@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/internal/smart_device_selector.dart';
-import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/models/smart_discovery_result.dart';
+import 'package:zebrautil/models/zebra_device.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

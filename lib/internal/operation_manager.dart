@@ -1,11 +1,23 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
+import '../../models/operation_log_entry.dart';
+import '../../models/result.dart';
 import 'native_operation.dart';
-import '../models/result.dart';
-import '../models/operation_log_entry.dart';
 
 /// Result-based OperationManager with logging capabilities
 class OperationManager {
+  /// Constructor
+  OperationManager({
+    required this.channel,
+    this.onLog,
+    this.onOperationLog,
+  }) {
+    // Start timeout checker
+    _timeoutChecker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _checkTimeouts();
+    });
+  }
+
   /// The method channel for native communication
   final MethodChannel channel;
 
@@ -23,17 +35,6 @@ class OperationManager {
 
   /// Operation log entries
   final List<OperationLogEntry> _operationLog = [];
-
-  OperationManager({
-    required this.channel,
-    this.onLog,
-    this.onOperationLog,
-  }) {
-    // Start timeout checker
-    _timeoutChecker = Timer.periodic(const Duration(seconds: 1), (_) {
-      _checkTimeouts();
-    });
-  }
 
   /// Get all operation log entries
   List<OperationLogEntry> get operationLog => List.unmodifiable(_operationLog);

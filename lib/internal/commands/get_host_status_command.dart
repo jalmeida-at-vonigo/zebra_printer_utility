@@ -1,7 +1,7 @@
-import 'printer_command.dart';
-import '../parser_util.dart';
-import '../../models/result.dart';
 import '../../models/host_status_info.dart';
+import '../../models/result.dart';
+import '../parser_util.dart';
+import 'printer_command.dart';
 
 /// Command to get host status from the printer
 class GetHostStatusCommand extends PrinterCommand<HostStatusInfo> {

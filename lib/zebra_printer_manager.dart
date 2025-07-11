@@ -1,9 +1,19 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
-import 'package:zebrautil/zebrautil.dart';
-import 'internal/smart_device_selector.dart';
-import 'internal/printer_preferences.dart';
+import 'internal/commands/command_factory.dart';
+import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
+import 'internal/printer_preferences.dart';
+import 'internal/smart_device_selector.dart';
+import 'models/communication_policy_options.dart';
+import 'models/print_enums.dart';
+import 'models/print_options.dart';
+import 'models/result.dart';
+import 'models/zebra_device.dart';
+import 'zebra_printer.dart';
+import 'zebra_printer_discovery.dart';
+import 'zebra_printer_readiness_manager.dart';
+import 'zebra_sgd_commands.dart';
 
 /// Manager for Zebra printer instances and state
 ///
@@ -160,7 +170,7 @@ class ZebraPrinterManager {
           await SmartDeviceSelector.recordSuccessfulConnection(address);
 
           // Use the provided device or find it in the controller's list
-          ZebraDevice? deviceToSave = device ??
+          final ZebraDevice? deviceToSave = device ??
               _controller?.printers.firstWhere(
                 (p) => p.address == address,
                 orElse: () => ZebraDevice(

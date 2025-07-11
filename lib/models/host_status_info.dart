@@ -1,5 +1,12 @@
 /// Detailed information about host status response
 class HostStatusInfo {
+  HostStatusInfo({
+    required this.isOk,
+    this.errorCode,
+    this.errorMessage,
+    required this.details,
+  });
+
   /// Whether the printer status is OK
   final bool isOk;
 
@@ -11,13 +18,6 @@ class HostStatusInfo {
 
   /// Additional details about the status
   final Map<String, dynamic> details;
-
-  HostStatusInfo({
-    required this.isOk,
-    this.errorCode,
-    this.errorMessage,
-    required this.details,
-  });
 
   /// Convert to map for serialization
   Map<String, dynamic> toMap() {

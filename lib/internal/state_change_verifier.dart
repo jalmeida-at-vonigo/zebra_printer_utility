@@ -1,6 +1,6 @@
 import 'dart:async';
-import '../models/result.dart';
-import '../zebra_printer.dart';
+import '../../models/result.dart';
+import '../../zebra_printer.dart';
 import 'logger.dart';
 
 /// Verifies state changes for operations that don't provide callbacks
@@ -9,13 +9,14 @@ import 'logger.dart';
 /// settings changes that execute on the printer but don't report completion.
 /// It uses a verify-retry pattern to ensure operations actually completed.
 class StateChangeVerifier {
-  final ZebraPrinter printer;
-  final Logger _logger;
-
+  /// Constructor
   StateChangeVerifier({
     required this.printer,
     void Function(String)? logCallback,
   }) : _logger = Logger.withPrefix('StateChangeVerifier');
+
+  final ZebraPrinter printer;
+  final Logger _logger;
 
   void _log(String message) {
     _logger.debug(message);

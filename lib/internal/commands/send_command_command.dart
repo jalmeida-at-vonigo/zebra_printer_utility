@@ -3,11 +3,11 @@ import 'printer_command.dart';
 
 /// Command to send any command to the printer
 class SendCommandCommand extends PrinterCommand<void> {
-  /// The command to send
-  final String command;
-  
   /// Constructor
   SendCommandCommand(super.printer, this.command);
+  
+  /// The command to send
+  final String command;
   
   @override
   String get operationName => 'Send Command: $command';

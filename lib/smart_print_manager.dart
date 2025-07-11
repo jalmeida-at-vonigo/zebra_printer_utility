@@ -1,18 +1,21 @@
 import 'dart:async';
-import 'models/result.dart';
-import 'models/readiness_options.dart';
-import 'models/zebra_device.dart';
+
+import 'internal/logger.dart';
+import 'models/communication_policy_event.dart';
+import 'models/communication_policy_options.dart';
 import 'models/print_enums.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
-import 'models/communication_policy_event.dart';
-import 'models/communication_policy_options.dart';
+import 'models/readiness_options.dart';
+import 'models/result.dart';
+import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
 import 'zebra_sgd_commands.dart';
-import 'internal/logger.dart';
 
 /// Smart print manager for handling complex print workflows
 class SmartPrintManager {
+  
+  SmartPrintManager(this._printerManager);
   // Private fields
   final ZebraPrinterManager _printerManager;
   final Logger _logger = Logger.withPrefix('SmartPrintManager');
@@ -37,8 +40,6 @@ class SmartPrintManager {
   
   // Synchronization lock for thread safety
   bool _isRunning = false;
-  
-  SmartPrintManager(this._printerManager);
 
   /// Get the event stream for monitoring print progress
   Stream<PrintEvent> get eventStream {

@@ -1,13 +1,13 @@
 import 'dart:async';
-import 'zebra_printer.dart';
-import 'zebra_printer_manager.dart';
-import 'zebra_printer_discovery.dart';
-import 'smart_print_manager.dart';
+import 'models/print_enums.dart';
+import 'models/print_event.dart';
+import 'models/print_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
-import 'models/print_options.dart';
-import 'models/print_event.dart';
-import 'models/print_enums.dart';
+import 'smart_print_manager.dart';
+import 'zebra_printer.dart';
+import 'zebra_printer_discovery.dart';
+import 'zebra_printer_manager.dart';
 
 /// Main entry point for Zebra printer operations
 ///
