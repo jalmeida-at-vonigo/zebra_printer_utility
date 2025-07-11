@@ -16,7 +16,9 @@ void main() {
       printer = ZebraPrinter(instanceId);
     });
 
-    tearDown(() {
+    tearDown(() async {
+      // Allow any pending operations to complete before disposing
+      await Future.delayed(const Duration(milliseconds: 50));
       printer.dispose();
     });
 
@@ -241,7 +243,9 @@ void main() {
         controller = ZebraController();
       });
 
-      tearDown(() {
+      tearDown(() async {
+        // Allow any pending operations to complete before disposing
+        await Future.delayed(const Duration(milliseconds: 50));
         controller.dispose();
       });
 

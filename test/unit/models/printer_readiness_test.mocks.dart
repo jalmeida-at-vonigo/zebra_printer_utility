@@ -85,6 +85,15 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i2.ZebraController);
 
   @override
+  _i3.MethodChannel get channel => (super.noSuchMethod(
+        Invocation.getter(#channel),
+        returnValue: _FakeMethodChannel_1(
+          this,
+          Invocation.getter(#channel),
+        ),
+      ) as _i3.MethodChannel);
+
+  @override
   bool get isRotated => (super.noSuchMethod(
         Invocation.getter(#isRotated),
         returnValue: false,
@@ -103,13 +112,37 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as bool);
 
   @override
-  _i3.MethodChannel get channel => (super.noSuchMethod(
-        Invocation.getter(#channel),
-        returnValue: _FakeMethodChannel_1(
-          this,
-          Invocation.getter(#channel),
+  set onDiscoveryError(
+          void Function(
+            String,
+            String,
+          )? _onDiscoveryError) =>
+      super.noSuchMethod(
+        Invocation.setter(
+          #onDiscoveryError,
+          _onDiscoveryError,
         ),
-      ) as _i3.MethodChannel);
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  set onPermissionDenied(void Function()? _onPermissionDenied) =>
+      super.noSuchMethod(
+        Invocation.setter(
+          #onPermissionDenied,
+          _onPermissionDenied,
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  set channel(_i3.MethodChannel? _channel) => super.noSuchMethod(
+        Invocation.setter(
+          #channel,
+          _channel,
+        ),
+        returnValueForMissingStub: null,
+      );
 
   @override
   set isRotated(bool? _isRotated) => super.noSuchMethod(
@@ -134,39 +167,6 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
         Invocation.setter(
           #shouldSync,
           _shouldSync,
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  set onDiscoveryError(
-          dynamic Function(
-            String,
-            String?,
-          )? _onDiscoveryError) =>
-      super.noSuchMethod(
-        Invocation.setter(
-          #onDiscoveryError,
-          _onDiscoveryError,
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  set onPermissionDenied(dynamic Function()? _onPermissionDenied) =>
-      super.noSuchMethod(
-        Invocation.setter(
-          #onPermissionDenied,
-          _onPermissionDenied,
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  set channel(_i3.MethodChannel? _channel) => super.noSuchMethod(
-        Invocation.setter(
-          #channel,
-          _channel,
         ),
         returnValueForMissingStub: null,
       );

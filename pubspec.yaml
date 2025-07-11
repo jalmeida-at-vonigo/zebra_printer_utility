@@ -1,6 +1,6 @@
 name: zebrautil
 description: A plugin for working with zebra printers and labels, you can find Zebra BLE, WIFI Printers, and print ZPL code to them.
-version: 2.0.40
+version: 2.0.41
 homepage: "https://github.com/anthonyR012/zebra_printer_utility/tree/main"
 
 environment:

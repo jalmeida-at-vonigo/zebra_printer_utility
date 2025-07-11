@@ -43,7 +43,7 @@ class SmartPrintManager {
 
   /// Get the event stream for monitoring print progress
   Stream<PrintEvent> get eventStream {
-    _eventController ??= StreamController<PrintEvent>.broadcast();
+    _eventController ??= StreamController<PrintEvent>();
     return _eventController!.stream;
   }
 
@@ -81,12 +81,9 @@ class SmartPrintManager {
     
     // Create new event controller for this print operation
     await _eventController?.close();
-    _eventController = StreamController<PrintEvent>.broadcast();
+    _eventController = StreamController<PrintEvent>();
     
-    // Start the print workflow
-    yield* eventStream;
-
-    // Run the print workflow in the background
+    // Run the print workflow in the background FIRST (this produces the events)
     _runPrintWorkflow(
       data: data,
       device: device,
@@ -95,6 +92,9 @@ class SmartPrintManager {
       checkStatusBeforePrint: checkStatusBeforePrint,
       waitForCompletion: waitForCompletion,
     );
+    
+    // Then yield the event stream (this consumes the events)
+    yield* eventStream;
   }
 
   /// Execute the smart print workflow
@@ -177,20 +177,8 @@ class SmartPrintManager {
           ));
           return;
         }
-        final readinessOptions = ReadinessOptions.quickWithLanguage().copyWith(
-          checkConnection: true,
-          checkMedia: true,
-          checkHead: true,
-          checkPause: true,
-          checkErrors: true,
-          checkLanguage: true,
-          fixPausedPrinter: true,
-          fixPrinterErrors: true,
-          fixLanguageMismatch: true,
-          fixMediaCalibration: true,
-          clearBuffer: true,
-          flushBuffer: true,
-        );
+        // Use the same readiness options as regular print - no aggressive overrides
+        final readinessOptions = ReadinessOptions.quickWithLanguage();
         final readinessResult = await readinessManager.prepareForPrint(
           detectedFormat,
           readinessOptions,

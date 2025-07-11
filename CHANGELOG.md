@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.41] - 2025-01-11
+
+### Fixed
+- **Smart Print Deadlock**: Fixed async generator issue in `smartPrint` method
+  - Fixed deadlock caused by yielding event stream before starting workflow
+  - Workflow now starts before yielding events, preventing UI blocking
+  - Smart print now executes immediately instead of waiting for cancellation
+- **Smart Print Readiness Options**: Aligned smart print with regular print behavior
+  - Removed aggressive readiness overrides in smart print workflow
+  - Now uses same `ReadinessOptions.quickWithLanguage()` as regular print
+  - Fixed issue where smart print was failing due to hardware error checks that regular print skips
+  - User requested no additional safety checks in smart print vs regular print
+- **Smart Print Event Stream**: Fixed potential event loss issue
+  - Changed from broadcast stream to regular (buffering) stream controller
+  - Ensures early events (like initialization) are not lost due to race conditions
+  - All events are now buffered until a listener subscribes, preventing any event loss
+- **Test Suite**: Fixed all failing tests
+  - Regenerated mocks to fix type mismatch issues with `onDiscoveryError` callback
+  - Fixed "Operation cancelled" errors by adding proper async teardown delays
+  - All tests now pass successfully without errors
+
 ## [2.0.40] - 2025-01-10
 
 ### Redesigned
