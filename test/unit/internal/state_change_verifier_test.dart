@@ -101,12 +101,16 @@ void main() {
     });
 
     test('setBooleanState works for true/false', () async {
-      when(printer.getSetting(any)).thenAnswer((_) async => 'true');
+      when(printer.getSetting(any))
+          .thenAnswer((_) async => Result.success('true'));
       
       final result = await verifier.setBooleanState(
         operationName: 'Pause',
         command: 'CMD',
-        getSetting: () async => 'true',
+        getSetting: () async {
+          final result = await printer.getSetting('test');
+          return result.success ? result.data : null;
+        },
         desiredState: true,
       );
       expect(result.success, isTrue);
@@ -204,31 +208,43 @@ void main() {
     group('boolean state parsing', () {
       test('setBooleanState parses various boolean representations', () async {
         // Test "1" as true
-        when(printer.getSetting(any)).thenAnswer((_) async => '1');
+        when(printer.getSetting(any))
+            .thenAnswer((_) async => Result.success('1'));
         var result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
-          getSetting: () => printer.getSetting('test'),
+          getSetting: () async {
+            final result = await printer.getSetting('test');
+            return result.success ? result.data : null;
+          },
           desiredState: true,
         );
         expect(result.success, isTrue);
         
         // Test "on" as true
-        when(printer.getSetting(any)).thenAnswer((_) async => 'on');
+        when(printer.getSetting(any))
+            .thenAnswer((_) async => Result.success('on'));
         result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
-          getSetting: () => printer.getSetting('test'),
+          getSetting: () async {
+            final result = await printer.getSetting('test');
+            return result.success ? result.data : null;
+          },
           desiredState: true,
         );
         expect(result.success, isTrue);
         
         // Test "0" as false
-        when(printer.getSetting(any)).thenAnswer((_) async => '0');
+        when(printer.getSetting(any))
+            .thenAnswer((_) async => Result.success('0'));
         result = await verifier.setBooleanState(
           operationName: 'Test',
           command: 'CMD',
-          getSetting: () => printer.getSetting('test'),
+          getSetting: () async {
+            final result = await printer.getSetting('test');
+            return result.success ? result.data : null;
+          },
           desiredState: false,
         );
         expect(result.success, isTrue);
@@ -237,12 +253,16 @@ void main() {
 
     group('string state validation', () {
       test('setStringState handles null values correctly', () async {
-        when(printer.getSetting(any)).thenAnswer((_) async => null);
+        when(printer.getSetting(any))
+            .thenAnswer((_) async => Result.success(null));
         
         final result = await verifier.setStringState(
           operationName: 'Test',
           command: 'CMD',
-          getSetting: () => printer.getSetting('test'),
+          getSetting: () async {
+            final getResult = await printer.getSetting('test');
+            return getResult.success ? getResult.data : null;
+          },
           validator: (s) => s == '',  // null becomes empty string
         );
         

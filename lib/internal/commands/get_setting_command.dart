@@ -15,21 +15,21 @@ class GetSettingCommand extends PrinterCommand<String?> {
   
   @override
   Future<Result<String?>> execute() async {
-    try {
-      logger.debug('Getting setting: $setting');
-      final value = await printer.getSetting(setting);
-      
-      if (value != null && value.isNotEmpty) {
-        final parsed = ZebraSGDCommands.parseResponse(value);
-        logger.debug('Setting $setting = $parsed');
-        return Result.success(parsed);
-      }
-      
-      logger.debug('Setting $setting returned null or empty');
-      return Result.success(null);
-    } catch (e) {
-      logger.error('Failed to get setting $setting', e);
-      return Result.error('Failed to get setting $setting: $e');
+    logger.debug('Getting setting: $setting');
+    
+    // ZebraPrinter method is exception-free and already bridged
+    final result = await printer.getSetting(setting);
+
+    if (result.success) {
+      // Add business logic (SGD response parsing)
+      final parsed = result.data != null
+          ? ZebraSGDCommands.parseResponse(result.data!)
+          : null;
+      logger.debug('Setting $setting = $parsed');
+      return Result.success(parsed);
+    } else {
+      // Propagate ZebraPrinter error, preserve context
+      return Result.errorFromResult(result, 'Setting retrieval failed');
     }
   }
 } 

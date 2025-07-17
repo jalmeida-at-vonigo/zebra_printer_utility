@@ -137,6 +137,15 @@ class ReadinessOptions {
   /// Whether to enable verbose logging
   final bool verboseLogging;
 
+  /// Check if any readiness check is enabled
+  bool get hasAnyCheckEnabled =>
+      checkConnection ||
+      checkMedia ||
+      checkHead ||
+      checkPause ||
+      checkErrors ||
+      checkLanguage;
+
   /// Creates a copy with modified options
   ReadinessOptions copyWith({
     bool? checkConnection,

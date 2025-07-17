@@ -11,14 +11,18 @@ class CheckConnectionCommand extends PrinterCommand<bool> {
   
   @override
   Future<Result<bool>> execute() async {
-    try {
-      logger.debug('Checking printer connection');
-      final isConnected = await printer.isPrinterConnected();
-      logger.debug('Connection status: $isConnected');
-      return Result.success(isConnected);
-    } catch (e) {
-      logger.error('Failed to check connection', e);
-      return Result.error('Failed to check connection: $e');
+    logger.debug('Checking printer connection');
+    
+    // ZebraPrinter handles ALL ZSDK errors and returns Result<bool>
+    // No try-catch needed - ZebraPrinter is exception-free
+    final result = await printer.isPrinterConnected();
+
+    if (result.success) {
+      logger.debug('Connection status: ${result.data}');
+      return Result.success(result.data!);
+    } else {
+      // Simply propagate the already-bridged error from ZebraPrinter
+      return Result.errorFromResult(result, 'Connection check failed');
     }
   }
 } 

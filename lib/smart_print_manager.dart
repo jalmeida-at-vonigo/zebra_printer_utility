@@ -1,12 +1,12 @@
 import 'dart:async';
 
+
 import 'internal/logger.dart';
 import 'models/communication_policy_event.dart';
 import 'models/communication_policy_options.dart';
 import 'models/print_enums.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
-import 'models/readiness_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
@@ -14,28 +14,26 @@ import 'zebra_sgd_commands.dart';
 
 /// Smart print manager for handling complex print workflows
 class SmartPrintManager {
-  
   SmartPrintManager(this._printerManager);
   // Private fields
   final ZebraPrinterManager _printerManager;
   final Logger _logger = Logger.withPrefix('SmartPrintManager');
-  
+
   // Event stream
   StreamController<PrintEvent>? _eventController;
-  
+
   // Timers
   Timer? _timeoutTimer;
   Timer? _statusCheckTimer;
 
   // State tracking
   bool _isCancelled = false;
-  final bool _isConnected = false;
   DateTime? _startTime;
   Map<String, dynamic>? _lastPrinterStatus;
   PrintStep _currentStep = PrintStep.initializing;
   int _currentAttempt = 1;
   int _maxAttempts = 3;
-  
+
   // Synchronization lock for thread safety
   bool _isRunning = false;
 
@@ -49,11 +47,9 @@ class SmartPrintManager {
   Stream<PrintEvent> smartPrint({
     required String data,
     ZebraDevice? device,
-    PrintFormat? format,
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
-    bool checkStatusBeforePrint = true,
-    bool waitForCompletion = true,
+    PrintOptions? options,
   }) async* {
     // Prevent concurrent smart print operations
     if (_isRunning) {
@@ -74,21 +70,22 @@ class SmartPrintManager {
     _currentAttempt = 1;
     _maxAttempts = maxAttempts;
     _startTime = DateTime.now();
-    
+
     // Create new event controller for this print operation
     await _eventController?.close();
     _eventController = StreamController<PrintEvent>();
-    
+
+    // Convert null options to empty instance to avoid ?? operators throughout
+    options ??= const PrintOptions();
+
     // Run the print workflow in the background FIRST (this produces the events)
     _runPrintWorkflow(
       data: data,
       device: device,
-      format: format,
       timeout: timeout,
-      checkStatusBeforePrint: checkStatusBeforePrint,
-      waitForCompletion: waitForCompletion,
+      options: options,
     );
-    
+
     // Then yield the event stream (this consumes the events)
     yield* eventStream;
   }
@@ -97,11 +94,10 @@ class SmartPrintManager {
   Future<void> _runPrintWorkflow({
     required String data,
     ZebraDevice? device,
-    PrintFormat? format,
     required Duration timeout,
-    required bool checkStatusBeforePrint,
-    required bool waitForCompletion,
+    required PrintOptions options,
   }) async {
+
     // Set up timeout timer
     _timeoutTimer = Timer(timeout, () {
       if (!_isCancelled) {
@@ -113,17 +109,33 @@ class SmartPrintManager {
         );
       }
     });
-    
+
     try {
       // Step 1: Initialize and detect format
       await _updateStep(PrintStep.initializing, 'Initializing print operation');
-      
-      // Detect format once at the beginning to avoid redundant detection
-      final detectedFormat = format ??
-          ZebraSGDCommands.detectDataLanguage(data) ??
-          PrintFormat.zpl;
 
-      _logger.info('Smart print format: ${detectedFormat.name}');
+      // Detect format from PrintOptions or data
+      final PrintFormat? format =
+          options.formatOrDefault ?? ZebraSGDCommands.detectDataLanguage(data);
+      if (format == null) {
+        _eventController?.add(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message: 'Unknown or unsupported print format',
+            recoverability: ErrorRecoverability.nonRecoverable,
+            errorCode: ErrorCodes.printDataInvalidFormat.code,
+          ),
+          stepInfo: _createStepInfo(PrintStep.failed, 'Invalid print format'),
+        ));
+        return;
+      }
+      _logger.info('Smart print format: ${format.name}');
+
+      // Update printOptions with the detected format
+      if (options.format != format) {
+        options = options.copyWith(PrintOptions(format: format));
+      }
 
       // Step 2: Validate data
       final validationResult = await _validatePrintData(data);
@@ -156,9 +168,12 @@ class SmartPrintManager {
         ));
         return;
       }
-      
-      // Step 4: Check printer status (if enabled)
-      if (checkStatusBeforePrint) {
+
+      // Step 4: Check printer status using ReadinessOptions from PrintOptions
+      final readinessOptions = options.readinessOptionsOrDefault;
+
+      // Only perform status checks if any check flags are enabled
+      if (readinessOptions.hasAnyCheckEnabled) {
         final readinessManager = _printerManager.readinessManager;
         if (readinessManager == null) {
           _eventController?.add(PrintEvent(
@@ -173,10 +188,9 @@ class SmartPrintManager {
           ));
           return;
         }
-        // Use the same readiness options as regular print - no aggressive overrides
-        final readinessOptions = ReadinessOptions.quickWithLanguage();
+        
         final readinessResult = await readinessManager.prepareForPrint(
-          detectedFormat,
+          format,
           readinessOptions,
           onStatus: (event) {
             _eventController?.add(PrintEvent(
@@ -218,7 +232,7 @@ class SmartPrintManager {
       }
 
       // Step 5: Send print data
-      final printResult = await _sendPrintData(data, detectedFormat, timeout);
+      final printResult = await _sendPrintData(data, timeout, options);
       if (!printResult.success) {
         _eventController?.add(PrintEvent(
           type: PrintEventType.errorOccurred,
@@ -232,13 +246,13 @@ class SmartPrintManager {
         ));
         return;
       }
-      
+
       // Step 6: Wait for completion (if enabled)
-      if (waitForCompletion) {
+      if (options.waitForPrintCompletionOrDefault) {
         await _updateStep(
             PrintStep.waitingForCompletion, 'Waiting for print completion');
         final completionResult =
-            await _printerManager.waitForPrintCompletion(data, detectedFormat);
+            await _printerManager.waitForPrintCompletion(data, format);
         if (!completionResult.success) {
           _eventController?.add(PrintEvent(
             type: PrintEventType.errorOccurred,
@@ -254,14 +268,15 @@ class SmartPrintManager {
         }
       }
 
-      // Step 7: Complete
-      await _updateStep(PrintStep.completed, 'Print operation completed successfully');
+      // Step 6.5: Complete
+      await _updateStep(
+          PrintStep.completed, 'Print operation completed successfully');
       _eventController?.add(PrintEvent(
         type: PrintEventType.completed,
         timestamp: DateTime.now(),
-        stepInfo: _createStepInfo(PrintStep.completed, 'Print operation completed'),
+        stepInfo:
+            _createStepInfo(PrintStep.completed, 'Print operation completed'),
       ));
-      
     } catch (e, stack) {
       _logger.error('Unexpected error in smart print', e, stack);
       await _handleError(
@@ -283,7 +298,8 @@ class SmartPrintManager {
     _eventController?.add(PrintEvent(
       type: PrintEventType.cancelled,
       timestamp: DateTime.now(),
-      stepInfo: _createStepInfo(PrintStep.cancelled, 'Print operation cancelled'),
+      stepInfo:
+          _createStepInfo(PrintStep.cancelled, 'Print operation cancelled'),
     ));
   }
 
@@ -337,8 +353,10 @@ class SmartPrintManager {
     return trimmed.isNotEmpty;
   }
 
-  /// Connect to printer with retry logic (delegated to ZebraPrinterManager)
+  /// Connect to printer with retry logic (delegated to CommunicationPolicy)
   Future<Result<void>> _connectToPrinter(ZebraDevice? device) async {
+    await _updateStep(PrintStep.connecting, 'Connecting to printer...');
+
     return await _printerManager.connect(
       device,
       options: CommunicationPolicyOptions(
@@ -384,15 +402,13 @@ class SmartPrintManager {
 
   /// Send print data with retry logic (delegated to CommunicationPolicy)
   Future<Result<void>> _sendPrintData(
-      String data, PrintFormat format, Duration timeout) async {
+      String data, Duration timeout, PrintOptions options) async {
+    await _updateStep(PrintStep.sending, 'Sending print data...');
+
     return await _printerManager.communicationPolicy!.execute(
       () async {
-        // Track the data and format for completion logic
-        // Use simple print options since readiness is already handled
-        final printOptions = PrintOptions.withoutCompletion().copyWith(
-          format: format,
-        );
-        return await _printerManager.print(data, options: printOptions);
+        // Use the provided options which already contain the format and other settings
+        return await _printerManager.print(data, options: options);
       },
       'Send Print Data',
       options: CommunicationPolicyOptions(
@@ -440,7 +456,7 @@ class SmartPrintManager {
   Future<void> _updateStep(PrintStep step, String message) async {
     _currentStep = step;
     _logger.info('Print step: $step - $message');
-    
+
     _eventController?.add(PrintEvent(
       type: PrintEventType.stepChanged,
       timestamp: DateTime.now(),
@@ -456,42 +472,20 @@ class SmartPrintManager {
   }) async {
     final errorInfo = PrintErrorInfo(
       message: errorCode.formatMessage(formatArgs),
-      recoverability: _determineRecoverability(errorCode),
+      recoverability: _mapCategoryToRecoverability(errorCode.category),
       errorCode: errorCode.code,
       stackTrace: stackTrace,
-      recoveryHint: _getRecoveryHint(errorCode),
+      recoveryHint: errorCode.recoveryHint,
     );
-    
+
     _logger.error('Print error: ${errorInfo.message}', null, stackTrace);
-    
+
     _eventController?.add(PrintEvent(
       type: PrintEventType.errorOccurred,
       timestamp: DateTime.now(),
       errorInfo: errorInfo,
       stepInfo: _createStepInfo(PrintStep.failed, errorInfo.message),
     ));
-  }
-
-  /// Get recovery hint for error
-  String? _getRecoveryHint(ErrorCode errorCode) {
-    switch (errorCode.code) {
-      case 'HEAD_OPEN':
-        return 'Close the printer head and try again';
-      case 'OUT_OF_PAPER':
-        return 'Add paper to the printer and try again';
-      case 'PRINTER_PAUSED':
-        return 'Resume the printer and try again';
-      case 'RIBBON_ERROR':
-        return 'Check the ribbon and try again';
-      case 'BLUETOOTH_DISABLED':
-        return 'Enable Bluetooth in device settings';
-      case 'NO_PERMISSION':
-        return 'Grant Bluetooth permissions in app settings';
-      case 'CONNECTION_TIMEOUT':
-        return 'Check network connection and printer power';
-      default:
-        return null;
-    }
   }
 
   /// Create step info for current state
@@ -503,27 +497,6 @@ class SmartPrintManager {
       maxAttempts: _maxAttempts,
       elapsed: DateTime.now().difference(_startTime ?? DateTime.now()),
     );
-  }
-
-  /// Determine error recoverability
-  ErrorRecoverability _determineRecoverability(ErrorCode errorCode) {
-    switch (errorCode.category) {
-      case 'Connection':
-        return ErrorRecoverability.recoverable;
-      case 'Operation':
-        return ErrorRecoverability.recoverable;
-      case 'Print':
-        // Some print errors are recoverable (timeouts), others are not (hardware)
-        if (errorCode.code == 'PRINT_TIMEOUT' ||
-            errorCode.code == 'PRINTER_PAUSED') {
-          return ErrorRecoverability.recoverable;
-        }
-        return ErrorRecoverability.nonRecoverable;
-      case 'Data':
-        return ErrorRecoverability.nonRecoverable;
-      default:
-        return ErrorRecoverability.unknown;
-    }
   }
 
   /// Cleanup resources
@@ -591,9 +564,35 @@ class SmartPrintManager {
   /// Get last known printer status
   Map<String, dynamic>? get lastPrinterStatus => _lastPrinterStatus;
 
-  /// Check if currently connected
-  bool get isConnected => _isConnected;
 
   /// Check if operation is cancelled
   bool get isCancelled => _isCancelled;
-} 
+
+  /// Map ErrorCode category to ErrorRecoverability
+  ErrorRecoverability _mapCategoryToRecoverability(ResultCategory category) {
+    switch (category) {
+      case ResultCategory.connection:
+        return ErrorRecoverability.recoverable;
+      case ResultCategory.operation:
+        return ErrorRecoverability.recoverable;
+      case ResultCategory.print:
+        return ErrorRecoverability.possiblyRecoverable;
+      case ResultCategory.data:
+        return ErrorRecoverability.nonRecoverable;
+      case ResultCategory.discovery:
+        return ErrorRecoverability.recoverable;
+      case ResultCategory.status:
+        return ErrorRecoverability.recoverable;
+      case ResultCategory.configuration:
+        return ErrorRecoverability.possiblyRecoverable;
+      case ResultCategory.command:
+        return ErrorRecoverability.recoverable;
+      case ResultCategory.platform:
+        return ErrorRecoverability.possiblyRecoverable;
+      case ResultCategory.system:
+        return ErrorRecoverability.possiblyRecoverable;
+      case ResultCategory.validation:
+        return ErrorRecoverability.nonRecoverable;
+    }
+  }
+}

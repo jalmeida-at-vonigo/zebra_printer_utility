@@ -39,8 +39,6 @@ class ZebraPrinterManager {
   StreamController<String>? _statusStreamController;
   final Logger _logger = Logger.withPrefix('ZebraPrinterManager');
 
-  // Smart print manager instance
-
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter? get printer => _printer;
 
@@ -303,8 +301,8 @@ class ZebraPrinterManager {
       }
 
       // Step 2: Detect data format
-      final printOptions = options ?? PrintOptions.defaults();
-      final detectedFormat = printOptions.format ??
+      options = PrintOptions.defaults().copyWith(options);
+      final detectedFormat = options.formatOrDefault ??
           ZebraSGDCommands.detectDataLanguage(data) ??
           PrintFormat.zpl;
       _logger.info('Manager: Detected print format: ${detectedFormat.name}');
@@ -314,7 +312,7 @@ class ZebraPrinterManager {
           'Manager: Preparing printer for ${detectedFormat.name} printing');
       _statusStreamController?.add('Preparing printer...');
 
-      final readinessOptions = printOptions.readinessOptions;
+      final readinessOptions = options.readinessOptionsOrDefault;
 
       final prepareResult = await _readinessManager!.prepareForPrint(
         detectedFormat,
@@ -407,7 +405,7 @@ class ZebraPrinterManager {
       }
 
       // Step 7: Wait for print completion with format-specific delays (if enabled)
-      if (printOptions.waitForPrintCompletion) {
+      if (options.waitForPrintCompletionOrDefault) {
         final completionResult =
             await waitForPrintCompletion(data, detectedFormat);
         if (!completionResult.success) {
@@ -561,7 +559,8 @@ class ZebraPrinterManager {
   /// Primitive: Check if a printer is currently connected
   Future<bool> isConnected() async {
     await _ensureInitialized();
-    return await _printer!.isPrinterConnected();
+    final result = await _printer!.isPrinterConnected();
+    return result.success ? (result.data ?? false) : false;
   }
 
   /// Primitive: Rotate print orientation

@@ -170,22 +170,34 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  void startScanning() => super.noSuchMethod(
+  _i6.Future<_i4.Result<void>> startScanning() => (super.noSuchMethod(
         Invocation.method(
           #startScanning,
           [],
         ),
-        returnValueForMissingStub: null,
-      );
+        returnValue: _i6.Future<_i4.Result<void>>.value(_FakeResult_2<void>(
+          this,
+          Invocation.method(
+            #startScanning,
+            [],
+          ),
+        )),
+      ) as _i6.Future<_i4.Result<void>>);
 
   @override
-  void stopScanning() => super.noSuchMethod(
+  _i6.Future<_i4.Result<void>> stopScanning() => (super.noSuchMethod(
         Invocation.method(
           #stopScanning,
           [],
         ),
-        returnValueForMissingStub: null,
-      );
+        returnValue: _i6.Future<_i4.Result<void>>.value(_FakeResult_2<void>(
+          this,
+          Invocation.method(
+            #stopScanning,
+            [],
+          ),
+        )),
+      ) as _i6.Future<_i4.Result<void>>);
 
   @override
   _i6.Future<_i4.Result<void>> connectToPrinter(String? address) =>
@@ -254,38 +266,38 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i6.Future<_i4.Result<Map<String, dynamic>>>);
 
   @override
-  _i6.Future<String?> getSetting(String? setting) => (super.noSuchMethod(
+  _i6.Future<_i4.Result<Map<String, dynamic>>> getDetailedPrinterStatus() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getDetailedPrinterStatus,
+          [],
+        ),
+        returnValue: _i6.Future<_i4.Result<Map<String, dynamic>>>.value(
+            _FakeResult_2<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #getDetailedPrinterStatus,
+            [],
+          ),
+        )),
+      ) as _i6.Future<_i4.Result<Map<String, dynamic>>>);
+
+  @override
+  _i6.Future<_i4.Result<String?>> getSetting(String? setting) =>
+      (super.noSuchMethod(
         Invocation.method(
           #getSetting,
           [setting],
         ),
-        returnValue: _i6.Future<String?>.value(),
-      ) as _i6.Future<String?>);
-
-  @override
-  _i6.Future<_i4.Result<void>> setSetting(
-    String? setting,
-    String? value,
-  ) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #setSetting,
-          [
-            setting,
-            value,
-          ],
-        ),
-        returnValue: _i6.Future<_i4.Result<void>>.value(_FakeResult_2<void>(
+        returnValue:
+            _i6.Future<_i4.Result<String?>>.value(_FakeResult_2<String?>(
           this,
           Invocation.method(
-            #setSetting,
-            [
-              setting,
-              value,
-            ],
+            #getSetting,
+            [setting],
           ),
         )),
-      ) as _i6.Future<_i4.Result<void>>);
+      ) as _i6.Future<_i4.Result<String?>>);
 
   @override
   void rotate() => super.noSuchMethod(
@@ -297,13 +309,19 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i6.Future<bool> isPrinterConnected() => (super.noSuchMethod(
+  _i6.Future<_i4.Result<bool>> isPrinterConnected() => (super.noSuchMethod(
         Invocation.method(
           #isPrinterConnected,
           [],
         ),
-        returnValue: _i6.Future<bool>.value(false),
-      ) as _i6.Future<bool>);
+        returnValue: _i6.Future<_i4.Result<bool>>.value(_FakeResult_2<bool>(
+          this,
+          Invocation.method(
+            #isPrinterConnected,
+            [],
+          ),
+        )),
+      ) as _i6.Future<_i4.Result<bool>>);
 
   @override
   _i6.Future<void> nativeMethodCallHandler(_i3.MethodCall? methodCall) =>

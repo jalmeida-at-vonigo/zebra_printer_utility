@@ -4,8 +4,8 @@ import 'readiness_options.dart';
 /// Options for configuring print operations
 class PrintOptions {
   const PrintOptions({
-    this.waitForPrintCompletion = true,
-    this.readinessOptions = const ReadinessOptions(),
+    this.waitForPrintCompletion,
+    this.readinessOptions,
     this.format,
   });
 
@@ -29,24 +29,32 @@ class PrintOptions {
       );
 
   /// Whether to wait for print completion after sending data
-  final bool waitForPrintCompletion;
+  final bool? waitForPrintCompletion;
 
   /// Readiness options for printer preparation
-  final ReadinessOptions readinessOptions;
+  final ReadinessOptions? readinessOptions;
 
   /// Print format to use (null for auto-detection)
   final PrintFormat? format;
 
-  /// Creates a copy with modified options
-  PrintOptions copyWith({
-    bool? waitForPrintCompletion,
-    ReadinessOptions? readinessOptions,
-    PrintFormat? format,
-  }) =>
-      PrintOptions(
-        waitForPrintCompletion:
-            waitForPrintCompletion ?? this.waitForPrintCompletion,
-        readinessOptions: readinessOptions ?? this.readinessOptions,
-        format: format ?? this.format,
-      );
+  /// Gets waitForPrintCompletion with default value
+
+  bool get waitForPrintCompletionOrDefault => waitForPrintCompletion ?? true;
+
+  /// Gets readinessOptions with default value
+  ReadinessOptions get readinessOptionsOrDefault =>
+      readinessOptions ?? ReadinessOptions.quickWithLanguage();
+
+  /// Gets format with default value (null for auto-detection)
+  PrintFormat? get formatOrDefault => format;
+
+  /// Creates a copy by merging with another PrintOptions, copying only non-null properties
+  PrintOptions copyWith(PrintOptions? other) {
+    return PrintOptions(
+      waitForPrintCompletion:
+          other?.waitForPrintCompletion ?? waitForPrintCompletion,
+      readinessOptions: other?.readinessOptions ?? readinessOptions,
+      format: other?.format ?? format,
+    );
+  }
 } 

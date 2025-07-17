@@ -1,9 +1,11 @@
 import 'dart:async';
+
 import '../../models/communication_policy_event.dart';
 import '../../models/communication_policy_options.dart';
 import '../../models/result.dart';
 import '../../zebra_printer.dart';
 import 'logger.dart';
+import 'zebra_error_bridge.dart';
 
 /// Centralized communication policy for printer operations with optimistic execution
 /// 
@@ -41,6 +43,9 @@ class CommunicationPolicy {
   /// Status update callback for real-time updates
   final void Function(String status)? onStatusUpdate;
   
+  /// Execution state tracking to prevent policy nesting
+  bool _isExecuting = false;
+  
   /// Connection timeout settings
   static const Duration _connectionCheckTimeout = Duration(minutes: 5);
   static const Duration _operationTimeout = Duration(seconds: 10);
@@ -56,6 +61,20 @@ class CommunicationPolicy {
     String operationName, {
     CommunicationPolicyOptions? options,
   }) async {
+    // ✅ NEW: Detect nested execution
+    if (_isExecuting) {
+      _logger.debug(
+          'Policy already executing - using pass-through mode for $operationName');
+      try {
+        return await operation(); // Simple execution, no retry logic
+      } catch (e, stack) {
+        return ZebraErrorBridge.fromError<T>(e, stackTrace: stack);
+      }
+    }
+
+    // ✅ NEW: Mark as executing
+    _isExecuting = true;
+    try {
     // Define the default options
     const defaultOptions = CommunicationPolicyOptions(
       skipConnectionCheck: false,
@@ -86,6 +105,9 @@ class CommunicationPolicy {
         skipConnectionCheck: effectiveOptions.skipConnectionCheck ?? false,
         onEvent: effectiveOptions.onEvent,
       );
+    }
+    } finally {
+      _isExecuting = false;
     }
   }
 
@@ -124,7 +146,10 @@ class CommunicationPolicy {
       }
       // Step 3: React to failures - check if it's connection-related
       final errorMessage = result.error!.message.toLowerCase();
-      if (_isConnectionError(errorMessage)) {
+      if (errorMessage.contains('connection') ||
+          errorMessage.contains('timeout') ||
+          errorMessage.contains('network') ||
+          errorMessage.contains('bluetooth')) {
         _logger.warning('Connection error detected in $operationName: ${result.error?.message}');
         onStatusUpdate?.call('Connection error - attempting recovery...');
         // Step 4: Handle connection failure and retry
@@ -137,7 +162,9 @@ class CommunicationPolicy {
     } catch (e) {
       _logger.error('Unexpected error in $operationName: $e');
       onStatusUpdate?.call('Unexpected error: $e');
-      return Result.error('Unexpected error in $operationName: $e');
+      
+      // Use centralized error bridge for better error handling
+      return ZebraErrorBridge.fromError<T>(e);
     }
   }
 
@@ -182,6 +209,31 @@ class CommunicationPolicy {
             message: '$operationName failed: ${result.error?.message}',
             error: result.error,
           ));
+          
+          // Use type-safe Result properties to determine if we should abort early
+          if (result.isPermissionError) {
+            _logger.warning(
+                'Permission error detected - aborting retries for $operationName');
+            onEvent?.call(CommunicationPolicyEvent(
+              type: CommunicationPolicyEventType.failed,
+              attempt: attempt,
+              maxAttempts: maxAttempts,
+              message: '$operationName aborted due to permission error',
+              error: result.error,
+            ));
+            return result; // Don't re-bridge, preserve original ZebraPrinter error
+          } else if (result.isHardwareError) {
+            _logger.warning(
+                'Hardware error detected - aborting retries for $operationName');
+            onEvent?.call(CommunicationPolicyEvent(
+              type: CommunicationPolicyEventType.failed,
+              attempt: attempt,
+              maxAttempts: maxAttempts,
+              message: '$operationName aborted due to hardware error',
+              error: result.error,
+            ));
+            return result; // Don't re-bridge, preserve original ZebraPrinter error
+          }
         }
       } catch (e) {
         onEvent?.call(CommunicationPolicyEvent(
@@ -210,7 +262,11 @@ class CommunicationPolicy {
       maxAttempts: maxAttempts,
       message: '$operationName failed after $maxAttempts attempts',
     ));
-    return Result.error('$operationName failed after $maxAttempts attempts');
+    // Use bridge for final failure with context about what types of errors were encountered
+    return ZebraErrorBridge.fromError<T>(
+      Exception('$operationName failed after $maxAttempts attempts'),
+      stackTrace: StackTrace.current,
+    );
   }
   
   /// Check if connection check is needed based on timeout
@@ -233,31 +289,53 @@ class CommunicationPolicy {
       _logger.debug('Connection check attempt $attempts/${_maxRetries + 1}');
       
       try {
-        final isConnected =
+        final connectionResult =
             await _printer.isPrinterConnected().timeout(_operationTimeout);
         
-        if (isConnected) {
+        if (connectionResult.success && (connectionResult.data ?? false)) {
           _logger.info('Connection verified successfully');
           return Result.success(true);
         }
         
-        _logger.warning('Connection check failed on attempt $attempts');
+        _logger.warning(
+            'Connection check failed on attempt $attempts: ${connectionResult.error?.message}');
         if (attempts > _maxRetries) {
-          return Result.error('Connection failed after $_maxRetries attempts');
+          return Result.errorFromResult(connectionResult,
+              'Connection check failed after $_maxRetries attempts');
         }
         
         await Future.delayed(_retryDelay * attempts);
         
       } catch (e) {
         _logger.error('Connection check error on attempt $attempts: $e');
+        
+        // Check error type for better error handling
+        final errorMessage = e.toString().toLowerCase();
+        if (errorMessage.contains('timeout')) {
+          _logger.warning('Connection check timed out on attempt $attempts');
+        } else if (errorMessage.contains('permission')) {
+          _logger.error(
+              'Permission error during connection check - aborting retries');
+          return ZebraErrorBridge.fromConnectionError<bool>(
+            e,
+            stackTrace: StackTrace.current,
+          );
+        }
+        
         if (attempts > _maxRetries) {
-          return Result.error('Connection check failed after $_maxRetries attempts: $e');
+          return ZebraErrorBridge.fromConnectionError<bool>(
+            e,
+            stackTrace: StackTrace.current,
+          );
         }
         await Future.delayed(_retryDelay * attempts);
       }
     }
     
-    return Result.error('Unexpected: exceeded maximum connection attempts');
+    return ZebraErrorBridge.fromConnectionError<bool>(
+      Exception('Unexpected: exceeded maximum connection attempts'),
+      stackTrace: StackTrace.current,
+    );
   }
   
   /// Handle connection failure and retry the operation
@@ -296,7 +374,9 @@ class CommunicationPolicy {
     } catch (e) {
       _logger.error('Unexpected error in $operationName retry: $e');
       onStatusUpdate?.call('Unexpected error during retry: $e');
-      return Result.error('Unexpected error in $operationName retry: $e');
+      
+      // Use centralized error bridge for better error handling
+      return ZebraErrorBridge.fromError<T>(e);
     }
   }
   
@@ -352,23 +432,6 @@ class CommunicationPolicy {
       _logger.error('Reconnection error: $e');
       return Result.error('Reconnection error: $e');
     }
-  }
-  
-  /// Check if error is connection-related
-  bool _isConnectionError(String errorMessage) {
-    final connectionKeywords = [
-      'connection',
-      'connected',
-      'disconnect',
-      'timeout',
-      'network',
-      'bluetooth',
-      'wifi',
-      'socket',
-      'communication'
-    ];
-    
-    return connectionKeywords.any((keyword) => errorMessage.contains(keyword));
   }
   
   /// Get connection status (for external use)

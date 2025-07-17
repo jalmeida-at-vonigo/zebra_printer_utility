@@ -187,15 +187,21 @@ void main() {
         expect(result, isA<Result<Map<String, dynamic>>>());
       });
 
-      test('getSetting returns string or null', () async {
+      test('getSetting returns Result<String?>', () async {
         final result = await printer.getSetting('media.status');
-        // Can be null or string, both are valid
-        expect(result, anyOf([isNull, isA<String>()]));
+        expect(result, isA<Result<String?>>());
+        // Data can be null or string, both are valid
+        if (result.success) {
+          expect(result.data, anyOf([isNull, isA<String>()]));
+        }
       });
 
-      test('isPrinterConnected returns boolean', () async {
+      test('isPrinterConnected returns Result<bool>', () async {
         final result = await printer.isPrinterConnected();
-        expect(result, isA<bool>());
+        expect(result, isA<Result<bool>>());
+        if (result.success) {
+          expect(result.data, isA<bool>());
+        }
       });
     });
 

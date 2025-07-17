@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.44] - 2024-12-19
+
+### Changed
+- **Smart Print Workflow**: Now detects print data format (CPCL or ZPL) before printing, checks printer language, and sets the correct mode if needed before sending data.
+- **Status Logic**: Ensures printer is in the correct mode before sending print data, and only sends data after all checks pass.
+- **Code Quality**: Fixed all linter and analysis warnings; codebase is clean and up to standards.
+
+### Technical
+- Implemented smart waiting logic based on print data size and language.
+- Updated command factory and print manager integration for robust, error-free operation.
+- **Type-Safe Error Classification**: Unified ErrorCode and SuccessCode categories using ResultCategory enum
+  - Renamed ErrorCategory to ResultCategory for unified categorization system
+  - Updated all 200+ error codes and 19 success codes to use ResultCategory enum instead of strings
+  - Enhanced type safety with compile-time category checking
+  - Simplified Result classification extensions with direct enum access
+  - Updated SmartPrintManager to work with enum-based category mapping
+  - Eliminated string parsing and mapping logic for better performance
+
 ## [2.0.43] - 2024-12-19
 
 ### Fixed

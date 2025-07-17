@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'models/print_enums.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
 import 'models/result.dart';
@@ -293,10 +292,13 @@ class Zebra {
   static Stream<PrintEvent> smartPrint(
     String data, {
     ZebraDevice? device,
-    PrintFormat? format,
     int maxAttempts = 3,
     Duration timeout = const Duration(seconds: 60),
+    PrintOptions? options,
   }) async* {
+    // Convert null options to empty instance to avoid ?? operators throughout
+    options ??= const PrintOptions();
+
     final initResult = await _ensureInitialized();
     if (!initResult.success) {
       yield PrintEvent(
@@ -326,9 +328,9 @@ class Zebra {
     yield* managerResult.data!.smartPrint(
       data: data,
       device: device,
-      format: format,
       maxAttempts: maxAttempts,
       timeout: timeout,
+      options: options,
     );
   }
 

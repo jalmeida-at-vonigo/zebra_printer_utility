@@ -11,26 +11,18 @@ class GetDetailedPrinterStatusCommand extends PrinterCommand<Map<String, dynamic
 
   @override
   Future<Result<Map<String, dynamic>>> execute() async {
-    try {
-      logger.debug('Getting detailed printer status');
-      
-      final result = await printer.channel.invokeMethod('getDetailedPrinterStatus');
-      
-      if (result is Map<String, dynamic>) {
-        logger.debug('Detailed printer status retrieved successfully');
-        
-        // Enhance the result with analysis and recommendations
-        final enhancedResult = _analyzeStatus(result);
-
-        return Result.success(enhancedResult);
-      } else {
-        logger.error('Invalid response format for detailed printer status');
-        return Result.error(
-            'Invalid response format for detailed printer status - expected Map<String, dynamic>, got ${result.runtimeType}');
-      }
-    } catch (e) {
-      logger.error('Failed to get detailed printer status', e);
-      return Result.error('Failed to get detailed printer status: $e');
+    logger.debug('Getting detailed printer status');
+    
+    // ZebraPrinter method is exception-free and already bridged
+    final result = await printer.getDetailedPrinterStatus();
+    
+    if (result.success) {
+      // Add business logic (analysis and recommendations)
+      final enhancedResult = _analyzeStatus(result.data!);
+      return Result.success(enhancedResult);
+    } else {
+      // Propagate ZebraPrinter error, don't re-bridge
+      return Result.errorFromResult(result, 'Detailed status check failed');
     }
   }
   

@@ -1,10 +1,13 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'internal/logger.dart';
 import 'internal/operation_callback_handler.dart';
 import 'internal/operation_manager.dart';
 import 'internal/permission_manager.dart';
+import 'internal/zebra_error_bridge.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 
@@ -112,47 +115,73 @@ class ZebraPrinter {
   bool shouldSync = false;
 
   // Primitive: Start scanning
-  void startScanning() async {
+  Future<Result<void>> startScanning() async {
     _logger.info('Starting printer discovery process');
     isScanning = true;
     controller.cleanAll();
+    
     try {
       final hasPermission = await PermissionManager.checkBluetoothPermission();
       if (!hasPermission) {
         _logger.warning('Bluetooth permission permanently denied');
-        if (onPermissionDenied != null) {
-          onPermissionDenied!();
-        }
+        return ZebraErrorBridge.fromDiscoveryError<void>(
+          'Bluetooth permission denied',
+          stackTrace: StackTrace.current,
+        );
       }
-      await _operationManager.execute<bool>(
+      
+      final result = await _operationManager.execute<bool>(
         method: 'startScan',
         arguments: {},
         timeout: const Duration(seconds: 30),
       );
-      _logger.info('Printer scan initiated successfully');
-    } catch (e) {
-      _logger.error('Failed to start printer discovery', e);
-      isScanning = false;
-      if (onDiscoveryError != null) {
-        onDiscoveryError!(ErrorCodes.discoveryError.code, e.toString());
+      
+      if (result.success) {
+        _logger.info('Printer scan initiated successfully');
+        return Result.success();
+      } else {
+        isScanning = false;
+        return ZebraErrorBridge.fromDiscoveryError<void>(
+          result.error ?? 'Discovery start failed',
+          stackTrace: StackTrace.current,
+        );
       }
+    } catch (e, stack) {
+      isScanning = false;
+      return ZebraErrorBridge.fromDiscoveryError<void>(
+        e,
+        stackTrace: stack,
+      );
     }
   }
 
   // Primitive: Stop scanning
-  void stopScanning() async {
+  Future<Result<void>> stopScanning() async {
     _logger.info('Stopping printer discovery process');
     isScanning = false;
     shouldSync = true;
+    
     try {
-      await _operationManager.execute<bool>(
+      final result = await _operationManager.execute<bool>(
         method: 'stopScan',
         arguments: {},
         timeout: const Duration(seconds: 5),
       );
-      _logger.info('Printer discovery stopped successfully');
-    } catch (e) {
-      _logger.error('Error stopping scan', e);
+      
+      if (result.success) {
+        _logger.info('Printer discovery stopped successfully');
+        return Result.success();
+      } else {
+        return ZebraErrorBridge.fromDiscoveryError<void>(
+          result.error ?? 'Discovery stop failed',
+          stackTrace: StackTrace.current,
+        );
+      }
+    } catch (e, stack) {
+      return ZebraErrorBridge.fromDiscoveryError<void>(
+        e,
+        stackTrace: stack,
+      );
     }
   }
 
@@ -199,34 +228,38 @@ class ZebraPrinter {
       } else {
         _logger.error('Failed to establish connection to printer: $address');
         controller.selectedAddress = null;
-        return Result.errorCode(
-          ErrorCodes.connectionError,
+        return ZebraErrorBridge.fromConnectionError<void>(
+          result.error ?? 'Connection failed',
+          deviceAddress: address,
+          stackTrace: StackTrace.current,
         );
       }
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
       _logger.error('Connection timeout to printer: $address');
       controller.selectedAddress = null;
-      return Result.errorCode(
-        ErrorCodes.connectionTimeout,
+      return ZebraErrorBridge.fromConnectionError<void>(
+        e,
+        deviceAddress: address,
+        stackTrace: StackTrace.current,
       );
     } on PlatformException catch (e) {
       _logger.error(
           'Platform exception during connection to printer: $address', e);
       controller.selectedAddress = null;
-      return Result.errorCode(
-        ErrorCodes.connectionError,
-        formatArgs: [e.message ?? 'Connection failed'],
+      return ZebraErrorBridge.fromConnectionError<void>(
+        e,
+        deviceAddress: address,
         errorNumber: int.tryParse(e.code),
-        nativeError: e,
+        stackTrace: StackTrace.current,
       );
     } catch (e, stack) {
       _logger.error(
           'Unexpected error during connection to printer: $address', e, stack);
       controller.selectedAddress = null;
-      return Result.errorCode(
-        ErrorCodes.connectionError,
-        formatArgs: ['Connection error: $e'],
-        dartStackTrace: stack,
+      return ZebraErrorBridge.fromConnectionError<void>(
+        e,
+        deviceAddress: address,
+        stackTrace: stack,
       );
     }
   }
@@ -268,10 +301,11 @@ class ZebraPrinter {
       );
     } catch (e, stack) {
       _logger.error('Unexpected error during disconnect', e, stack);
-      return Result.errorCode(
-        ErrorCodes.connectionError,
-        formatArgs: ['Disconnect error: $e'],
-        dartStackTrace: stack,
+      // NEW BRIDGE PATTERN - creates Result.failure() directly from ZSDK error
+      return ZebraErrorBridge.fromConnectionError(
+        e,
+        stackTrace: stack,
+        deviceAddress: controller.selectedAddress,
       );
     }
   }
@@ -290,29 +324,29 @@ class ZebraPrinter {
         return Result.success();
       } else {
         _logger.error('Print operation failed: ${result.error?.message}');
-        return Result.errorCode(
-          ErrorCodes.printError,
+        return ZebraErrorBridge.fromPrintError<void>(
+          result.error ?? 'Print operation failed',
+          stackTrace: StackTrace.current,
         );
       }
-    } on TimeoutException {
+    } on TimeoutException catch (e) {
       _logger.error('Print operation timed out after 30 seconds');
-      return Result.errorCode(
-        ErrorCodes.operationTimeout,
+      return ZebraErrorBridge.fromPrintError<void>(
+        e,
+        stackTrace: StackTrace.current,
       );
     } on PlatformException catch (e) {
       _logger.error('Platform exception during print operation', e);
-      return Result.errorCode(
-        ErrorCodes.printError,
-        formatArgs: [e.message ?? 'Print failed'],
+      return ZebraErrorBridge.fromPrintError<void>(
+        e,
         errorNumber: int.tryParse(e.code),
-        nativeError: e,
+        stackTrace: StackTrace.current,
       );
     } catch (e, stack) {
       _logger.error('Unexpected error during print operation', e, stack);
-      return Result.errorCode(
-        ErrorCodes.printError,
-        formatArgs: ['Print error: $e'],
-        dartStackTrace: stack,
+      return ZebraErrorBridge.fromPrintError<void>(
+        e,
+        stackTrace: stack,
       );
     }
   }
@@ -331,30 +365,77 @@ class ZebraPrinter {
         return Result.successFromResult(result);
       } else {
         _logger.error('Failed to get printer status: ${result.error?.message}');
-        return Result.errorCode(
-          ErrorCodes.statusCheckFailed,
+        return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+          result.error ?? 'Status retrieval failed',
+          isDetailed: false,
+          stackTrace: StackTrace.current,
         );
       }
     } catch (e, stack) {
       _logger.error('Error getting printer status', e, stack);
-      return Result.error('Failed to get printer status: $e',
-          dartStackTrace: stack);
+      return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+        e,
+        isDetailed: false,
+        stackTrace: stack,
+      );
+    }
+  }
+
+  // Primitive: Get detailed printer status
+  Future<Result<Map<String, dynamic>>> getDetailedPrinterStatus() async {
+    _logger.info('Getting detailed printer status');
+    try {
+      final result = await _operationManager.execute<Map<String, dynamic>>(
+        method: 'getDetailedPrinterStatus',
+        arguments: {},
+        timeout: const Duration(seconds: 5),
+      );
+      if (result.success && result.data != null) {
+        _logger.info('Detailed printer status retrieved successfully');
+        return Result.successFromResult(result);
+      } else {
+        _logger.error(
+            'Failed to get detailed printer status: ${result.error?.message}');
+        return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+          result.error ?? 'Detailed status retrieval failed',
+          isDetailed: true,
+          stackTrace: StackTrace.current,
+        );
+      }
+    } catch (e, stack) {
+      _logger.error('Error getting detailed printer status', e, stack);
+      return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+        e,
+        isDetailed: true,
+        stackTrace: stack,
+      );
     }
   }
 
   // Primitive: Get setting
-  Future<String?> getSetting(String setting) async {
+  Future<Result<String?>> getSetting(String setting) async {
     try {
       final result = await _operationManager.execute<String>(
         method: 'getSetting',
         arguments: {'setting': setting},
         timeout: const Duration(seconds: 5),
       );
-      return result.success && (result.data?.isNotEmpty ?? false)
-          ? result.data
-          : null;
-    } catch (e) {
-      return null;
+      if (result.success) {
+        final data = result.data?.isNotEmpty == true ? result.data : null;
+        return Result.success(data);
+      } else {
+        return ZebraErrorBridge.fromCommandError<String?>(
+          result.error ?? 'Setting retrieval failed',
+          command: 'getSetting($setting)',
+          stackTrace: StackTrace.current,
+        );
+      }
+    } catch (e, stack) {
+      return ZebraErrorBridge.fromCommandError<String?>(
+        e,
+        command: 'getSetting($setting)',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -364,16 +445,26 @@ class ZebraPrinter {
   }
 
   // Primitive: Check if printer is connected
-  Future<bool> isPrinterConnected() async {
+  Future<Result<bool>> isPrinterConnected() async {
     try {
       final result = await _operationManager.execute<bool>(
         method: 'isPrinterConnected',
         arguments: {},
         timeout: const Duration(seconds: 5),
       );
-      return result.success && (result.data ?? false);
-    } catch (e) {
-      return false;
+      if (result.success) {
+        return Result.success(result.data ?? false);
+      } else {
+        return ZebraErrorBridge.fromConnectionError<bool>(
+          result.error ?? 'Connection check failed',
+          stackTrace: StackTrace.current,
+        );
+      }
+    } catch (e, stack) {
+      return ZebraErrorBridge.fromConnectionError<bool>(
+        e,
+        stackTrace: stack,
+      );
     }
   }
 

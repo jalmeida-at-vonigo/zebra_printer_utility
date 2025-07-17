@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Zebra Printer Plugin automatically detects the format of print data and ensures the printer is in the correct mode before printing.
+The Zebra Printer Plugin smart print workflow (v2.0.44+) automatically detects the format of print data, checks the printer's current language, sets the correct mode if needed, and only sends data after all checks pass. This ensures robust, error-free printing for all supported Zebra printers.
 
 ## How It Works
 
@@ -17,16 +17,16 @@ The plugin examines the print data to determine its format:
 - Unknown: Neither ZPL nor CPCL markers found
 ```
 
-### 2. Printer Mode Verification
+### 2. Printer Mode Verification & Setting
 
 When printing with auto-detection enabled (default):
 
 ```dart
-// In ZebraPrinterService._doPrint()
+// In SmartPrintManager.smartPrint()
 1. Detect data format (ZPL or CPCL)
 2. Query current printer mode via SGD
 3. If modes don't match, switch printer mode
-4. Send print data
+4. Only send print data after all checks pass
 ```
 
 ### 3. Mode Switching

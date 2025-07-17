@@ -11,28 +11,28 @@ class GetPrinterStatusCommand extends PrinterCommand<Map<String, dynamic>> {
 
   @override
   Future<Result<Map<String, dynamic>>> execute() async {
-    try {
-      logger.debug('Getting printer status');
-      
-      // Use the operation manager to call the native method
-      final result = await printer.channel.invokeMethod('getPrinterStatus');
-      
-      if (result is Map<String, dynamic>) {
-        logger.debug('Printer status retrieved successfully');
-        
-        // Add statusDescription if not present
-        if (!result.containsKey('statusDescription')) {
-          result['statusDescription'] = _generateStatusDescription(result);
-        }
-        
-        return Result.success(result);
-      } else {
-        throw Exception('Invalid response format for printer status');
-      }
-    } catch (e) {
-      logger.error('Failed to get printer status', e);
-      return Result.error('Failed to get printer status: $e');
+    logger.debug('Getting printer status');
+    
+    // ZebraPrinter method is exception-free and already bridged
+    final result = await printer.getPrinterStatus();
+    
+    if (result.success) {
+      // Add business logic (status description generation)
+      final enhanced = _enhanceStatusWithDescription(result.data!);
+      return Result.success(enhanced);
+    } else {
+      // Propagate ZebraPrinter error, don't re-bridge
+      return Result.errorFromResult(result, 'Status check failed');
     }
+  }
+  
+  // Business logic stays in command
+  Map<String, dynamic> _enhanceStatusWithDescription(
+      Map<String, dynamic> status) {
+    if (!status.containsKey('statusDescription')) {
+      status['statusDescription'] = _generateStatusDescription(status);
+    }
+    return status;
   }
   
   /// Generate human-readable status description

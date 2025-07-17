@@ -1,0 +1,264 @@
+# ZEBRA ERROR BRIDGE PATTERN
+
+## Purpose
+[ZebraErrorBridge](mdc:lib/internal/zebra_error_bridge.dart) provides a bridge pattern for converting Zebra Link-OS SDK operation failures into structured Result objects with proper ErrorCode constants.
+
+**Based on**: Zebra Link-OS SDK v1.6.1158 iOS Documentation  
+**Focus**: Operation failures only (NOT PrinterStatus which is for getStatusDetails)
+
+## Architecture
+
+### Bridge Pattern Implementation
+The ZebraErrorBridge acts as a bridge between:
+- **Zebra Link-OS SDK error system** (native errors from ZSDK)
+- **Internal Result-based error handling** (structured Result.failure() objects)
+
+### Core Principle
+**ALL ZSDK operation failures MUST use ZebraErrorBridge instead of generic Result.error()**
+
+## Usage Patterns
+
+### ✅ CORRECT - Using Bridge Methods
+```dart
+import '../zebra_error_bridge.dart';
+
+// For command operations
+catch (e) {
+  return ZebraErrorBridge.fromCommandError<String?>(
+    e,
+    command: 'getSetting($setting)',
+    stackTrace: StackTrace.current,
+  );
+}
+
+// For connection operations  
+catch (e) {
+  return ZebraErrorBridge.fromConnectionError<bool>(
+    e,
+    deviceAddress: deviceAddress,
+    stackTrace: StackTrace.current,
+  );
+}
+
+// For print operations
+catch (e) {
+  return ZebraErrorBridge.fromPrintError<bool>(
+    e,
+    printData: data,
+    stackTrace: StackTrace.current,
+  );
+}
+
+// For status operations
+catch (e) {
+  return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+    e,
+    isDetailed: true,
+    stackTrace: StackTrace.current,
+  );
+}
+```
+
+### ❌ WRONG - Generic Error Handling
+```dart
+// DON'T DO THIS - Using generic Result.error
+catch (e) {
+  return Result.error('Failed to get setting: $e');
+}
+
+// DON'T DO THIS - Manual error classification
+catch (e) {
+  if (e.toString().contains('timeout')) {
+    return ErrorCodes.operationTimeout;
+  }
+  return ErrorCodes.operationError;
+}
+```
+
+## Bridge Methods
+
+### Core Bridge Methods
+* `fromError<T>()` - General ZSDK operation failure
+* `fromConnectionError<T>()` - Connection operation failure  
+* `fromPrintError<T>()` - Print operation failure
+* `fromStatusError<T>()` - Status check operation failure
+* `fromDiscoveryError<T>()` - Discovery operation failure
+* `fromCommandError<T>()` - Command operation failure
+
+### Utility Methods
+* `isConnectionError()` - Check if error is connection-related
+* `isTimeoutError()` - Check if error is timeout-related
+* `isPermissionError()` - Check if error is permission-related
+* `isHardwareError()` - Check if error is hardware-related
+
+## Error Context Enrichment
+
+### Operation Context
+Each bridge method adds relevant context:
+- **Command operations**: `command`, `operationType`, `stackTrace`
+- **Connection operations**: `deviceAddress`, `operationType`, `stackTrace`  
+- **Print operations**: `printDataLength`, `operationType`, `stackTrace`
+- **Status operations**: `isDetailed`, `operationType`, `stackTrace`
+
+### Rich Error Information
+```dart
+// Bridge methods automatically include:
+return Result.errorCode(
+  errorCode,                    // Mapped from ZSDK error
+  formatArgs: [deviceAddress],  // Context-specific args
+  errorNumber: errorNumber,     // Native error number
+  nativeError: originalError,   // Original ZSDK error
+  dartStackTrace: stackTrace,   // Full stack trace
+);
+```
+
+## ZSDK Error Mapping
+
+### Official SDK Error Codes
+Based on documented Zebra Link-OS SDK v1.6.1158 error codes:
+- `ZEBRA_ERROR_NO_CONNECTION` → `ErrorCodes.zebraNoConnection`
+- `ZEBRA_ERROR_WRITE_FAILURE` → `ErrorCodes.zebraWriteFailure`
+- `ZEBRA_ERROR_READ_FAILURE` → `ErrorCodes.zebraReadFailure`
+- `ZEBRA_UNKNOWN_PRINTER_LANGUAGE` → `ErrorCodes.zebraUnknownPrinterLanguage`
+- `ZEBRA_MALFORMED_NETWORK_DISCOVERY_ADDRESS` → `ErrorCodes.zebraMalformedNetworkDiscoveryAddress`
+- And more (see [zebra_error_bridge.dart](mdc:lib/internal/zebra_error_bridge.dart))
+
+### Fallback Classification
+For undocumented errors, the bridge provides intelligent fallbacks:
+- Timeout patterns → `ErrorCodes.operationTimeout`
+- Connection patterns → `ErrorCodes.connectionError`  
+- Permission patterns → `ErrorCodes.noPermission`
+
+## Implementation Requirements
+
+### Command Classes
+All command classes that interact with ZSDK MUST use ZebraErrorBridge:
+```dart
+// ✅ CORRECT
+catch (e) {
+  logger.error('Failed to get setting $setting', e);
+  return ZebraErrorBridge.fromCommandError<String?>(
+    e,
+    command: 'getSetting($setting)',
+    stackTrace: StackTrace.current,
+  );
+}
+```
+
+### Channel Operations
+All direct channel invocations MUST use ZebraErrorBridge:
+```dart
+// ✅ CORRECT  
+try {
+  final result = await printer.channel.invokeMethod('getPrinterStatus');
+  // ... handle success
+} catch (e) {
+  return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(e);
+}
+```
+
+### Operation Manager
+The OperationManager MUST use ZebraErrorBridge for timeouts and failures:
+```dart
+// ✅ CORRECT
+} on TimeoutException catch (e) {
+  return ZebraErrorBridge.fromCommandError<T>(
+    e,
+    command: method,
+    context: {'operationId': operationId, 'timeoutSeconds': timeout.inSeconds},
+  );
+} catch (e) {
+  return ZebraErrorBridge.fromError<T>(
+    e,
+    context: {'operationId': operationId, 'method': method},
+  );
+}
+```
+
+## File Locations
+
+### Core Files
+- **[zebra_error_bridge.dart](mdc:lib/internal/zebra_error_bridge.dart)** - Main bridge implementation
+- **[result.dart](mdc:lib/models/result.dart)** - Zebra-specific ErrorCode constants
+
+### Usage Locations
+- **All command files** in [commands/](mdc:lib/internal/commands/)
+- **[operation_manager.dart](mdc:lib/internal/operation_manager.dart)** - Channel operation errors
+- **[zebra_printer.dart](mdc:lib/zebra_printer.dart)** - Print and connection errors
+- **[communication_policy.dart](mdc:lib/internal/communication_policy.dart)** - Policy execution errors
+
+## Enforcement Rules
+
+### ALWAYS Use Bridge For
+- ✅ Any catch block that handles ZSDK operations
+- ✅ Channel invocation error handling
+- ✅ Native method call failures
+- ✅ Timeout exceptions from ZSDK operations
+
+### NEVER Use Bridge For  
+- ❌ Pure Dart validation errors (use appropriate ErrorCodes directly)
+- ❌ PrinterStatus analysis (that's for getStatusDetails, not failures)
+- ❌ UI-specific error presentation (that's the mobile layer's job)
+
+## Migration Pattern
+
+### From Generic Errors
+```dart
+// OLD
+catch (e) {
+  return Result.error('Operation failed: $e');
+}
+
+// NEW  
+catch (e) {
+  return ZebraErrorBridge.fromError<T>(e, stackTrace: StackTrace.current);
+}
+```
+
+### From Manual Classification
+```dart
+// OLD
+catch (e) {
+  if (e.toString().contains('timeout')) {
+    return Result.errorCode(ErrorCodes.operationTimeout);
+  }
+  return Result.errorCode(ErrorCodes.operationError);
+}
+
+// NEW
+catch (e) {
+  return ZebraErrorBridge.fromCommandError<T>(
+    e,
+    command: operationName,
+    stackTrace: StackTrace.current,
+  );
+}
+```
+
+## Benefits
+
+### Consistency
+- ✅ All ZSDK errors follow the same pattern
+- ✅ Structured error information with rich context
+- ✅ Proper ErrorCode mapping from official SDK documentation
+
+### Debugging
+- ✅ Stack traces preserved
+- ✅ Operation context included
+- ✅ Native error details maintained
+
+### No False Positives
+- ✅ Based on documented ZSDK patterns only
+- ✅ Proper fallback classification
+- ✅ Context-aware error mapping
+
+---
+
+**See also:**
+- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
+- [Edge Case Error Handling](mdc:.cursor/rules/edge-case-error-handling.mdc)
+- [Command Files](mdc:.cursor/rules/command-files.mdc)
+description:
+globs:
+alwaysApply: false
+---

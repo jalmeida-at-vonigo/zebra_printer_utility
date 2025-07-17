@@ -149,10 +149,9 @@ class OperationManager {
       );
       _addLogEntry(timeoutEntry);
       onLog?.call('Operation $operationId timed out: ${e.message}');
-      return Result<T>.error(
-        'Operation "$method" (ID: $operationId) timed out after ${timeout.inSeconds}s on channel "${channel.name}". '
-        'Arguments: ${arguments.toString()}',
-        code: ErrorCodes.operationTimeout.code,
+      return Result.errorCode(
+        ErrorCodes.operationTimeout,
+        formatArgs: [timeout.inSeconds],
         dartStackTrace: StackTrace.current,
       );
     } catch (e) {
@@ -171,11 +170,9 @@ class OperationManager {
       _addLogEntry(errorEntry);
       
       onLog?.call('Operation $operationId failed: $e');
-      return Result<T>.error(
-        'Operation "$method" (ID: $operationId) failed on channel "${channel.name}". '
-        'Arguments: ${arguments.toString()}. '
-        'Error: ${e.toString()}',
-        code: ErrorCodes.operationError.code,
+      return Result.errorCode(
+        ErrorCodes.operationError,
+        formatArgs: [e.toString()],
         dartStackTrace: StackTrace.current,
       );
     } finally {

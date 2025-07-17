@@ -13,9 +13,13 @@ class GetHostStatusCommand extends PrinterCommand<HostStatusInfo> {
 
   @override
   Future<Result<HostStatusInfo>> execute() async {
-    try {
-      logger.debug('Getting host status');
-      final value = await printer.getSetting('device.host_status');
+    logger.debug('Getting host status');
+    
+    // ZebraPrinter method is exception-free and already bridged
+    final result = await printer.getSetting('device.host_status');
+
+    if (result.success) {
+      final value = result.data;
       if (value != null && value.isNotEmpty) {
         final parsed = ParserUtil.parseHostStatus(value);
         logger.debug('Host status parsed: \n');
@@ -23,9 +27,9 @@ class GetHostStatusCommand extends PrinterCommand<HostStatusInfo> {
       }
       logger.debug('Host status returned null or empty');
       return Result.success(ParserUtil.parseHostStatus(null));
-    } catch (e) {
-      logger.error('Failed to get host status', e);
-      return Result.error('Failed to get host status: $e');
+    } else {
+      // Propagate ZebraPrinter error, preserve context
+      return Result.errorFromResult(result, 'Host status retrieval failed');
     }
   }
 } 

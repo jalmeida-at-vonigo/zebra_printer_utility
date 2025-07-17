@@ -9,7 +9,7 @@ A professional Flutter plugin for robust, cross-platform Zebra printer integrati
 - **Cross-platform**: iOS (MFi Bluetooth, Network), Android (Network)
 - **Modern Architecture**: Command pattern, event-driven workflows, manager-based API, and centralized communication policies
 - **Robust Communication**: Centralized connection assurance, timeout handling, and retry logic with policy depth protection
-- **Automatic Format Detection**: ZPL/CPCL auto-detection and mode switching
+- **Automatic Format Detection & Language Management**: ZPL/CPCL auto-detection, printer language check/set, and mode switching before printing
 - **Smart Device Discovery**: Intelligent, real-time printer discovery and selection
 - **Comprehensive Diagnostics**: Status, error, and readiness checks with actionable recommendations
 - **Advanced Error Handling**: Retry logic, error classification, and progress tracking
@@ -128,6 +128,9 @@ eventStream.listen((event) {
   // Handle PrintEvent: step changes, errors, progress, completion
 });
 ```
+
+// NEW in 2.0.44:
+// The smart print workflow now automatically detects the print data format (CPCL or ZPL), checks the printer's current language, sets the correct mode if needed, and only sends data after all checks pass. This ensures robust, error-free printing for all supported Zebra printers.
 
 ---
 

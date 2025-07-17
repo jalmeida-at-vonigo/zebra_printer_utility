@@ -129,10 +129,19 @@ CommunicationPolicy.resetPolicyDepth(); // For testing only
 - Policy depth protection prevents the nested retry issues
 - Backward compatibility is maintained through manager APIs
 
+### Error Handling
+- ALL ZSDK operation failures MUST use [ZebraErrorBridge](mdc:lib/internal/zebra_error_bridge.dart)
+- Use bridge methods in catch blocks for proper error classification
+- Never use generic Result.error() for ZSDK operations
+
 ### Testing Considerations
 - Policy depth protection may affect test scenarios
 - Use `resetPolicyDepth()` for isolated tests
 - Monitor policy statistics during integration tests
+
+**See also:**
+- [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
+- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 description:
 globs:
 alwaysApply: false

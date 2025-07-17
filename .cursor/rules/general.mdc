@@ -1,9 +1,8 @@
----
-alwaysApply: true
----
+# Unified Project Rules
 
-# General Project Standards
+This document consolidates all general project standards,code cleanup guidelines, testing standards, documentation rules, and completion criteria into a single set of direct rules. These must be followed for all tasks without exception.
 
+## Core Project Standards
 - No TODOs or known incomplete work should remain at the end of any task. If you are not able to complete, ask for help.
 - All code must be clean, working, and free of lint or analysis warnings (`flutter analyze` must pass with no issues).
 - No deprecated code is allowed; all code must use the latest APIs and patterns.
@@ -14,38 +13,47 @@ alwaysApply: true
 - All tests must be updated and passing with the proper implementation.
 - If you find unrelated lint or analysis issues, fix them as part of your change.
 
-# API MIGRATION AND CODE CLEANUP STANDARDS
+## API Migration and Code Cleanup Rules
+### Zero Tolerance for Stub Code
+- **NEVER** leave commented-out code with explanatory comments like "These methods no longer exist in the new API".
+- **NEVER** use `skip: 'Method no longer exist in new API'` or similar excuses.
+- **NEVER** leave TODO comments explaining why code was removed or changed.
+- **ALWAYS** complete the migration properly or remove the code entirely.
 
-## Zero Tolerance for Stub Code
-- **NEVER** leave commented-out code with explanatory comments like "These methods no longer exist in the new API"
-- **NEVER** use `skip: 'Method no longer exists in new API'` or similar excuses
-- **NEVER** leave TODO comments explaining why code was removed or changed
-- **ALWAYS** complete the migration properly or remove the code entirely
+### Migration Requirements
+- **Complete Migration**: When APIs change, fully migrate all affected code to the new API.
+- **Remove Legacy Code**: Delete old methods, classes, and interfaces that are no longer used.
+- **Update Tests**: Rewrite tests to use the new API instead of skipping them.
+- **Clean Imports**: Remove unused imports and dependencies.
+- **Update Documentation**: Ensure all documentation reflects the current API.
 
-## Migration Requirements
-- **Complete Migration**: When APIs change, fully migrate all affected code to the new API
-- **Remove Legacy Code**: Delete old methods, classes, and interfaces that are no longer used
-- **Update Tests**: Rewrite tests to use the new API instead of skipping them
-- **Clean Imports**: Remove unused imports and dependencies
-- **Update Documentation**: Ensure all documentation reflects the current API
-
-## Code Cleanup Standards
-- **Remove Dead Code**: Delete unused methods, variables, and classes
-- **Clean Comments**: Remove outdated comments that reference old APIs
-- **Update Examples**: Ensure all examples use current APIs
-- **Fix Linting**: Address all lint warnings and errors
-- **Consistent Patterns**: Use consistent coding patterns throughout
+### Code Cleanup Standards
+- **Remove Dead Code**: Delete unused methods, variables, and classes.
+- **Clean Comments**: Remove outdated comments that reference old APIs.
+- **Update Examples**: Ensure all examples use current APIs.
+- **Fix Linting**: Address all lint warnings and errors.
+- **Consistent Patterns**: Use consistent coding patterns throughout.
 
 ## Testing Standards
-- **No Skipped Tests**: All tests must be functional and passing
-- **Current API Usage**: Tests must use the current API, not legacy methods
-- **Proper Mocks**: Use proper mocking instead of skipping complex operations
-- **Complete Coverage**: Ensure new functionality has proper test coverage
+- **No Skipped Tests**: All tests must be functional and passing.
+- **Current API Usage**: Tests must use the current API, not legacy methods.
+- **Proper Mocks**: Use proper mocking instead of skipping complex operations.
+- **Complete Coverage**: Ensure new functionality has proper test coverage.
 
-# DOCUMENTATION
+## Documentation Rules
+- ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details.
+- The docs are about:
+  - Usability of the API.
+  - Standards about the development and architecture.
+- There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.
 
-* ALWAYS update [README.md](mdc:README.md) and the `.readme` folder to keep the docs in sync with relevant details
-* The docs are about:
-    - Usability of the API
-    - Standards about the development and architecture, and
-* There is no need to write any MIGRATION GUIDE or MIGRATION STEPS anywhere as there was nothing released yet.
+## Completion Criteria
+To consider any task or change complete, you must satisfy all of the following (this governs the definition of done for all work in this codebase and is always applied to every request):
+
+1. Ensure all code is clean, working, and free of lint/analysis warnings (`flutter analyze` must pass with no issues - NOT EVEN info ISSUES).
+2. No TODOs or known incomplete work should remain at the end of any task.
+3. All changes must be documented as required in the documentation section (update `CHANGELOG.md`, `README.md`, and `.readme` as needed).
+4. Always update the version number (patch increments only).
+5. All tests must be updated and passing with the proper implementation.
+6. If you find unrelated lint or analysis issues, fix them as part of your change.
+7. **Before marking a task as complete, reevaluate all git changes against all workspace and user rules to ensure compliance.**

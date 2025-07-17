@@ -26,6 +26,7 @@ _Last updated: 2024-06-13_
 ## 4. File Structure Template
 ```dart
 import '../../zebra_printer.dart';
+import '../zebra_error_bridge.dart';
 import 'send_command_command.dart';
 
 /// Command to send [specific operation] to the printer ([language]-specific)
@@ -35,6 +36,20 @@ class [CommandClassName] extends SendCommandCommand {
   
   @override
   String get operationName => 'Send [Specific Operation] Command';
+  
+  // If overriding execute() method, use ZebraErrorBridge for ZSDK errors:
+  @override
+  Future<Result<void>> execute() async {
+    try {
+      // Command execution logic
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<void>(
+        e,
+        command: [COMMAND_STRING],
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
 }
 ```
 
@@ -140,6 +155,7 @@ final command = SendZplClearBufferCommand(printer); // Don't do this
 - [Command Format Naming](mdc:.cursor/rules/command-format-naming.mdc)
 - [ZebraSGDCommands Utility Rule](mdc:.cursor/rules/zebra-sgd-commands.mdc)
 - [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
 
   
   @override

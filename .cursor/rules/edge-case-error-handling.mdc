@@ -275,6 +275,44 @@ void dispose() {
 - `mobile/src/lib/Widgets/PrinterSelectionPopup/ZebraPrintingPopup.dart` - UI error handling
 - `lib/models/result.dart` - Error code system
 - `lib/zebra_printer_manager.dart` - Status detection
+- `lib/internal/zebra_error_bridge.dart` - ZSDK error conversion bridge
+
+## ZSDK Error Handling
+**ALL ZSDK operation failures MUST use [ZebraErrorBridge](mdc:lib/internal/zebra_error_bridge.dart) instead of generic error handling.**
+
+### Bridge Usage in Commands
+```dart
+// ✅ CORRECT - Use bridge for ZSDK errors
+catch (e) {
+  return ZebraErrorBridge.fromCommandError<String?>(
+    e,
+    command: 'getSetting($setting)',
+    stackTrace: StackTrace.current,
+  );
+}
+
+// ❌ WRONG - Don't use generic Result.error for ZSDK operations
+catch (e) {
+  return Result.error('Failed to get setting: $e');
+}
+```
+
+### Bridge Usage in Status Checking
+```dart
+// Enhanced status checking with bridge error handling
+try {
+  final statusResult = await _printerManager.getDetailedPrinterStatus();
+  if (statusResult.success) {
+    // Handle status analysis
+  }
+} catch (e) {
+  return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+    e,
+    isDetailed: true,
+    stackTrace: StackTrace.current,
+  );
+}
+```
 
 ## Last Updated
 2024-12-19 - Comprehensive edge case error handling architecture

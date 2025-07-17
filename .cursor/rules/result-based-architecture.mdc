@@ -2,14 +2,17 @@
 - [Error Handling Guide](mdc:.readme/guides/error-handling.md)
 - [Development Docs](mdc:.readme/development/README.md)
 - [README.md](mdc:README.md)
+- [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
 
 # RESULT-BASED ARCHITECTURE & ERROR CODE CENTRALIZATION
 
 ## Overview
 The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. **ALL error and success codes MUST be defined in [result.dart](mdc:lib/models/result.dart) and referenced using the centralized constants.**
 
-## Core Principle
+## Core Principles
 **NO hardcoded error or success strings should exist anywhere in the codebase outside of [result.dart](mdc:lib/models/result.dart).**
+
+**ALL ZSDK operation failures MUST use [ZebraErrorBridge](mdc:lib/internal/zebra_error_bridge.dart) instead of generic Result.error().**
 
 ## Core Components
 
@@ -31,6 +34,13 @@ The plugin uses a comprehensive Result-based architecture for consistent error a
   - Formatable message templates using `{0}`, `{1}`, etc.
   - Comprehensive descriptions and categories
   - Utility methods for code lookup
+  - **Zebra-specific error codes** for proper ZSDK error mapping
+
+### ZebraErrorBridge Integration
+- **Purpose**: Bridge pattern for converting ZSDK errors to Result objects
+- **Location**: [lib/internal/zebra_error_bridge.dart](mdc:lib/internal/zebra_error_bridge.dart)
+- **Usage**: ALL ZSDK operation failures must use this bridge instead of generic Result.error()
+- **Benefits**: Proper error classification, rich context, no false positives
 
 ### ErrorInfo & SuccessInfo Classes
 - **Purpose**: Detailed information about errors and successes
@@ -132,7 +142,32 @@ Result.errorCode(
 
 ## Usage Patterns
 
-### Error Handling
+### ZSDK Error Handling (PREFERRED)
+```dart
+// ✅ CORRECT - Use ZebraErrorBridge for all ZSDK operations
+catch (e) {
+  return ZebraErrorBridge.fromCommandError<String?>(
+    e,
+    command: 'getSetting($setting)',
+    stackTrace: StackTrace.current,
+  );
+}
+
+catch (e) {
+  return ZebraErrorBridge.fromConnectionError<bool>(
+    e,
+    deviceAddress: address,
+    stackTrace: StackTrace.current,
+  );
+}
+
+// ❌ WRONG - Don't use generic Result.error for ZSDK operations
+catch (e) {
+  return Result.error('ZSDK operation failed: $e');
+}
+```
+
+### Direct ErrorCode Usage (for non-ZSDK errors)
 ```dart
 return Result.errorCode(ErrorCodes.connectionError);
 return Result.errorCode(
