@@ -89,3 +89,6 @@ ErrorCode _classifyConnectionError(String errorMessage) {
         );
       }
   Analyze all of those places and DRY it out.
+
+
+  - First time ever the screen dances around (maybe by blinking scanning by found?)

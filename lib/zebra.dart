@@ -325,13 +325,17 @@ class Zebra {
       );
       return;
     }
-    yield* managerResult.data!.smartPrint(
+    // Start the smart print operation
+    await managerResult.data!.smartPrint(
       data: data,
       device: device,
       maxAttempts: maxAttempts,
       timeout: timeout,
       options: options,
     );
+    
+    // Stream events from the manager's event stream
+    yield* managerResult.data!.eventStream;
   }
 
   /// Cancel the current smart print operation

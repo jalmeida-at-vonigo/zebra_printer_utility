@@ -7,6 +7,7 @@ export 'operation_log_entry.dart';
 export 'print_enums.dart';
 export 'print_event.dart';
 export 'print_options.dart';
+export 'print_state.dart';
 export 'printer_readiness.dart';
 export 'readiness_operation_event.dart';
 export 'readiness_options.dart';

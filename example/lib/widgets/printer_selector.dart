@@ -160,97 +160,111 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   Widget build(BuildContext context) {
     return Card(
       margin: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.print,
-                      size: 20,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Printer Selection',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.print,
+                        size: 20,
                         color: Theme.of(context).primaryColor,
                       ),
-                    ),
-                    const Spacer(),
-                    // Discovery button
-                    IconButton(
-                      onPressed: _isDiscovering ? null : _startDiscovery,
-                      icon: _isDiscovering
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.refresh),
-                      tooltip: 'Discover printers',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Status
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _selectedDevice != null
-                            ? Colors.green
-                            : Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _status,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[600],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Printer Selection',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Content
-          Expanded(
-            child: _buildContent(),
-          ),
-          // Disconnect button
-          if (_selectedDevice != null)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: OutlinedButton.icon(
-                onPressed: _disconnect,
-                icon: const Icon(Icons.link_off),
-                label: const Text('Disconnect'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
-                ),
+                      // Discovery button
+                      IconButton(
+                        onPressed: _isDiscovering ? null : _startDiscovery,
+                        icon: _isDiscovering
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh),
+                        tooltip: 'Discover printers',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Status
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _selectedDevice != null
+                              ? Colors.green
+                              : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _status,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-        ],
+            // Content
+            ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: 120,
+                maxHeight: 280,
+              ),
+              child: SingleChildScrollView(
+                child: _buildContent(),
+              ),
+            ),
+            // Disconnect button
+            if (_selectedDevice != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: OutlinedButton.icon(
+                  onPressed: _disconnect,
+                  icon: const Icon(Icons.link_off),
+                  label: const Text('Disconnect'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -262,46 +276,56 @@ class _PrinterSelectorState extends State<PrinterSelector> {
 
     if (_devices.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.print_disabled,
-              size: 48,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _isDiscovering ? 'Searching for printers...' : 'No printers found',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            if (!_isDiscovering)
-              TextButton.icon(
-                onPressed: _startDiscovery,
-                icon: const Icon(Icons.search),
-                label: const Text('Start Discovery'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.print_disabled,
+                size: 48,
+                color: Colors.grey[400],
               ),
-          ],
+              const SizedBox(height: 16),
+              Text(
+                _isDiscovering
+                    ? 'Searching for printers...'
+                    : 'No printers found',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              if (!_isDiscovering)
+                TextButton.icon(
+                  onPressed: _startDiscovery,
+                  icon: const Icon(Icons.search),
+                  label: const Text('Start Discovery'),
+                ),
+            ],
+          ),
         ),
       );
     }
 
     return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: _devices.length,
       itemBuilder: (context, index) {
         final device = _devices[index];
         final isSelected = device.address == _selectedDevice?.address;
         
         return ListTile(
+          dense: true,
           leading: CircleAvatar(
             backgroundColor: isSelected
                 ? Theme.of(context).primaryColor
                 : Colors.grey[300],
+            radius: 18,
             child: Icon(
               device.isWifi ? Icons.wifi : Icons.bluetooth,
               color: isSelected ? Colors.white : Colors.grey[600],
-              size: 20,
+              size: 18,
             ),
           ),
           title: Text(device.name),

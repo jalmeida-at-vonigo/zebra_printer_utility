@@ -267,7 +267,7 @@ PRINT''';
     });
 
     _addLog('Starting discovery...', 'info');
-
+      
     try {
       await _printerChannel!.startDiscovery();
     } catch (e) {
@@ -352,16 +352,16 @@ PRINT''';
       // CPCL data preparation (same as library implementation)
       if (_format == editor.PrintFormat.cpcl) {
         preparedData = preparedData.replaceAll(RegExp(r'(?<!\r)\n'), '\r\n');
-        
+
         if (preparedData.trim().endsWith('FORM') &&
             !preparedData.contains('PRINT')) {
           preparedData = '${preparedData.trim()}\r\nPRINT\r\n';
         }
-        
+
         if (!preparedData.endsWith('\r\n')) {
           preparedData += '\r\n';
         }
-        
+
         preparedData += '\r\n\r\n';
       }
 
@@ -453,8 +453,8 @@ PRINT''';
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Left side - Connection and logs
-        SizedBox(
-          width: 400,
+        Expanded(
+          flex: 2,
           child: Column(
             children: [
               // Connection card
@@ -473,6 +473,7 @@ PRINT''';
         const SizedBox(width: 16),
         // Right side - Print data editor
         Expanded(
+          flex: 3,
           child: editor.PrintDataEditor(
             controller: _dataController,
             format: _format,
@@ -504,12 +505,16 @@ PRINT''';
                   color: Theme.of(context).primaryColor,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Direct Channel Connection',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Theme.of(context).primaryColor,
+                Expanded(
+                  child: Text(
+                    'Direct Channel Connection',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               ],
@@ -532,8 +537,11 @@ PRINT''';
                     child: Text(
                       'Connected to ${_selectedDevice!.name}',
                       style: TextStyle(color: Colors.grey[700]),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   OutlinedButton(
                     onPressed: _disconnect,
                     child: const Text('Disconnect'),
@@ -548,7 +556,7 @@ PRINT''';
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _isDiscovering || _printerChannel == null 
-                          ? null 
+                          ? null
                           : _startDiscovery,
                       icon: _isDiscovering
                           ? const SizedBox(
@@ -583,22 +591,24 @@ PRINT''';
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey[300]!),
                         borderRadius: BorderRadius.circular(4),
-                      ),
+                          ),
                       child: Row(
-                        children: [
-                          Icon(
+                            children: [
+                              Icon(
                             device.isWifi ? Icons.wifi : Icons.bluetooth,
                             size: 16,
                             color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 8),
+                              ),
+                              const SizedBox(width: 8),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
                                 Text(
                                   device.name,
                                   style: const TextStyle(fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                 ),
                                 Text(
                                   device.address,
@@ -606,14 +616,16 @@ PRINT''';
                                     fontSize: 12,
                                     color: Colors.grey[600],
                                   ),
-                                ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
                               ],
-                            ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
                 )),
               ],
               // Manual IP entry

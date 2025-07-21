@@ -140,14 +140,16 @@ class _LogPanelState extends State<LogPanel> {
                   color: Theme.of(context).primaryColor,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Operation Log',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
+                Expanded(
+                  child: Text(
+                    'Operation Log',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
                 // Auto-scroll toggle
                 TextButton.icon(
                   onPressed: () {
@@ -157,12 +159,16 @@ class _LogPanelState extends State<LogPanel> {
                   },
                   icon: Icon(
                     _autoScroll ? Icons.vertical_align_bottom : Icons.pan_tool,
-                    size: 16,
+                    size: 14,
                   ),
-                  label: Text(_autoScroll ? 'Auto' : 'Manual'),
+                  label: Text(
+                    _autoScroll ? 'Auto' : 'Manual',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    minimumSize: const Size(0, 28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
                 // Copy button

@@ -152,19 +152,75 @@ class _PrintDataEditorState extends State<PrintDataEditor> {
     }
   }
 
+  Widget _buildFormatToggle() {
+    return SegmentedButton<PrintFormat>(
+      segments: const [
+        ButtonSegment(
+          value: PrintFormat.zpl,
+          label: Text('ZPL'),
+          icon: Icon(Icons.qr_code),
+        ),
+        ButtonSegment(
+          value: PrintFormat.cpcl,
+          label: Text('CPCL'),
+          icon: Icon(Icons.receipt),
+        ),
+      ],
+      selected: {widget.format},
+      onSelectionChanged: (selection) {
+        if (widget.onFormatChanged != null && selection.isNotEmpty) {
+          final newFormat = selection.first;
+          widget.onFormatChanged!(newFormat);
+
+          // Automatically apply a template for the new format
+          final presetsForNewFormat =
+              defaultPresets.where((p) => p.format == newFormat).toList();
+          if (presetsForNewFormat.isNotEmpty) {
+            // Apply the first template for the new format
+            _applyPreset(presetsForNewFormat.first);
+          }
+        }
+      },
+    );
+  }
+
+  Widget _buildPresetSelector() {
+    return SizedBox(
+      height: 32,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final preset
+              in defaultPresets.where((p) => p.format == widget.format))
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                label: Text(preset.name),
+                onPressed: () => _applyPreset(preset),
+                tooltip: preset.description,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Card(
       margin: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header with format selector
+          // Header
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              color: theme.primaryColor.withValues(alpha: 0.1),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(4)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,9 +228,9 @@ class _PrintDataEditorState extends State<PrintDataEditor> {
                 Row(
                   children: [
                     Icon(
-                      Icons.code,
+                      Icons.edit_document,
                       size: 20,
-                      color: Theme.of(context).primaryColor,
+                      color: theme.primaryColor,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -182,74 +238,50 @@ class _PrintDataEditorState extends State<PrintDataEditor> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: Theme.of(context).primaryColor,
+                        color: theme.primaryColor,
                       ),
                     ),
                     const Spacer(),
-                    // Format selector
-                    SegmentedButton<PrintFormat>(
-                      segments: const [
-                        ButtonSegment(
-                          value: PrintFormat.zpl,
-                          label: Text('ZPL'),
-                          icon: Icon(Icons.qr_code),
-                        ),
-                        ButtonSegment(
-                          value: PrintFormat.cpcl,
-                          label: Text('CPCL'),
-                          icon: Icon(Icons.receipt),
-                        ),
-                      ],
-                      selected: {widget.format},
-                      onSelectionChanged: (selection) {
-                        if (widget.onFormatChanged != null && selection.isNotEmpty) {
-                          widget.onFormatChanged!(selection.first);
-                        }
-                      },
-                    ),
+                    // Fullscreen button for mobile
+                    if (MediaQuery.of(context).size.width < 600)
+                      IconButton(
+                        icon: const Icon(Icons.fullscreen),
+                        tooltip: 'Full screen editor',
+                        onPressed: () => _openFullscreenEditor(context),
+                      ),
+                    // Format toggle
+                    _buildFormatToggle(),
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Presets
-                SizedBox(
-                  height: 32,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      for (final preset in defaultPresets
-                          .where((p) => p.format == widget.format))
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            label: Text(preset.name),
-                            onPressed: () => _applyPreset(preset),
-                            tooltip: preset.description,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                // Preset selector
+                _buildPresetSelector(),
               ],
             ),
           ),
-          // Editor
+          // Code editor
           Expanded(
-            child: TextField(
-              controller: widget.controller,
-              maxLines: null,
-              expands: true,
-              scrollController: _scrollController,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 13,
-                height: 1.4,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(4)),
               ),
-              decoration: InputDecoration(
-                hintText: widget.format == PrintFormat.zpl
-                    ? 'Enter ZPL commands here...\n\nExample:\n^XA\n^FO50,50^FDHello World^FS\n^XZ'
-                    : 'Enter CPCL commands here...\n\nExample:\n! 0 200 200 210 1\nTEXT 4 0 30 40 Hello World\nFORM\nPRINT',
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: widget.controller,
+                maxLines: null,
+                expands: true,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                ),
+                decoration: InputDecoration(
+                  hintText:
+                      'Enter ${widget.format.name.toUpperCase()} data here...',
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(16),
+                ),
               ),
             ),
           ),
@@ -257,40 +289,109 @@ class _PrintDataEditorState extends State<PrintDataEditor> {
           if (widget.onPrint != null)
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: widget.isPrinting ? null : widget.onPrint,
-                  icon: widget.isPrinting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.print),
-                  label: Text(widget.isPrinting ? 'Printing...' : 'Print'),
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
+              child: ElevatedButton.icon(
+                onPressed: widget.onPrint,
+                icon: widget.isPrinting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.print),
+                label: Text(widget.isPrinting ? 'Printing...' : 'Print'),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  void _openFullscreenEditor(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => _FullscreenEditor(
+          controller: widget.controller,
+          format: widget.format,
+          onFormatChanged: widget.onFormatChanged ?? ((_) {}),
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenEditor extends StatelessWidget {
+  final TextEditingController controller;
+  final PrintFormat format;
+  final ValueChanged<PrintFormat> onFormatChanged;
+
+  const _FullscreenEditor({
+    required this.controller,
+    required this.format,
+    required this.onFormatChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${format.name.toUpperCase()} Editor'),
+        actions: [
+          // Format toggle
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: SegmentedButton<PrintFormat>(
+              segments: const [
+                ButtonSegment(
+                  value: PrintFormat.zpl,
+                  label: Text('ZPL'),
+                ),
+                ButtonSegment(
+                  value: PrintFormat.cpcl,
+                  label: Text('CPCL'),
+                ),
+              ],
+              selected: {format},
+              onSelectionChanged: (Set<PrintFormat> selected) {
+                if (selected.isNotEmpty) {
+                  final newFormat = selected.first;
+                  onFormatChanged(newFormat);
+
+                  // Automatically apply a template for the new format
+                  final presetsForNewFormat = defaultPresets
+                      .where((p) => p.format == newFormat)
+                      .toList();
+                  if (presetsForNewFormat.isNotEmpty) {
+                    // Apply the first template for the new format
+                    controller.text = presetsForNewFormat.first.data;
+                  }
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+      body: Container(
+        color: Colors.grey[100],
+        child: TextField(
+          controller: controller,
+          maxLines: null,
+          expands: true,
+          autofocus: true,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 14,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Enter ${format.name.toUpperCase()} data here...',
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.all(16),
+          ),
+        ),
       ),
     );
   }

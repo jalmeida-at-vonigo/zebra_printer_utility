@@ -103,9 +103,9 @@ Navigation automatically switches between:
 
 1. **Connect a Zebra printer** to your network or pair via Bluetooth
 2. **Run the app**:
-   ```bash
-   flutter run
-   ```
+```bash
+flutter run
+```
 3. **Select a screen** from the navigation
 4. **Discover and connect** to your printer
 5. **Test the functionality** specific to each screen
