@@ -8,6 +8,7 @@ import 'models/print_event.dart';
 import 'models/print_operation_tracker.dart';
 import 'models/print_options.dart';
 import 'models/print_state.dart';
+import 'models/readiness_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
@@ -107,6 +108,7 @@ class SmartPrintManager {
       isCompleted: false,
       isCancelled: false,
       details: null,
+      printerWarnings: const [],
       startTime: DateTime.now(),
       elapsedTime: Duration.zero,
     );
@@ -703,11 +705,35 @@ class SmartPrintManager {
         _logger.info('Printer prepared successfully');
       }
 
-      // Update state with final readiness details
+      // Update state with final readiness details and proper error classification
+      PrintErrorInfo? readinessError;
+
+      if (readiness.failedFixes.isNotEmpty) {
+        // Convert failed fixes to proper error classification
+        final errorInfo = _classifyReadinessErrors(
+            readiness.failedFixes, readiness.fixErrors);
+        readinessError = errorInfo;
+        
+        _logger.info('=== READINESS DEBUG ===');
+        _logger.info('Failed fixes: ${readiness.failedFixes}');
+        _logger.info('Fix errors: ${readiness.fixErrors}');
+        _logger.info(
+            'Classified error: ${errorInfo.recoverability} - ${errorInfo.message}');
+        _logger.info('Is ready: ${readiness.isReady}');
+        _logger.info('======================');
+      } else {
+        _logger.info('=== READINESS DEBUG ===');
+        _logger.info('No failed fixes - printer ready');
+        _logger.info('Is ready: ${readiness.isReady}');
+        _logger.info('======================');
+      }
+      
       _currentState = _currentState.copyWith(
         details: readiness.isReady
             ? 'Printer ready for print'
             : 'Printer prepared with warnings',
+        currentError: readinessError,
+        printerWarnings: const [], // Keep empty for backward compatibility
       );
       
       // Emit final readiness status
@@ -751,7 +777,10 @@ class SmartPrintManager {
       try {
         final result = await _printerManager.print(
           data,
-          options: PrintOptions(cancellationToken: _cancellationToken),
+          options: PrintOptions(
+            readinessOptions: const ReadinessOptions(),
+            cancellationToken: _cancellationToken,
+          ),
         );
         if (result.success) {
           final tracker = result.data;
@@ -820,6 +849,95 @@ class SmartPrintManager {
     } else {
       return ErrorCodes.printError;
     }
+  }
+
+  /// Classify readiness errors based on failed fixes
+  PrintErrorInfo _classifyReadinessErrors(
+      List<String> failedFixes, Map<String, String> fixErrors) {
+    // Analyze failed fixes to determine the most appropriate error classification
+    final errorMessages = failedFixes
+        .map((key) => fixErrors[key] ?? 'Unknown issue: $key')
+        .where((message) => message.isNotEmpty)
+        .toList();
+
+    final combinedMessage = errorMessages.join('; ');
+    final lowerMessage = combinedMessage.toLowerCase();
+
+    // Determine recoverability and error code based on the type of issue
+    ErrorRecoverability recoverability;
+    ErrorCode errorCode;
+    String? recoveryHint;
+
+    // Check for user-fixable issues (recoverable)
+    if (lowerMessage.contains('head') && lowerMessage.contains('open')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.headOpen;
+      recoveryHint =
+          'Close the printer head and your print job will be processed automatically.';
+    } else if (lowerMessage.contains('paper') ||
+        lowerMessage.contains('media')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.outOfPaper;
+      recoveryHint =
+          'Check paper/media supply and ensure proper loading. Once resolved, your print job will be processed automatically.';
+    } else if (lowerMessage.contains('ribbon')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.ribbonError;
+      recoveryHint =
+          'Check ribbon installation and alignment. Once the ribbon is properly installed, your print job will be processed automatically.';
+    } else if (lowerMessage.contains('temperature')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.temperatureError;
+      recoveryHint =
+          'Allow printer to reach proper operating temperature. Your print job will be processed automatically once the printer is at the correct temperature.';
+    } else if (lowerMessage.contains('calibration')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.calibrationRequired;
+      recoveryHint =
+          'Run printer calibration for current media type. Once calibrated, your print job will be processed automatically.';
+    } else if (lowerMessage.contains('paused')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.printerPaused;
+      recoveryHint = 'Unpause the printer to continue printing.';
+    } else if (lowerMessage.contains('language')) {
+      recoverability = ErrorRecoverability.recoverable;
+      errorCode = ErrorCodes.languageMismatch;
+      recoveryHint =
+          'Set the printer language to match your print data format (ZPL/CPCL).';
+    }
+    // Check for technical issues (non-recoverable)
+    else if (lowerMessage.contains('buffer') ||
+        lowerMessage.contains('memory')) {
+      recoverability = ErrorRecoverability.nonRecoverable;
+      errorCode = ErrorCodes.bufferFull;
+      recoveryHint =
+          'Wait for the printer to process current data or clear the buffer.';
+    } else if (lowerMessage.contains('connection') ||
+        lowerMessage.contains('network')) {
+      recoverability = ErrorRecoverability.nonRecoverable;
+      errorCode = ErrorCodes.connectionError;
+      recoveryHint =
+          'Wait for the printer to process current data or clear the buffer.';
+    } else if (lowerMessage.contains('hardware') ||
+        lowerMessage.contains('sensor')) {
+      recoverability = ErrorRecoverability.nonRecoverable;
+      errorCode = ErrorCodes.printCompletionHardwareError;
+      recoveryHint = 'Check printer hardware and contact support if needed.';
+    }
+    // Default to possibly recoverable
+    else {
+      recoverability = ErrorRecoverability.possiblyRecoverable;
+      errorCode = ErrorCodes.printerNotReady;
+      recoveryHint =
+          'Check printer status and ensure it is ready for printing.';
+    }
+
+    return PrintErrorInfo(
+      message: combinedMessage,
+      recoverability: recoverability,
+      errorCode: errorCode.code,
+      recoveryHint: recoveryHint,
+    );
   }
 
 

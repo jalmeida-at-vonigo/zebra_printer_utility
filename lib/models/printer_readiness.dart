@@ -54,19 +54,16 @@ class PrinterReadiness {
   final ReadinessOptions? _options;
 
   /// Get connection status (lazy)
-  Future<bool> get isConnected async {
-    if (!_connectionRead && (_options?.checkConnection ?? true)) {
-      await _readConnectionStatus();
-    }
-    return _isConnected ?? false;
+  Future<bool?> get isConnected async {
+    return await ensureConnection();
   }
 
   /// Ensure connection status is checked and return the value
-  Future<bool> ensureConnection() async {
+  Future<bool?> ensureConnection() async {
     if (!_connectionRead && (_options?.checkConnection ?? true)) {
       await _readConnectionStatus();
     }
-    return _isConnected ?? false;
+    return _isConnected;
   }
 
   /// Whether connection status has been read
@@ -74,10 +71,7 @@ class PrinterReadiness {
 
   /// Get media status (lazy)
   Future<String?> get mediaStatus async {
-    if (!_mediaRead && (_options?.checkMedia ?? true)) {
-      await _readMediaStatus();
-    }
-    return _mediaStatus;
+    return await ensureMediaStatus();
   }
 
   /// Ensure media status is checked and return the value
@@ -93,10 +87,7 @@ class PrinterReadiness {
 
   /// Get has media (lazy)
   Future<bool?> get hasMedia async {
-    if (!_mediaRead && (_options?.checkMedia ?? true)) {
-      await _readMediaStatus();
-    }
-    return _hasMedia;
+    return await ensureHasMedia();
   }
 
   /// Ensure has media is checked and return the value
@@ -109,10 +100,7 @@ class PrinterReadiness {
 
   /// Get head status (lazy)
   Future<String?> get headStatus async {
-    if (!_headRead && (_options?.checkHead ?? true)) {
-      await _readHeadStatus();
-    }
-    return _headStatus;
+    return await ensureHeadStatus();
   }
 
   /// Ensure head status is checked and return the value
@@ -128,10 +116,7 @@ class PrinterReadiness {
 
   /// Get head closed status (lazy)
   Future<bool?> get headClosed async {
-    if (!_headRead && (_options?.checkHead ?? true)) {
-      await _readHeadStatus();
-    }
-    return _headClosed;
+    return await ensureHeadClosed();
   }
 
   /// Ensure head closed is checked and return the value
@@ -144,15 +129,12 @@ class PrinterReadiness {
 
   /// Get pause status (lazy)
   Future<String?> get pauseStatus async {
-    if (!_pauseRead) {
-      await _readPauseStatus();
-    }
-    return _pauseStatus;
+    return await ensurePauseStatus();
   }
 
   /// Ensure pause status is checked and return the value
   Future<String?> ensurePauseStatus() async {
-    if (!_pauseRead) {
+    if (!_pauseRead && (_options?.checkPause ?? true)) {
       await _readPauseStatus();
     }
     return _pauseStatus;
@@ -163,15 +145,12 @@ class PrinterReadiness {
 
   /// Get is paused status (lazy)
   Future<bool?> get isPaused async {
-    if (!_pauseRead) {
-      await _readPauseStatus();
-    }
-    return _isPaused;
+    return await ensureIsPaused();
   }
 
   /// Ensure is paused is checked and return the value
   Future<bool?> ensureIsPaused() async {
-    if (!_pauseRead) {
+    if (!_pauseRead && (_options?.checkPause ?? true)) {
       await _readPauseStatus();
     }
     return _isPaused;
@@ -179,10 +158,7 @@ class PrinterReadiness {
 
   /// Get host status (lazy)
   Future<String?> get hostStatus async {
-    if (!_hostRead && (_options?.checkErrors ?? true)) {
-      await _readHostStatus();
-    }
-    return _hostStatus;
+    return await ensureHostStatus();
   }
 
   /// Ensure host status is checked and return the value
@@ -198,10 +174,7 @@ class PrinterReadiness {
 
   /// Get errors (lazy)
   Future<List<String>> get errors async {
-    if (!_hostRead && (_options?.checkErrors ?? true)) {
-      await _readHostStatus();
-    }
-    return List.unmodifiable(_errors);
+    return await ensureErrors();
   }
 
   /// Ensure errors are checked and return the value
@@ -214,10 +187,7 @@ class PrinterReadiness {
 
   /// Get language status (lazy)
   Future<String?> get languageStatus async {
-    if (!_languageRead && (_options?.checkLanguage ?? true)) {
-      await _readLanguageStatus();
-    }
-    return _languageStatus;
+    return await ensureLanguageStatus();
   }
 
   /// Ensure language status is checked and return the value
@@ -233,20 +203,18 @@ class PrinterReadiness {
 
   /// Get overall readiness status (lazy)
   Future<bool> get isReady async {
-    final connected = await isConnected;
-    if (!connected) return false;
 
-    final hasMediaStatus = await hasMedia;
-    if (hasMediaStatus == false) return false;
+    await readAllStatuses();
 
-    final headClosedStatus = await headClosed;
-    if (headClosedStatus == false) return false;
+    if (wasConnectionRead && (await isConnected) == false) return false;
 
-    final pausedStatus = await isPaused;
-    if (pausedStatus == true) return false;
+    if (wasMediaRead && (await hasMedia) == false) return false;
 
-    final errorList = await errors;
-    if (errorList.isNotEmpty) return false;
+    if (wasHeadRead && (await headClosed) == false) return false;
+
+    if (wasPauseRead && (await isPaused) == true) return false;
+
+    if (wasHostRead && (await errors).isNotEmpty) return false;
 
     return true;
   }
@@ -255,28 +223,12 @@ class PrinterReadiness {
   Future<void> readAllStatuses() async {
     _logger.info('PrinterReadiness: Reading all statuses based on options');
 
-    if (_options?.checkConnection ?? true) {
-      await _readConnectionStatus();
-    }
-
-    if (_options?.checkMedia ?? true) {
-      await _readMediaStatus();
-    }
-
-    if (_options?.checkHead ?? true) {
-      await _readHeadStatus();
-    }
-
-    // Always read pause status - it's critical for print operations
-    await _readPauseStatus();
-
-    if (_options?.checkErrors ?? true) {
-      await _readHostStatus();
-    }
-
-    if (_options?.checkLanguage ?? true) {
-      await _readLanguageStatus();
-    }
+    await ensureConnection();
+    await ensureMediaStatus();
+    await ensureHeadStatus();
+    await ensurePauseStatus();
+    await ensureHostStatus();
+    await ensureLanguageStatus();
   }
 
   /// Set cached values (for use during prepare process)
@@ -549,7 +501,7 @@ class PrinterReadiness {
   }
 
   /// Reset connection status and re-read
-  Future<bool> resetConnection() async {
+  Future<bool?> resetConnection() async {
     _connectionRead = false;
     _isConnected = null;
     return await isConnected;

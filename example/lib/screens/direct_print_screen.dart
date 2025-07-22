@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:zebrautil/internal/logger.dart';
 
 import '../widgets/print_data_editor.dart' as editor;
 import '../widgets/log_panel.dart';
@@ -12,6 +13,7 @@ class DirectPrinterChannel {
   final String? instanceId;
   final MethodChannel? _instanceChannel;
   final Future<dynamic> Function(MethodCall) _methodCallHandler;
+  final Logger _logger = Logger.withPrefix('DirectPrinterChannel');
 
   DirectPrinterChannel({
     required this.instanceId,
@@ -30,6 +32,7 @@ class DirectPrinterChannel {
   static Future<DirectPrinterChannel?> createInstance(
     Future<dynamic> Function(MethodCall) methodCallHandler,
   ) async {
+    final logger = Logger.withPrefix('DirectPrinterChannel');
     try {
       const channel = MethodChannel('zebrautil');
       final instanceId = await channel.invokeMethod<String>('getInstance');
@@ -41,7 +44,7 @@ class DirectPrinterChannel {
       }
       return null;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Failed to get instance: $e');
+      logger.error('Failed to get instance: $e', e);
       return null;
     }
   }
@@ -52,7 +55,7 @@ class DirectPrinterChannel {
       await _instanceChannel.invokeMethod('startScan');
       return true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Discovery error: $e');
+      _logger.error('Discovery error: $e', e);
       return false;
     }
   }
@@ -63,7 +66,7 @@ class DirectPrinterChannel {
       await _instanceChannel.invokeMethod('stopScan');
       return true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Stop discovery error: $e');
+      _logger.error('Stop discovery error: $e', e);
       return false;
     }
   }
@@ -77,7 +80,7 @@ class DirectPrinterChannel {
       );
       return result == true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Connection error: $e');
+      _logger.error('Connection error: $e', e);
       return false;
     }
   }
@@ -88,7 +91,7 @@ class DirectPrinterChannel {
       await _instanceChannel.invokeMethod('disconnect');
       return true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Disconnect error: $e');
+      _logger.error('Disconnect error: $e', e);
       return false;
     }
   }
@@ -102,7 +105,7 @@ class DirectPrinterChannel {
       );
       return result == true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Print error: $e');
+      _logger.error('Print error: $e', e);
       return false;
     }
   }
@@ -116,7 +119,7 @@ class DirectPrinterChannel {
       });
       return true;
     } catch (e) {
-      debugPrint('DirectPrinterChannel: Send data error: $e');
+      _logger.error('Send data error: $e', e);
       return false;
     }
   }

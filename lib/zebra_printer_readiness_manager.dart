@@ -6,7 +6,6 @@ import 'zebrautil.dart';
 /// Manager for printer readiness operations using command pattern
 /// Centralized connection assurance and retry logic
 class ZebraPrinterReadinessManager {
-
   /// Constructor with instantiation count check
   ZebraPrinterReadinessManager({
     required ZebraPrinter printer,
@@ -16,18 +15,19 @@ class ZebraPrinterReadinessManager {
     _communicationPolicy = CommunicationPolicy(printer);
     _logger.debug('ZebraPrinterReadinessManager instantiated');
   }
+
   /// The printer instance to manage
   final ZebraPrinter _printer;
-  
+
   /// Logger for this manager
   final Logger _logger = Logger.withPrefix('ZebraPrinterReadinessManager');
-  
+
   /// Optional status callback for progress updates
   final void Function(ReadinessOperationEvent)? _statusCallback;
-  
+
   /// Communication policy for connection assurance and retry logic
   late final CommunicationPolicy _communicationPolicy;
-  
+
   /// Log a message to both callback and logger
   void _log(String message) {
     _logger.info(message);
@@ -128,7 +128,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   /// Centralized connection assurance method for other managers to use
   /// This is the single point of truth for connection assurance
   Future<Result<bool>> ensureConnection() async {
@@ -152,7 +152,7 @@ class ZebraPrinterReadinessManager {
   void dispose() {
     _logger.debug('ZebraPrinterReadinessManager disposed');
   }
-  
+
   /// Prepare printer for printing with specified options
   Future<Result<ReadinessResult>> prepareForPrint(
     PrintFormat format,
@@ -175,14 +175,14 @@ class ZebraPrinterReadinessManager {
         result: ReadinessOperationResult.successful,
       ));
     }
-    
+
     try {
       // Create lazy readiness object
       final readiness = PrinterReadiness(printer: _printer, options: options);
       final appliedFixes = <String>[];
       final failedFixes = <String>[];
       final fixErrors = <String, String>{};
-      
+
       // 1. Check and fix connection
       if (options.checkConnection) {
         _logger
@@ -193,18 +193,17 @@ class ZebraPrinterReadinessManager {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping connection check (disabled)');
       }
-      
+
       // 2. Check and fix media
-      if (options.checkMedia) {
+      if (options.checkMedia || options.fixMediaCalibration) {
         _logger.info('ZebraPrinterReadinessManager: Performing media check');
         await _checkAndFixMedia(
             readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
       } else {
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Skipping media check (disabled)');
       }
-      
+
       // 3. Check and fix head
       if (options.checkHead) {
         _logger.info('ZebraPrinterReadinessManager: Performing head check');
@@ -214,62 +213,59 @@ class ZebraPrinterReadinessManager {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping head check (disabled)');
       }
-      
+
       // 4. Check and fix pause - ALWAYS check for print operations
       // Pause status is critical for printing, so we check it regardless of options
-      _logger.info(
-          'ZebraPrinterReadinessManager: Performing pause check (always required for printing)');
-      await _checkAndFixPause(
-          readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
-      
+      if (options.checkPause || options.fixPausedPrinter) {
+        _logger.info(
+            'ZebraPrinterReadinessManager: Performing pause check (always required for printing)');
+        await _checkAndFixPause(
+            readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
+      }
+
       // 5. Check and fix errors (format-specific)
-      if (options.checkErrors) {
+      if (options.checkErrors || options.fixPrinterErrors) {
         _logger.info(
             'ZebraPrinterReadinessManager: Performing error check for ${format.name}');
-        await _checkAndFixErrors(
-            readiness, appliedFixes, failedFixes,
+        await _checkAndFixErrors(readiness, appliedFixes, failedFixes,
             fixErrors, options, format, onStatus);
       } else {
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Skipping error check (disabled)');
       }
-      
+
       // 6. Check and fix language (format-specific)
-      if (options.checkLanguage) {
+      if (options.checkLanguage || options.fixLanguageMismatch) {
         _logger.info(
             'ZebraPrinterReadinessManager: Performing language check for ${format.name}');
-        await _checkAndFixLanguage(
-            readiness, appliedFixes, failedFixes,
+        await _checkAndFixLanguage(readiness, appliedFixes, failedFixes,
             fixErrors, format, options, onStatus);
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping language check (disabled)');
       }
-      
+
       // 7. Handle buffer operations (format-specific)
-      if (options.clearBuffer) {
+      if (options.clearBuffer || options.fixBufferIssues) {
         _logger.info(
             'ZebraPrinterReadinessManager: Performing buffer clear for ${format.name}');
         await _checkAndFixBuffer(
             appliedFixes, failedFixes, fixErrors, format, onStatus);
       } else {
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Skipping buffer clear (disabled)');
       }
-      
-      if (options.flushBuffer) {
+
+      if (options.flushBuffer || options.fixBufferIssues) {
         _logger.info(
             'ZebraPrinterReadinessManager: Performing buffer flush for ${format.name}');
         await _checkAndFixFlush(
             appliedFixes, failedFixes, fixErrors, format, onStatus);
       } else {
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Skipping buffer flush (disabled)');
       }
-      
+
       // 8. Get final readiness status (using cached values)
       _logger
           .info('ZebraPrinterReadinessManager: Getting final readiness status');
@@ -282,7 +278,7 @@ class ZebraPrinterReadinessManager {
         fixErrors,
         stopwatch.elapsed,
       );
-      
+
       _logger.info(
           'ZebraPrinterReadinessManager: PrepareForPrint completed in ${stopwatch.elapsed.inMilliseconds}ms');
       _logger
@@ -303,7 +299,6 @@ class ZebraPrinterReadinessManager {
         ));
       }
       return Result.success(result);
-      
     } catch (e, stack) {
       _logger.error('Error during printer preparation', e);
       return Result.error(
@@ -313,13 +308,13 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   /// Run comprehensive diagnostics on the printer
   Future<Result<Map<String, dynamic>>> runDiagnostics() async {
     _logger.info(
         'ZebraPrinterReadinessManager: Starting comprehensive diagnostics');
     _log('Running comprehensive diagnostics...');
-    
+
     final diagnostics = <String, dynamic>{
       'timestamp': DateTime.now().toIso8601String(),
       'connected': false,
@@ -329,26 +324,25 @@ class ZebraPrinterReadinessManager {
       'errors': [],
       'recommendations': [],
     };
-    
+
     try {
       // Check connection using command
-      _logger
-          .info(
+      _logger.info(
           'ZebraPrinterReadinessManager: Checking connection for diagnostics');
       final connectionResult = await _checkConnection();
-      diagnostics['connected'] = connectionResult.success ? connectionResult.data : false;
+      diagnostics['connected'] =
+          connectionResult.success ? connectionResult.data : false;
       _logger.info(
           'ZebraPrinterReadinessManager: Connection check result: ${connectionResult.success}');
-      
+
       if (!diagnostics['connected']) {
         diagnostics['errors'].add('Connection lost');
         diagnostics['recommendations'].add('Reconnect to the printer');
         return Result.success(diagnostics);
       }
-      
+
       // Run comprehensive status checks using commands
-      _logger
-          .info(
+      _logger.info(
           'ZebraPrinterReadinessManager: Running comprehensive status checks');
       final statusChecks = [
         {'setting': 'media.status', 'label': 'Media Status'},
@@ -360,7 +354,7 @@ class ZebraPrinterReadinessManager {
         {'setting': 'device.product_name', 'label': 'Product Name'},
         {'setting': 'appl.name', 'label': 'Firmware Version'},
       ];
-      
+
       for (final check in statusChecks) {
         final setting = check['setting'] as String;
         final label = check['label'] as String;
@@ -372,7 +366,7 @@ class ZebraPrinterReadinessManager {
               () => CommandFactory.createGetSettingCommand(_printer, setting)
                   .execute(),
               'Get Setting: $setting');
-          
+
           if (result.success && result.data != null) {
             diagnostics['status'][label] = result.data;
             _logger
@@ -387,18 +381,16 @@ class ZebraPrinterReadinessManager {
           // Continue with other checks
         }
       }
-      
+
       // Analyze and provide recommendations
       _logger.info(
           'ZebraPrinterReadinessManager: Analyzing diagnostics and generating recommendations');
       _analyzeDiagnostics(diagnostics);
-      
-      _logger
-          .info(
+
+      _logger.info(
           'ZebraPrinterReadinessManager: Diagnostics completed successfully');
       _log('Diagnostics complete');
       return Result.success(diagnostics);
-      
     } catch (e, stack) {
       diagnostics['errors'].add('Diagnostic error: $e');
       return Result.error(
@@ -408,42 +400,14 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
-  /// Get detailed status of the printer
-  Future<Result<PrinterReadiness>> getDetailedStatus() async {
-    _logger
-        .info('ZebraPrinterReadinessManager: Getting detailed printer status');
-    final readiness = PrinterReadiness(printer: _printer);
-    await readiness.readAllStatuses();
-    _logger.info(
-        'ZebraPrinterReadinessManager: Detailed status - Connected: ${await readiness.isConnected}, HasMedia: ${await readiness.hasMedia}, HeadClosed: ${await readiness.headClosed}, IsPaused: ${await readiness.isPaused}');
-    return Result.success(readiness);
-  }
-  
-  /// Validate if the printer state is ready
-  Future<Result<bool>> validatePrinterState() async {
-    _logger.info('ZebraPrinterReadinessManager: Validating printer state');
-    final result = await getDetailedStatus();
-    if (!result.success) {
-      _logger.error(
-          'ZebraPrinterReadinessManager: Failed to get detailed status for validation: ${result.error?.message}');
-      return Result.errorFromResult(result);
-    }
-    
-    final readiness = result.data!;
-    final isReady = await readiness.isReady;
-    _logger.info(
-        'ZebraPrinterReadinessManager: Printer state validation result: $isReady');
-    return Result.success(isReady);
-  }
-  
+
   // Private check methods - each uses a single command
   Future<Result<bool>> _checkConnection() async {
     _logger.info('ZebraPrinterReadinessManager: Executing connection check');
     // Use centralized connection assurance
     return await ensureConnection();
   }
-  
+
   // Individual check and fix methods using cached values from readiness
   Future<void> _checkAndFixConnection(
     PrinterReadiness readiness,
@@ -454,14 +418,14 @@ class ZebraPrinterReadinessManager {
   ) async {
     _logger.info(
         'ZebraPrinterReadinessManager: Starting connection check and fix');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final connected = await readiness.isConnected;
 
     _reportCheckResult(
       readiness: readiness,
       operationType: ReadinessOperationType.connection,
-      passed: connected,
+      passed: connected ?? true,
       passMessage: 'Connection check passed',
       failMessage: 'Connection failed',
       failedFixes: failedFixes,
@@ -469,7 +433,7 @@ class ZebraPrinterReadinessManager {
       fixKey: 'connection',
     );
   }
-  
+
   Future<void> _checkAndFixMedia(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -479,17 +443,16 @@ class ZebraPrinterReadinessManager {
     void Function(ReadinessOperationEvent)? onStatus,
   ) async {
     _logger.info('ZebraPrinterReadinessManager: Starting media check and fix');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final hasMedia = await readiness.hasMedia;
-    
+
     if (hasMedia == false) {
       // Try to fix media calibration
       if (options.fixMediaCalibration) {
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Attempting media calibration fix');
-        
+
         await _executeFix(
           commandExecutor: () =>
               CommandFactory.createSendCalibrationCommand(_printer).execute(),
@@ -528,7 +491,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   Future<void> _checkAndFixHead(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -537,7 +500,7 @@ class ZebraPrinterReadinessManager {
     void Function(ReadinessOperationEvent)? onStatus,
   ) async {
     _logger.info('ZebraPrinterReadinessManager: Starting head check and fix');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final headClosed = await readiness.headClosed;
 
@@ -552,7 +515,7 @@ class ZebraPrinterReadinessManager {
       fixKey: 'head',
     );
   }
-  
+
   Future<void> _checkAndFixPause(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -562,16 +525,16 @@ class ZebraPrinterReadinessManager {
     void Function(ReadinessOperationEvent)? onStatus,
   ) async {
     _logger.info('ZebraPrinterReadinessManager: Starting pause check and fix');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final isPaused = await readiness.isPaused;
-    
+
     if (isPaused == true) {
       // Try to unpause
       if (options.fixPausedPrinter) {
         _logger.info(
             'ZebraPrinterReadinessManager: Attempting to unpause printer');
-        
+
         await _executeFix(
           commandExecutor: () =>
               CommandFactory.createSendUnpauseCommand(_printer).execute(),
@@ -610,7 +573,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   Future<void> _checkAndFixErrors(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -622,7 +585,7 @@ class ZebraPrinterReadinessManager {
   ) async {
     _logger.info(
         'ZebraPrinterReadinessManager: Starting error check and fix for ${format.name}');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final errors = await readiness.errors;
 
@@ -702,7 +665,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   Future<void> _checkAndFixLanguage(
     PrinterReadiness readiness,
     List<String> appliedFixes,
@@ -714,10 +677,10 @@ class ZebraPrinterReadinessManager {
   ) async {
     _logger.info(
         'ZebraPrinterReadinessManager: Starting language check and fix for ${format.name}');
-    
+
     // Use cached value from readiness (this will trigger read if not cached)
     final currentLanguage = await readiness.languageStatus;
-    
+
     if (currentLanguage != null) {
       _log('Current printer language: $currentLanguage');
 
@@ -741,7 +704,7 @@ class ZebraPrinterReadinessManager {
       if (!languageMatches) {
         _log(
             'Language mismatch: current=$currentLanguage, expected=$expectedLanguage');
-        
+
         if (options.fixLanguageMismatch) {
           // Switch to correct language mode
           _logger.info(
@@ -755,7 +718,7 @@ class ZebraPrinterReadinessManager {
 
           _logger.info(
               'ZebraPrinterReadinessManager: Executing ${format.name} language switch command');
-          
+
           // Use centralized command execution with assurance
           final switchResult = await executeCommandWithAssurance(
               () => switchCommand.execute(),
@@ -822,7 +785,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   Future<void> _checkAndFixBuffer(
     List<String> appliedFixes,
     List<String> failedFixes,
@@ -846,8 +809,7 @@ class ZebraPrinterReadinessManager {
         break;
       case PrintFormat.cpcl:
         // For CPCL, use CPCL-specific buffer clear command
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Using CPCL buffer clear command');
         result = await executeCommandWithAssurance(
             () => CommandFactory.createSendCpclClearBufferCommand(_printer)
@@ -855,7 +817,7 @@ class ZebraPrinterReadinessManager {
             'Send CPCL Clear Buffer');
         break;
     }
-    
+
     if (result.success) {
       appliedFixes.add('clearBuffer');
       _log('Buffer cleared using ${format.name} command');
@@ -882,7 +844,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   Future<void> _checkAndFixFlush(
     List<String> appliedFixes,
     List<String> failedFixes,
@@ -906,8 +868,7 @@ class ZebraPrinterReadinessManager {
         break;
       case PrintFormat.cpcl:
         // Use CPCL-specific buffer flush command
-        _logger
-            .info(
+        _logger.info(
             'ZebraPrinterReadinessManager: Using CPCL buffer flush command');
         result = await executeCommandWithAssurance(
             () => CommandFactory.createSendCpclFlushBufferCommand(_printer)
@@ -915,7 +876,7 @@ class ZebraPrinterReadinessManager {
             'Send CPCL Flush Buffer');
         break;
     }
-    
+
     if (result.success) {
       appliedFixes.add('flushBuffer');
       _log('Buffer flushed using ${format.name} command');
@@ -942,7 +903,7 @@ class ZebraPrinterReadinessManager {
       );
     }
   }
-  
+
   void _analyzeDiagnostics(Map<String, dynamic> diagnostics) {
     _logger.info('ZebraPrinterReadinessManager: Analyzing diagnostics data');
     // Analyze diagnostics and add recommendations
@@ -951,20 +912,20 @@ class ZebraPrinterReadinessManager {
       _logger.info(
           'ZebraPrinterReadinessManager: Added recommendation: Load media into the printer');
     }
-    
+
     if (diagnostics['status']['Head Status'] == 'open') {
       diagnostics['recommendations'].add('Close the print head');
       _logger.info(
           'ZebraPrinterReadinessManager: Added recommendation: Close the print head');
     }
-    
+
     if (diagnostics['status']['Pause Status'] == 'true') {
       diagnostics['recommendations'].add('Unpause the printer');
       _logger.info(
           'ZebraPrinterReadinessManager: Added recommendation: Unpause the printer');
     }
-    
+
     _logger.info(
         'ZebraPrinterReadinessManager: Diagnostics analysis completed with ${diagnostics['recommendations'].length} recommendations');
   }
-} 
+}

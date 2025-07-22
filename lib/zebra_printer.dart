@@ -362,7 +362,7 @@ class ZebraPrinter {
         final result = await _operationManager.execute<String>(
           method: 'getSetting',
           arguments: {'setting': setting},
-          timeout: const Duration(seconds: 5),
+          timeout: const Duration(seconds: 10),
         );
         if (result.success) {
           final data = result.data?.isNotEmpty == true ? result.data : null;

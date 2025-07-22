@@ -21,6 +21,7 @@ class PrintState {
     required this.isCompleted,
     required this.isCancelled,
     required this.details,
+    required this.printerWarnings,
     required this.startTime,
     required this.elapsedTime,
   });
@@ -42,6 +43,7 @@ class PrintState {
       isCompleted: false,
       isCancelled: false,
       details: null,
+      printerWarnings: [],
       startTime: null,
       elapsedTime: Duration.zero,
     );
@@ -69,6 +71,9 @@ class PrintState {
   // Step-specific details (e.g., readiness check information)
   final String? details;
   
+  // Printer warnings from readiness checks
+  final List<String> printerWarnings;
+  
   // Timing
   final DateTime? startTime;
   final Duration elapsedTime;
@@ -89,6 +94,7 @@ class PrintState {
     bool? isCompleted,
     bool? isCancelled,
     String? details,
+    List<String>? printerWarnings,
     DateTime? startTime,
     Duration? elapsedTime,
   }) {
@@ -107,6 +113,7 @@ class PrintState {
       isCompleted: isCompleted ?? this.isCompleted,
       isCancelled: isCancelled ?? this.isCancelled,
       details: details ?? this.details,
+      printerWarnings: printerWarnings ?? this.printerWarnings,
       startTime: startTime ?? this.startTime,
       elapsedTime: elapsedTime ?? this.elapsedTime,
     );

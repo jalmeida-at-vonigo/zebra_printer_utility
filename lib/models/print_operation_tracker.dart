@@ -68,11 +68,11 @@ class PrintOperationTracker {
       // Calculate required wait time based on data size and format
       final dataLength = data.length;
       final baseDelay =
-          format == PrintFormat.cpcl ? 5000 : 4000; // Increased base delay
+          format == PrintFormat.cpcl ? 2000 : 1500; // Increased base delay
       final sizeMultiplier =
           (dataLength / 1000).ceil(); // Extra 2s per KB (increased)
       final requiredWaitTime =
-          Duration(milliseconds: baseDelay + (sizeMultiplier * 2000));
+          Duration(milliseconds: baseDelay + (sizeMultiplier * 1000));
 
       // Calculate how much time has already elapsed since print started
       final elapsedTime = this.elapsedTime;

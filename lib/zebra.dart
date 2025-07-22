@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'internal/logger.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
 import 'models/result.dart';
@@ -41,6 +42,7 @@ class Zebra {
   static final _manager = ZebraPrinterManager();
   static SmartPrintManager? _smartPrintManager;
   static Result<void>? _initializationResult;
+  static final Logger _logger = Logger.withPrefix('Zebra');
 
   /// Public getter for the singleton ZebraPrinterManager
   /// Use this for advanced operations and direct manager access
@@ -73,8 +75,7 @@ class Zebra {
       }
     } catch (e, stack) {
       // Log the error but don't let it propagate as an unhandled exception
-      print('Error initializing Zebra manager: $e');
-      print('Stack trace: $stack');
+      _logger.error('Error initializing Zebra manager: $e', e, stack);
       _initializationResult = Result.error(
         'Failed to initialize Zebra manager: $e',
         code: ErrorCodes.operationError.code,

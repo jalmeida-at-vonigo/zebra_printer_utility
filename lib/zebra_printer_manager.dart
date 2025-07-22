@@ -151,6 +151,9 @@ class ZebraPrinterManager {
   }) async {
     String? address;
     ZebraDevice? device;
+    options ??= const CommunicationPolicyOptions();
+    options = options
+        .mergeWith(const CommunicationPolicyOptions(skipConnectionCheck: true));
 
     if (printerIdentifier is ZebraDevice) {
       device = printerIdentifier;
@@ -427,7 +430,7 @@ class ZebraPrinterManager {
       // Step 7: Wait for print completion with format-specific delays (if enabled)
       if (options.waitForPrintCompletionOrDefault && tracker != null) {
         final completionResult = await tracker.waitForCompletion(
-          data: data,
+          data: preparedData,
           format: detectedFormat,
           onStatusUpdate: (status) => _statusStreamController?.add(status),
         );
