@@ -1,3 +1,6 @@
+import 'dart:async'; // Added for TimeoutException
+import 'package:flutter/services.dart'; // Added for PlatformException and MissingPluginException
+
 import '../models/result.dart';
 
 /// Bridge pattern for converting Zebra SDK operation failures to structured Result objects
@@ -19,6 +22,12 @@ import '../models/result.dart';
 /// final connectionResult = ZebraErrorBridge.fromConnectionError(error);
 /// final printResult = ZebraErrorBridge.fromPrintError(error);
 /// final statusResult = ZebraErrorBridge.fromStatusError(error);
+/// 
+/// // Execute operations with automatic exception handling
+/// final result = await ZebraErrorBridge.executeAndHandle(
+///   operation: () => someOperation(),
+///   operationType: OperationType.connection,
+/// );
 /// ```
 class ZebraErrorBridge {
   /// Private constructor to prevent instantiation
@@ -218,6 +227,553 @@ class ZebraErrorBridge {
     );
   }
 
+  /// Centralized operation execution with automatic exception handling
+  ///
+  /// This method wraps any operation and automatically converts exceptions
+  /// to appropriate Result.failure() objects using the bridge pattern.
+  /// Handles specific exception types for more precise error classification.
+  ///
+  /// **Usage:**
+  /// ```dart
+  /// final result = await ZebraErrorBridge.executeAndHandle<String>(
+  ///   operation: () => printer.getSetting('device.language'),
+  ///   operationType: OperationType.command,
+  ///   context: {'setting': 'device.language'},
+  /// );
+  /// ```
+  static Future<Result<T>> executeAndHandle<T>({
+    required Future<T> Function() operation,
+    required OperationType operationType,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) async {
+    try {
+      final data = await operation();
+      return Result.success(data);
+    } on TimeoutException catch (error, stackTrace) {
+      return _handleTimeoutError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on PlatformException catch (error, stackTrace) {
+      return _handlePlatformError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on MissingPluginException catch (error, stackTrace) {
+      return _handleMissingPluginError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on FormatException catch (error, stackTrace) {
+      return _handleFormatError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on ArgumentError catch (error, stackTrace) {
+      return _handleArgumentError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on StateError catch (error, stackTrace) {
+      return _handleStateError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } catch (error, stackTrace) {
+      // Fallback for any other exception types
+      return _handleOperationError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    }
+  }
+
+  /// Synchronous version of executeAndHandle for non-async operations
+  static Result<T> executeAndHandleSync<T>({
+    required T Function() operation,
+    required OperationType operationType,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    try {
+      final data = operation();
+      return Result.success(data);
+    } on PlatformException catch (error, stackTrace) {
+      return _handlePlatformError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on MissingPluginException catch (error, stackTrace) {
+      return _handleMissingPluginError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on FormatException catch (error, stackTrace) {
+      return _handleFormatError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on ArgumentError catch (error, stackTrace) {
+      return _handleArgumentError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } on StateError catch (error, stackTrace) {
+      return _handleStateError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    } catch (error, stackTrace) {
+      // Fallback for any other exception types
+      return _handleOperationError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    }
+  }
+
+  /// Handle TimeoutException with operation-specific timeout errors
+  static Result<T> _handleTimeoutError<T>(
+    TimeoutException error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'TimeoutException',
+      'timeoutDuration': error.duration?.inSeconds,
+      'operationType': operationType.name,
+    };
+
+    // Choose specific timeout error based on operation type
+    final ErrorCode timeoutErrorCode;
+    switch (operationType) {
+      case OperationType.connection:
+        timeoutErrorCode = ErrorCodes.connectionSpecificTimeout;
+        break;
+      case OperationType.print:
+        timeoutErrorCode = ErrorCodes.printSpecificTimeout;
+        break;
+      case OperationType.status:
+        timeoutErrorCode = ErrorCodes.statusSpecificTimeout;
+        break;
+      case OperationType.command:
+        timeoutErrorCode = ErrorCodes.commandSpecificTimeout;
+        break;
+      case OperationType.discovery:
+        timeoutErrorCode = ErrorCodes.discoveryTimeout;
+        break;
+      case OperationType.general:
+        timeoutErrorCode = ErrorCodes.operationTimeout;
+        break;
+    }
+
+    return _createFailureResult<T>(
+      timeoutErrorCode,
+      error,
+      errorNumber: null,
+      stackTrace: stackTrace,
+      context: enrichedContext,
+    );
+  }
+
+  /// Handle PlatformException with extracted error codes
+  static Result<T> _handlePlatformError<T>(
+    PlatformException error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'PlatformException',
+      'platformCode': error.code,
+      'platformMessage': error.message,
+      'operationType': operationType.name,
+      if (deviceAddress != null) 'deviceAddress': deviceAddress,
+      if (command != null) 'command': command,
+    };
+
+    final errorNumber = int.tryParse(error.code);
+
+    // Route to specific bridge method based on operation type
+    switch (operationType) {
+      case OperationType.connection:
+        return fromConnectionError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          deviceAddress: deviceAddress,
+          context: enrichedContext,
+        );
+      case OperationType.discovery:
+        return fromDiscoveryError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          timeout: timeout,
+          context: enrichedContext,
+        );
+      case OperationType.print:
+        return fromPrintError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          printData: printData,
+          context: enrichedContext,
+        );
+      case OperationType.status:
+        return fromStatusError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          isDetailed: isDetailed,
+          context: enrichedContext,
+        );
+      case OperationType.command:
+        return fromCommandError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          command: command,
+          context: enrichedContext,
+        );
+      case OperationType.general:
+        return fromError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          context: enrichedContext,
+        );
+    }
+  }
+
+  /// Handle MissingPluginException (development/testing scenarios)
+  static Result<T> _handleMissingPluginError<T>(
+    MissingPluginException error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'MissingPluginException',
+      'missingPluginMessage': error.message,
+      'operationType': operationType.name,
+    };
+
+    return _createFailureResult<T>(
+      ErrorCodes.notImplemented,
+      error,
+      errorNumber: null,
+      stackTrace: stackTrace,
+      context: enrichedContext,
+    );
+  }
+
+  /// Handle FormatException (data format issues)
+  static Result<T> _handleFormatError<T>(
+    FormatException error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'FormatException',
+      'formatMessage': error.message,
+      'source': error.source,
+      'offset': error.offset,
+      'operationType': operationType.name,
+    };
+
+    return _createFailureResult<T>(
+      ErrorCodes.invalidFormat,
+      error,
+      errorNumber: null,
+      stackTrace: stackTrace,
+      context: enrichedContext,
+    );
+  }
+
+  /// Handle ArgumentError (invalid arguments)
+  static Result<T> _handleArgumentError<T>(
+    ArgumentError error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'ArgumentError',
+      'argumentName': error.name,
+      'argumentMessage': error.message,
+      'invalidValue': error.invalidValue,
+      'operationType': operationType.name,
+    };
+
+    return _createFailureResult<T>(
+      ErrorCodes.invalidArgument,
+      error,
+      errorNumber: null,
+      stackTrace: stackTrace,
+      context: enrichedContext,
+    );
+  }
+
+  /// Handle StateError (invalid state operations)
+  static Result<T> _handleStateError<T>(
+    StateError error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': 'StateError',
+      'stateMessage': error.message,
+      'operationType': operationType.name,
+    };
+
+    // Choose appropriate error code based on operation type
+    final ErrorCode stateErrorCode;
+    switch (operationType) {
+      case OperationType.connection:
+        stateErrorCode = ErrorCodes.connectionError;
+        break;
+      case OperationType.print:
+        stateErrorCode = ErrorCodes.printerNotReady;
+        break;
+      case OperationType.discovery:
+        stateErrorCode = ErrorCodes.discoveryError;
+        break;
+      case OperationType.status:
+      case OperationType.command:
+      case OperationType.general:
+        stateErrorCode = ErrorCodes.operationError;
+        break;
+    }
+
+    return _createFailureResult<T>(
+      stateErrorCode,
+      error,
+      errorNumber: null,
+      stackTrace: stackTrace,
+      context: enrichedContext,
+    );
+  }
+
+  /// Handle operation errors by routing to appropriate bridge method (fallback)
+  static Result<T> _handleOperationError<T>(
+    dynamic error, {
+    required OperationType operationType,
+    required StackTrace stackTrace,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) {
+    final enrichedContext = <String, dynamic>{
+      ...?context,
+      'exceptionType': error.runtimeType.toString(),
+      'operationType': operationType.name,
+    };
+
+    // Extract error number if available (legacy support)
+    int? errorNumber;
+    if (error is PlatformException) {
+      errorNumber = int.tryParse(error.code);
+    }
+
+    // Route to appropriate bridge method based on operation type
+    switch (operationType) {
+      case OperationType.connection:
+        return fromConnectionError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          deviceAddress: deviceAddress,
+          context: enrichedContext,
+        );
+
+      case OperationType.discovery:
+        return fromDiscoveryError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          timeout: timeout,
+          context: enrichedContext,
+        );
+
+      case OperationType.print:
+        return fromPrintError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          printData: printData,
+          context: enrichedContext,
+        );
+
+      case OperationType.status:
+        return fromStatusError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          isDetailed: isDetailed,
+          context: enrichedContext,
+        );
+
+      case OperationType.command:
+        return fromCommandError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          command: command,
+          context: enrichedContext,
+        );
+
+      case OperationType.general:
+        return fromError<T>(
+          error,
+          errorNumber: errorNumber,
+          stackTrace: stackTrace,
+          context: enrichedContext,
+        );
+    }
+  }
 
 
   // ===== PRIVATE IMPLEMENTATION METHODS =====
@@ -364,3 +920,13 @@ class ZebraErrorBridge {
     return null;
   }
 } 
+
+/// Operation type enumeration for executeAndHandle routing
+enum OperationType {
+  connection,
+  discovery,
+  print,
+  status,
+  command,
+  general,
+}

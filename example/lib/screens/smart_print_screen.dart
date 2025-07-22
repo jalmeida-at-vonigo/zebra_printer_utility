@@ -217,37 +217,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
         );
         break;
         
-      case PrintEventType.realTimeStatusUpdate:
-        final eventState = event.printState as PrintState?;
-        final hasIssues = eventState?.hasIssues ?? false;
-        final progressHint =
-            eventState?.realTimeStatus?['progressHint'] as String?;
-        final currentIssues = eventState?.currentIssues ?? [];
-        
-        if (progressHint != null) {
-          _addLog(
-            'Status hint',
-            'info',
-            details: progressHint,
-          );
-        }
-        
-        if (hasIssues && currentIssues.isNotEmpty) {
-          _addLog(
-            'Status update',
-            'warning',
-            details: 'Issues detected: ${currentIssues.join(', ')}',
-          );
-        }
 
-        if (eventState?.canAutoResume == true) {
-          _addLog(
-            'Auto-resume available',
-            'info',
-            details: eventState?.autoResumeAction ?? 'Auto-resume ready',
-          );
-        }
-        break;
         
       case PrintEventType.completed:
         _addLog('Print completed', 'success');
@@ -364,10 +334,10 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     final isPrinting = _printState?.isPrinting ?? false;
     final isCompleted = _printState?.isCompleted ?? false;
     final currentStep = _printState?.currentStep;
-    final realTimeStatus = _printState?.realTimeStatus;
+
     final canCancel = _smartPrintManager?.canCancel ?? false;
     
-    Color _stepColor(PrintStep step) {
+    Color stepColor(PrintStep step) {
       switch (step) {
         case PrintStep.initializing:
         case PrintStep.validating:
@@ -420,7 +390,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _stepColor(currentStep),
+                      color: stepColor(currentStep),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -524,11 +494,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
               const SizedBox(height: 12),
               _buildRichStateInfo(_printState!),
             ],
-            // Real-time status details
-            if (realTimeStatus != null) ...[
-              const SizedBox(height: 12),
-              _buildRealTimeStatusDetails(realTimeStatus),
-            ],
+
             // Action buttons for user intervention
             if (_printState?.isWaitingForUserFix == true) ...[
               const SizedBox(height: 12),
@@ -662,137 +628,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     );
   }
 
-  Widget _buildRealTimeStatusDetails(Map<String, dynamic> realTimeStatus) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              Icons.sensors,
-              size: 16,
-              color: Colors.purple[600],
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Real-time Status',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Colors.purple[700],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Progress hint
-        if (realTimeStatus['progressHint'] != null)
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.blue[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.lightbulb_outline,
-                  size: 14,
-                  color: Colors.blue[600],
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    realTimeStatus['progressHint'] as String,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.blue[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        // Issue details
-        if (realTimeStatus['issueDetails'] != null) ...[
-          const SizedBox(height: 6),
-          ...(realTimeStatus['issueDetails'] as List<dynamic>).map((issue) {
-            final issueMap = issue as Map<String, dynamic>?;
-            if (issueMap == null) return const SizedBox.shrink();
 
-            final message = issueMap['message'] as String? ?? 'Unknown issue';
-            final recoverable = issueMap['recoverable'] as bool? ?? true;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: recoverable ? Colors.orange[50] : Colors.red[50],
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: recoverable ? Colors.orange[200]! : Colors.red[200]!,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    recoverable ? Icons.info_outline : Icons.error_outline,
-                    size: 12,
-                    color: recoverable ? Colors.orange[600] : Colors.red[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      message,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color:
-                            recoverable ? Colors.orange[700] : Colors.red[700],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-        // Auto-resume status
-        if (realTimeStatus['canAutoResume'] == true) ...[
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.green[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.play_arrow,
-                  size: 12,
-                  color: Colors.green[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Auto-resume ready',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
 
   String _formatDuration(Duration duration) {
     final minutes = duration.inMinutes;

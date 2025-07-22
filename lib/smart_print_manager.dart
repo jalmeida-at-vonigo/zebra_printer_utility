@@ -5,9 +5,9 @@ import 'internal/logger.dart';
 import 'models/communication_policy_options.dart';
 import 'models/print_enums.dart';
 import 'models/print_event.dart';
+import 'models/print_operation_tracker.dart';
 import 'models/print_options.dart';
 import 'models/print_state.dart';
-import 'models/readiness_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
@@ -46,7 +46,6 @@ class SmartPrintManager {
 
   // Immutable state management
   PrintState _currentState = PrintState.initial();
-  Map<String, dynamic>? _lastPrinterStatus;
   
   // Cancellation management
   CancellationToken? _cancellationToken;
@@ -107,7 +106,6 @@ class SmartPrintManager {
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
-      realTimeStatus: null,
       startTime: DateTime.now(),
       elapsedTime: Duration.zero,
     );
@@ -209,24 +207,22 @@ class SmartPrintManager {
       }
       
       // Use readiness manager for comprehensive status checking and preparation
-      if (options.readinessOptionsOrDefault.checkPause) {
-        final readinessResult = await _preparePrinterForPrint(format, options);
-        if (!readinessResult.success) {
-          _emitEvent(PrintEvent(
-            type: PrintEventType.errorOccurred,
-            timestamp: DateTime.now(),
-            errorInfo: PrintErrorInfo(
-              message: readinessResult.error?.message ??
-                  'Printer preparation failed',
-              recoverability: ErrorRecoverability.recoverable,
-              errorCode: readinessResult.error?.code,
-            ),
-            stepInfo:
-                _createStepInfo(PrintStep.failed, 'Printer preparation failed'),
-            printState: _currentState,
-          ));
-          return;
-        }
+      final readinessResult = await _preparePrinterForPrint(format, options);
+      if (!readinessResult.success) {
+        _emitEvent(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message:
+                readinessResult.error?.message ?? 'Printer preparation failed',
+            recoverability: ErrorRecoverability.recoverable,
+            errorCode: readinessResult.error?.code,
+          ),
+          stepInfo:
+              _createStepInfo(PrintStep.failed, 'Printer preparation failed'),
+          printState: _currentState,
+        ));
+        return;
       }
 
       // Update options with cancellation token
@@ -261,7 +257,10 @@ class SmartPrintManager {
         return;
       }
       
-      if (options.waitForPrintCompletionOrDefault) {
+      // Get the tracker from the print result
+      final tracker = printResult.data;
+
+      if (options.waitForPrintCompletionOrDefault && tracker != null) {
         // Check for cancellation before waiting for completion
         if (isCancelled) {
           _emitEvent(PrintEvent(
@@ -274,7 +273,33 @@ class SmartPrintManager {
           return;
         }
         
-        final completionResult = await _waitForPrintCompletion();
+        await _updateStep(
+            PrintStep.waitingForCompletion, 'Waiting for print completion');
+
+        final completionResult = await tracker.waitForCompletion(
+          data: data,
+          format: options.formatOrDefault ?? PrintFormat.zpl,
+          onStatusUpdate: (status) {
+            _emitEvent(PrintEvent(
+              type: PrintEventType.statusUpdate,
+              timestamp: DateTime.now(),
+              printState: _currentState,
+              metadata: {
+                'message': status,
+                'progressHint': status,
+                'isReady': false,
+                'canAutoResume': false,
+                'issueDetails': [],
+                'autoResumeAction': null,
+                'progress': _currentState.getProgress(),
+                'currentStep': _currentState.currentStep.toString(),
+                'consecutiveErrors': 0,
+                'enhancedMetadata': true,
+              },
+            ));
+          },
+        );
+        
         if (!completionResult.success) {
           // Check if failure was due to cancellation
           if (completionResult.error?.code == 'OPERATION_CANCELLED' ||
@@ -410,7 +435,6 @@ class SmartPrintManager {
       canAutoResume: false,
       isWaitingForUserFix: false,
       currentIssues: [],
-      realTimeStatus: null,
     );
   }
 
@@ -637,19 +661,7 @@ class SmartPrintManager {
       );
 
       // Create readiness options based on print options
-      final readinessOptions = ReadinessOptions(
-        checkConnection: true,
-        checkMedia: true,
-        checkHead: true,
-        checkPause: options.readinessOptionsOrDefault.checkPause,
-        checkErrors: true,
-        checkLanguage: true,
-        fixPausedPrinter: true,
-        fixPrinterErrors: true,
-        fixLanguageMismatch: true,
-        clearBuffer: true,
-        flushBuffer: true,
-      );
+      final readinessOptions = options.readinessOptionsOrDefault;
 
       final prepareResult = await readinessManager.prepareForPrint(
         format,
@@ -705,8 +717,9 @@ class SmartPrintManager {
     }
   }
 
-  /// Send print data with retry logic
-  Future<Result<void>> _sendPrintData(String data, Duration timeout) async {
+  /// Send print data with retry logic and return tracker
+  Future<Result<PrintOperationTracker>> _sendPrintData(
+      String data, Duration timeout) async {
     while (_currentState.currentAttempt <= _currentState.maxAttempts &&
         !isCancelled) {
       await _updateStep(PrintStep.sending,
@@ -718,7 +731,21 @@ class SmartPrintManager {
           options: PrintOptions(cancellationToken: _cancellationToken),
         );
         if (result.success) {
-          return Result.success();
+          final tracker = result.data;
+          if (tracker != null) {
+            _logger.info(
+                'Received tracker from print operation: ${tracker.operationId}');
+            return Result.success(tracker);
+          } else {
+            _logger
+                .warning('Print operation succeeded but no tracker returned');
+            return Result.errorCode(
+              ErrorCodes.printError,
+              formatArgs: [
+                'Print operation succeeded but no tracker available'
+              ],
+            );
+          }
         } else {
           await _handleError(
             errorCode: _classifyPrintError(
@@ -772,174 +799,13 @@ class SmartPrintManager {
     }
   }
 
-  /// Wait for print completion with enhanced real-time status updates
-  Future<Result<void>> _waitForPrintCompletion() async {
-    await _updateStep(
-        PrintStep.waitingForCompletion, 'Waiting for print completion');
-
-    try {
-      // Use enhanced status polling with better UX
-      bool isCompleted = false;
-      bool hasAutoResumed = false;
-      String? lastProgressHint;
-
-      await for (final status in _printerManager.startStatusPolling(
-        interval: const Duration(milliseconds: 500),
-        timeout: const Duration(seconds: 30),
-        cancellationToken: _cancellationToken,
-      )) {
-        if (isCancelled) {
-          return Result.errorCode(ErrorCodes.operationCancelled);
-        }
-
-        // Handle polling errors
-        if (status['error'] != null) {
-          _logger.warning('Status polling error: ${status['error']}');
-          if (status['timeout'] == true) {
-            return Result.errorCode(
-              ErrorCodes.printError,
-              formatArgs: [
-                'Print completion timeout after ${status['elapsedSeconds']} seconds'
-              ],
-            );
-          }
-          // Continue polling on non-timeout errors
-          continue;
-        }
-
-        // Store last status for debugging
-        _lastPrinterStatus = status;
-
-        // Emit enhanced real-time status update with richer metadata
-        _emitEnhancedStatusUpdate(status);
-
-        // Check for completion using enhanced detection
-        if (status['isCompleted'] == true) {
-          isCompleted = true;
-          break;
-        }
-
-        // Handle auto-resume with better feedback
-        if (status['canAutoResume'] == true && !hasAutoResumed) {
-          _logger.info('Auto-resuming paused printer');
-          await _updateStep(
-              PrintStep.waitingForCompletion, 'Auto-resuming printer...');
-
-          final resumeResult = await _printerManager.autoResumePrinter();
-          if (resumeResult.success) {
-            hasAutoResumed = true;
-            await _updateStep(PrintStep.waitingForCompletion,
-                'Printer resumed, waiting for completion...');
-          }
-        }
-
-        // Enhanced issue handling with structured data
-        final issueDetails = status['issueDetails'] as List<dynamic>? ?? [];
-        if (issueDetails.isNotEmpty) {
-          final issues = issueDetails
-              .map((issue) => issue['message'] as String? ?? 'Unknown issue')
-              .toList();
-          
-          if (issues.isNotEmpty) {
-            await _updateStep(PrintStep.waitingForCompletion,
-                'Waiting for user to fix: ${issues.join(', ')}');
-          }
-        }
-
-        // Enhanced progress updates using progressHint
-        final progressHint = status['progressHint'] as String?;
-        if (progressHint != null && progressHint != lastProgressHint) {
-          await _updateStep(PrintStep.waitingForCompletion, progressHint);
-          lastProgressHint = progressHint;
-        }
-      }
-
-      if (isCompleted) {
-        _logger.info('Print completion successful via enhanced status polling');
-        return Result.success();
-      } else {
-        return Result.errorCode(
-          ErrorCodes.printError,
-          formatArgs: ['Print completion timeout or failed'],
-        );
-      }
-    } catch (e, stack) {
-      return Result.errorCode(
-        ErrorCodes.printError,
-        formatArgs: [e.toString()],
-        dartStackTrace: stack,
-      );
-    } finally {
-      // No explicit _cancellationToken cleanup needed here
-    }
-  }
-
-  /// Emit enhanced real-time status update event with richer metadata
-  void _emitEnhancedStatusUpdate(Map<String, dynamic> status) {
-    final issueDetails = status['issueDetails'] as List<dynamic>? ?? [];
-    final progressHint = status['progressHint'] as String?;
-    
-    // Update state with all real-time status information
-    final autoResumeAction = _getAutoResumeAction(status);
-    final canAutoResume = status['canAutoResume'] ?? false;
-
-    // Update current issues from status data
-    final currentIssues = <String>[];
-    for (final issue in issueDetails) {
-      final issueMap = issue as Map<String, dynamic>?;
-      if (issueMap != null) {
-        final message = issueMap['message'] as String? ?? 'Unknown issue';
-        currentIssues.add(message);
-      }
-    }
-
-    // Determine if waiting for user fix based on non-recoverable issues
-    final isWaitingForUserFix = issueDetails.any((issue) {
-      final issueMap = issue as Map<String, dynamic>?;
-      final recoverable = issueMap?['recoverable'] as bool? ?? true;
-      return !recoverable; // Waiting for user fix if there are non-recoverable issues
-    });
-
-    // Update state with new information
-    _currentState = _currentState.copyWith(
-      autoResumeAction: autoResumeAction,
-      canAutoResume: canAutoResume,
-      currentIssues: currentIssues,
-      isWaitingForUserFix: isWaitingForUserFix,
-      realTimeStatus: status,
-      elapsedTime:
-          DateTime.now().difference(_currentState.startTime ?? DateTime.now()),
-    );
-    
-    _emitEvent(PrintEvent(
-      type: PrintEventType.realTimeStatusUpdate,
-      timestamp: DateTime.now(),
-      printState: _currentState,
-      metadata: {
-        'status': status,
-        'isCompleted': status['isCompleted'] ?? false,
-        'hasIssues': status['hasIssues'] ?? false,
-        'canAutoResume': canAutoResume,
-        'issueDetails': issueDetails,
-        'progressHint': progressHint,
-        'autoResumeAction': autoResumeAction,
-        'progress': _currentState.getProgress(),
-        'currentStep': _currentState.currentStep.toString(),
-        'consecutiveErrors': status['consecutiveErrors'],
-        'enhancedMetadata': true, // Flag to indicate enhanced status
-      },
-    ));
-  }
 
 
 
-  /// Get auto-resume action description
-  String? _getAutoResumeAction(Map<String, dynamic> status) {
-    if (status['canAutoResume'] == true) {
-      return 'Printer can be auto-resumed';
-    }
-    return null;
-  }
+
+
+
+
 
   /// Update current step and emit event
   Future<void> _updateStep(PrintStep step, String message) async {
@@ -1110,7 +976,6 @@ class SmartPrintManager {
 
     // DO NOT reset state here - let the UI decide when to clear
     // This allows the final print status to persist even after disposal
-    _lastPrinterStatus = null;
   }
 
   /// Get current progress as percentage
@@ -1142,8 +1007,7 @@ class SmartPrintManager {
     }
   }
 
-  /// Get last known printer status
-  Map<String, dynamic>? get lastPrinterStatus => _lastPrinterStatus;
+
 
 
   /// Check if operation is cancelled

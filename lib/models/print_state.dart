@@ -20,7 +20,7 @@ class PrintState {
     required this.progress,
     required this.isCompleted,
     required this.isCancelled,
-    required this.realTimeStatus,
+  
     required this.startTime,
     required this.elapsedTime,
   });
@@ -41,7 +41,7 @@ class PrintState {
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
-      realTimeStatus: null,
+
       startTime: null,
       elapsedTime: Duration.zero,
     );
@@ -67,7 +67,7 @@ class PrintState {
   final bool isCancelled;
   
   // Real-time status from printer
-  final Map<String, dynamic>? realTimeStatus;
+
   
   // Timing
   final DateTime? startTime;
@@ -88,7 +88,7 @@ class PrintState {
     double? progress,
     bool? isCompleted,
     bool? isCancelled,
-    Map<String, dynamic>? realTimeStatus,
+
     DateTime? startTime,
     Duration? elapsedTime,
   }) {
@@ -106,7 +106,7 @@ class PrintState {
       progress: progress ?? this.progress,
       isCompleted: isCompleted ?? this.isCompleted,
       isCancelled: isCancelled ?? this.isCancelled,
-      realTimeStatus: realTimeStatus ?? this.realTimeStatus,
+
       startTime: startTime ?? this.startTime,
       elapsedTime: elapsedTime ?? this.elapsedTime,
     );
@@ -116,7 +116,7 @@ class PrintState {
   PrintState clearError() => copyWith(currentError: null);
   PrintState clearMessage() => copyWith(currentMessage: null);
   PrintState clearAutoResumeAction() => copyWith(autoResumeAction: null);
-  PrintState clearRealTimeStatus() => copyWith(realTimeStatus: null);
+
 
   /// Computed properties
   bool get isPrinting => isRunning && !isCompleted && !isCancelled;

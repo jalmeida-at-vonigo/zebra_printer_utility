@@ -215,16 +215,12 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Skipping head check (disabled)');
       }
       
-      // 4. Check and fix pause
-      if (options.checkPause) {
-        _logger.info('ZebraPrinterReadinessManager: Performing pause check');
-        await _checkAndFixPause(
-            readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
-      } else {
-        _logger
-            .info(
-            'ZebraPrinterReadinessManager: Skipping pause check (disabled)');
-      }
+      // 4. Check and fix pause - ALWAYS check for print operations
+      // Pause status is critical for printing, so we check it regardless of options
+      _logger.info(
+          'ZebraPrinterReadinessManager: Performing pause check (always required for printing)');
+      await _checkAndFixPause(
+          readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
       
       // 5. Check and fix errors (format-specific)
       if (options.checkErrors) {

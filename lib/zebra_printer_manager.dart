@@ -9,6 +9,7 @@ import 'internal/printer_preferences.dart';
 import 'internal/smart_device_selector.dart';
 import 'models/communication_policy_options.dart';
 import 'models/print_enums.dart';
+import 'models/print_operation_tracker.dart';
 import 'models/print_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
@@ -27,6 +28,8 @@ class CancellationToken {
     _isCancelled = true;
   }
 }
+
+
 
 /// Manager for Zebra printer instances and state
 ///
@@ -274,7 +277,8 @@ class ZebraPrinterManager {
 
   /// Robust print method with integrated workflow - as robust as the old ZebraPrinterService
   /// This combines pre-print preparation, print execution, and post-print verification
-  Future<Result<void>> print(String data, {PrintOptions? options}) async {
+  Future<Result<PrintOperationTracker>> print(String data,
+      {PrintOptions? options}) async {
     _logger.info('Manager: Starting robust print operation');
     await _ensureInitialized();
 
@@ -358,7 +362,7 @@ class ZebraPrinterManager {
       _statusStreamController?.add('Sending print data...');
 
       final printResult = await _communicationPolicy!.execute(
-        () => _printer!.print(data: preparedData),
+        () => _printer!.print(data: preparedData, format: detectedFormat),
         'Send Print Data',
         options: CommunicationPolicyOptions(
           maxAttempts: 3,
@@ -381,6 +385,13 @@ class ZebraPrinterManager {
           ErrorCodes.printError,
           formatArgs: [printResult.error?.message ?? 'Unknown print error'],
         );
+      }
+
+      // Get the tracker from the print result
+      final tracker = printResult.data;
+      if (tracker != null) {
+        _logger.info(
+            'Manager: Received tracker from print operation: ${tracker.operationId}');
       }
 
       _logger.info('Manager: Print data sent successfully');
@@ -414,9 +425,12 @@ class ZebraPrinterManager {
       }
 
       // Step 7: Wait for print completion with format-specific delays (if enabled)
-      if (options.waitForPrintCompletionOrDefault) {
-        final completionResult =
-            await waitForPrintCompletion(data, detectedFormat);
+      if (options.waitForPrintCompletionOrDefault && tracker != null) {
+        final completionResult = await tracker.waitForCompletion(
+          data: data,
+          format: detectedFormat,
+          onStatusUpdate: (status) => _statusStreamController?.add(status),
+        );
         if (!completionResult.success) {
           _logger.warning(
               'Manager: Print completion verification failed: ${completionResult.error?.message}');
@@ -439,7 +453,7 @@ class ZebraPrinterManager {
             ?.add('Print data sent (completion wait disabled)');
       }
 
-      return Result.success();
+      return Result.success(tracker);
     } catch (e, stack) {
       _logger.error(
           'Manager: Unexpected error during print operation', e, stack);
@@ -447,35 +461,6 @@ class ZebraPrinterManager {
       return Result.errorCode(
         ErrorCodes.printError,
         formatArgs: ['Unexpected print error: $e'],
-        dartStackTrace: stack,
-      );
-    }
-  }
-
-  /// Wait for print completion with format-specific delays
-  Future<Result<bool>> waitForPrintCompletion(
-      String data, PrintFormat? format) async {
-    try {
-      // Calculate delay based on data size and format (same as old service)
-      final dataLength = data.length;
-      final baseDelay = format == PrintFormat.cpcl ? 2500 : 2000;
-      final sizeMultiplier = (dataLength / 1000).ceil(); // Extra 1s per KB
-      final effectiveDelay =
-          Duration(milliseconds: baseDelay + (sizeMultiplier * 1000));
-
-      _logger.info(
-          'Manager: Waiting ${effectiveDelay.inMilliseconds}ms for print completion (data size: $dataLength bytes)');
-      _statusStreamController?.add('Waiting for print completion...');
-
-      // Wait for the calculated delay
-      await Future.delayed(effectiveDelay); 
-      return Result.success(true);
-    } catch (e, stack) {
-      _logger.error(
-          'Manager: Error during print completion verification', e, stack);
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: ['Print completion verification error: $e'],
         dartStackTrace: stack,
       );
     }
@@ -565,241 +550,9 @@ class ZebraPrinterManager {
     }
   }
 
-  /// Real-time status polling stream for print completion monitoring
-  /// This provides continuous status updates for UI feedback with enhanced cancellation and error handling
-  Stream<Map<String, dynamic>> startStatusPolling({
-    Duration interval = const Duration(milliseconds: 500),
-    Duration timeout = const Duration(seconds: 60),
-    CancellationToken? cancellationToken,
-  }) async* {
-    _logger.info('Manager: Starting enhanced real-time status polling');
-    await _ensureInitialized();
-
-    if (_printer == null) {
-      _logger
-          .error('Manager: Cannot start status polling - no printer connected');
-      yield {
-        'error': 'No printer connected',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'isCompleted': false,
-        'hasIssues': true,
-        'canAutoResume': false,
-      };
-      return;
-    }
-
-    final startTime = DateTime.now();
-    bool isCompleted = false;
-    int consecutiveErrors = 0;
-    const maxConsecutiveErrors = 3;
-
-    try {
-      while (!isCompleted && DateTime.now().difference(startTime) < timeout) {
-        // Check for cancellation
-        if (cancellationToken?.isCancelled == true) {
-          _logger.info('Manager: Status polling cancelled by token');
-          yield {
-            'cancelled': true,
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-            'isCompleted': false,
-            'hasIssues': false,
-            'canAutoResume': false,
-          };
-          return;
-        }
-
-        try {
-          final statusResult = await getPrinterStatus();
-          if (statusResult.success && statusResult.data != null) {
-            final status = statusResult.data!;
-            consecutiveErrors = 0; // Reset error counter on success
-
-            // Enhanced status with better completion detection
-            final enhancedStatus = _enhanceStatusData(status);
-            yield enhancedStatus;
-
-            // Check for completion with improved logic
-            if (enhancedStatus['isCompleted'] == true) {
-              isCompleted = true;
-              _logger.info(
-                  'Manager: Print completion detected via enhanced status polling');
-              break;
-            }
-          } else {
-            consecutiveErrors++;
-            _logger.warning(
-                'Manager: Failed to get status during polling (attempt $consecutiveErrors/$maxConsecutiveErrors)');
-
-            // Only yield error after consecutive failures to avoid noise
-            if (consecutiveErrors >= maxConsecutiveErrors) {
-              yield {
-                'error':
-                    'Failed to get printer status after $consecutiveErrors attempts',
-                'timestamp': DateTime.now().millisecondsSinceEpoch,
-                'isCompleted': false,
-                'hasIssues': true,
-                'canAutoResume': false,
-                'consecutiveErrors': consecutiveErrors,
-              };
-            }
-          }
-        } catch (e) {
-          consecutiveErrors++;
-          _logger.error(
-              'Manager: Error during status polling (attempt $consecutiveErrors/$maxConsecutiveErrors)',
-              e);
-
-          if (consecutiveErrors >= maxConsecutiveErrors) {
-            yield {
-              'error': 'Status polling error: $e',
-              'timestamp': DateTime.now().millisecondsSinceEpoch,
-              'isCompleted': false,
-              'hasIssues': true,
-              'canAutoResume': false,
-              'consecutiveErrors': consecutiveErrors,
-            };
-          }
-        }
-
-        // Wait before next poll with backoff on errors
-        final pollInterval = consecutiveErrors > 0
-            ? Duration(
-                milliseconds: interval.inMilliseconds * (1 + consecutiveErrors))
-            : interval;
-        await Future.delayed(pollInterval);
-      }
-
-      if (!isCompleted) {
-        _logger.warning(
-            'Manager: Status polling timed out after ${timeout.inSeconds} seconds');
-        yield {
-          'error': 'Status polling timed out',
-          'timeout': true,
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'isCompleted': false,
-          'hasIssues': true,
-          'canAutoResume': false,
-          'elapsedSeconds': DateTime.now().difference(startTime).inSeconds,
-        };
-      }
-    } catch (e, stack) {
-      _logger.error(
-          'Manager: Unexpected error in status polling stream', e, stack);
-      yield {
-        'error': 'Unexpected polling error: $e',
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'isCompleted': false,
-        'hasIssues': true,
-        'canAutoResume': false,
-        'stackTrace': stack.toString(),
-      };
-    }
-  }
-
-  /// Enhanced status data with improved completion detection and metadata
-  Map<String, dynamic> _enhanceStatusData(Map<String, dynamic> status) {
-    final enhancedStatus = Map<String, dynamic>.from(status);
-
-    // Add timestamp
-    enhancedStatus['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-
-    // Enhanced completion detection
-    enhancedStatus['isCompleted'] = _isPrintCompletedEnhanced(status);
-
-    // Enhanced issue detection
-    enhancedStatus['hasIssues'] = _hasPrintIssues(status);
-
-    // Enhanced auto-resume detection
-    enhancedStatus['canAutoResume'] = _canAutoResume(status);
-
-    // Add issue details for UI
-    enhancedStatus['issueDetails'] = _getIssueDetails(status);
-
-    // Add print progress hints
-    enhancedStatus['progressHint'] = _getProgressHint(status);
-
-    return enhancedStatus;
-  }
-
-  /// Enhanced print completion detection with better logic
-  bool _isPrintCompletedEnhanced(Map<String, dynamic> status) {
-    // Primary completion indicators
-    final isReadyToPrint = status['isReadyToPrint'] == true;
-    final isPartialFormatInProgress =
-        status['isPartialFormatInProgress'] == true;
-    final hasBlockingIssues = _hasPrintIssues(status);
-
-    // Additional completion checks
-    final isPrintingComplete = status['isPrintingComplete'] == true;
-    final isQueueEmpty = status['isQueueEmpty'] == true;
-    final hasActiveJob = status['hasActiveJob'] == true;
-
-    // Enhanced logic: Print is completed when:
-    // 1. Ready to print AND no active job AND no partial format in progress
-    // 2. OR explicitly marked as printing complete
-    // 3. AND no blocking hardware issues
-    return (isReadyToPrint &&
-            !isPartialFormatInProgress &&
-            !hasActiveJob &&
-            !hasBlockingIssues) ||
-        (isPrintingComplete == true && !hasBlockingIssues) ||
-        (isQueueEmpty == true && isReadyToPrint && !hasBlockingIssues);
-  }
 
 
 
-  /// Check if there are any print issues that need attention
-  bool _hasPrintIssues(Map<String, dynamic> status) {
-    return status['isHeadOpen'] == true ||
-        status['isPaperOut'] == true ||
-        status['isRibbonOut'] == true ||
-        status['isHeadCold'] == true ||
-        status['isHeadTooHot'] == true;
-  }
-
-  /// Check if the printer can auto-resume (e.g., was paused but can be unpaused)
-  bool _canAutoResume(Map<String, dynamic> status) {
-    // Can auto-resume if only paused (no hardware issues)
-    final isPaused = status['isPaused'] == true;
-    final hasHardwareIssues = status['isHeadOpen'] == true ||
-        status['isPaperOut'] == true ||
-        status['isRibbonOut'] == true ||
-        status['isHeadCold'] == true ||
-        status['isHeadTooHot'] == true;
-
-    return isPaused && !hasHardwareIssues;
-  }
-
-  /// Auto-resume printer if it's paused and can be resumed
-  Future<Result<void>> autoResumePrinter() async {
-    _logger.info('Manager: Attempting to auto-resume printer');
-    await _ensureInitialized();
-
-    try {
-      if (_printer == null) {
-        return Result.errorCode(ErrorCodes.notConnected);
-      }
-
-      final unpauseCommand = CommandFactory.createSendUnpauseCommand(_printer!);
-      final result = await unpauseCommand.execute();
-
-      if (result.success) {
-        _logger.info('Manager: Printer auto-resumed successfully');
-        _statusStreamController?.add('Printer resumed automatically');
-        return Result.success();
-      } else {
-        _logger.warning('Manager: Failed to auto-resume printer');
-        return result.map((data) => data);
-      }
-    } catch (e, stack) {
-      _logger.error('Manager: Error auto-resuming printer', e, stack);
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: ['Error auto-resuming printer: $e'],
-        dartStackTrace: stack,
-      );
-    }
-  }
 
   /// Primitive: Check if a printer is currently connected
   Future<bool> isConnected() async {
@@ -843,89 +596,7 @@ class ZebraPrinterManager {
     );
   }
 
-  /// Get detailed issue information for UI display
-  List<Map<String, dynamic>> _getIssueDetails(Map<String, dynamic> status) {
-    final issues = <Map<String, dynamic>>[];
 
-    if (status['isHeadOpen'] == true) {
-      issues.add({
-        'type': 'hardware',
-        'severity': 'error',
-        'message': 'Printer head is open',
-        'action': 'Close the printer head to continue',
-        'autoResolvable': false,
-      });
-    }
-
-    if (status['isPaperOut'] == true) {
-      issues.add({
-        'type': 'media',
-        'severity': 'error',
-        'message': 'Out of paper',
-        'action': 'Add more paper to the printer',
-        'autoResolvable': false,
-      });
-    }
-
-    if (status['isRibbonOut'] == true) {
-      issues.add({
-        'type': 'media',
-        'severity': 'error',
-        'message': 'Ribbon error or empty',
-        'action': 'Replace the printer ribbon',
-        'autoResolvable': false,
-      });
-    }
-
-    if (status['isPaused'] == true) {
-      issues.add({
-        'type': 'state',
-        'severity': 'warning',
-        'message': 'Printer is paused',
-        'action': 'Resume the printer or it will be auto-resumed',
-        'autoResolvable': true,
-      });
-    }
-
-    if (status['isHeadCold'] == true) {
-      issues.add({
-        'type': 'temperature',
-        'severity': 'warning',
-        'message': 'Print head is cold',
-        'action': 'Wait for the printer to warm up',
-        'autoResolvable': true,
-      });
-    }
-
-    if (status['isHeadTooHot'] == true) {
-      issues.add({
-        'type': 'temperature',
-        'severity': 'error',
-        'message': 'Print head is too hot',
-        'action': 'Wait for the printer to cool down',
-        'autoResolvable': true,
-      });
-    }
-
-    return issues;
-  }
-
-  /// Get progress hint for UI display
-  String _getProgressHint(Map<String, dynamic> status) {
-    if (status['isPartialFormatInProgress'] == true) {
-      return 'Print job in progress...';
-    } else if (status['isPaused'] == true) {
-      return 'Printer paused - will auto-resume if possible';
-    } else if (status['isHeadCold'] == true) {
-      return 'Printer warming up...';
-    } else if (status['isHeadTooHot'] == true) {
-      return 'Printer cooling down...';
-    } else if (status['isReadyToPrint'] == true) {
-      return 'Print completed successfully';
-    } else {
-      return 'Processing...';
-    }
-  }
 
   /// Dispose of resources
   void dispose() {

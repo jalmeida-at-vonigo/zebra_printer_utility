@@ -144,7 +144,7 @@ class PrinterReadiness {
 
   /// Get pause status (lazy)
   Future<String?> get pauseStatus async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
+    if (!_pauseRead) {
       await _readPauseStatus();
     }
     return _pauseStatus;
@@ -152,7 +152,7 @@ class PrinterReadiness {
 
   /// Ensure pause status is checked and return the value
   Future<String?> ensurePauseStatus() async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
+    if (!_pauseRead) {
       await _readPauseStatus();
     }
     return _pauseStatus;
@@ -163,7 +163,7 @@ class PrinterReadiness {
 
   /// Get is paused status (lazy)
   Future<bool?> get isPaused async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
+    if (!_pauseRead) {
       await _readPauseStatus();
     }
     return _isPaused;
@@ -171,7 +171,7 @@ class PrinterReadiness {
 
   /// Ensure is paused is checked and return the value
   Future<bool?> ensureIsPaused() async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
+    if (!_pauseRead) {
       await _readPauseStatus();
     }
     return _isPaused;
@@ -267,9 +267,8 @@ class PrinterReadiness {
       await _readHeadStatus();
     }
 
-    if (_options?.checkPause ?? true) {
-      await _readPauseStatus();
-    }
+    // Always read pause status - it's critical for print operations
+    await _readPauseStatus();
 
     if (_options?.checkErrors ?? true) {
       await _readHostStatus();

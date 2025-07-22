@@ -6,6 +6,7 @@ export 'host_status_info.dart';
 export 'operation_log_entry.dart';
 export 'print_enums.dart';
 export 'print_event.dart';
+export 'print_operation_tracker.dart';
 export 'print_options.dart';
 export 'print_state.dart';
 export 'printer_readiness.dart';
