@@ -106,6 +106,7 @@ class SmartPrintManager {
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
+      details: null,
       startTime: DateTime.now(),
       elapsedTime: Duration.zero,
     );
@@ -633,6 +634,22 @@ class SmartPrintManager {
       final readinessManager = ZebraPrinterReadinessManager(
         printer: printer,
         statusCallback: (event) {
+          // Extract readiness details for UI display
+          final operationType = event.operationType.toString().split('.').last;
+          final operationKind = event.operationKind.toString().split('.').last;
+
+          String details;
+          if (operationKind == 'check') {
+            details = 'Checking ${operationType.toLowerCase()}...';
+          } else if (operationKind == 'fix') {
+            details = 'Fixing ${operationType.toLowerCase()}...';
+          } else {
+            details = event.message;
+          }
+
+          // Update state with details
+          _currentState = _currentState.copyWith(details: details);
+          
           // Forward readiness events to our event stream
           _emitEvent(PrintEvent(
             type: PrintEventType.statusUpdate,
@@ -686,6 +703,13 @@ class SmartPrintManager {
         _logger.info('Printer prepared successfully');
       }
 
+      // Update state with final readiness details
+      _currentState = _currentState.copyWith(
+        details: readiness.isReady
+            ? 'Printer ready for print'
+            : 'Printer prepared with warnings',
+      );
+      
       // Emit final readiness status
       _emitEvent(PrintEvent(
         type: PrintEventType.statusUpdate,
@@ -722,8 +746,7 @@ class SmartPrintManager {
       String data, Duration timeout) async {
     while (_currentState.currentAttempt <= _currentState.maxAttempts &&
         !isCancelled) {
-      await _updateStep(PrintStep.sending,
-          'Sending print data (attempt ${_currentState.currentAttempt}/${_currentState.maxAttempts})');
+      await _updateStep(PrintStep.sending, 'Sending print data');
       
       try {
         final result = await _printerManager.print(
@@ -815,6 +838,7 @@ class SmartPrintManager {
       progress: _currentState.getProgress(),
       elapsedTime:
           DateTime.now().difference(_currentState.startTime ?? DateTime.now()),
+      details: null, // Clear details when step changes
     );
     
     _logger.info('Print step: $step - $message');

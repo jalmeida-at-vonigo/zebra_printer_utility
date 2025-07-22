@@ -20,7 +20,7 @@ class PrintState {
     required this.progress,
     required this.isCompleted,
     required this.isCancelled,
-  
+    required this.details,
     required this.startTime,
     required this.elapsedTime,
   });
@@ -41,7 +41,7 @@ class PrintState {
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
-
+      details: null,
       startTime: null,
       elapsedTime: Duration.zero,
     );
@@ -66,8 +66,8 @@ class PrintState {
   final bool isCompleted;
   final bool isCancelled;
   
-  // Real-time status from printer
-
+  // Step-specific details (e.g., readiness check information)
+  final String? details;
   
   // Timing
   final DateTime? startTime;
@@ -88,7 +88,7 @@ class PrintState {
     double? progress,
     bool? isCompleted,
     bool? isCancelled,
-
+    String? details,
     DateTime? startTime,
     Duration? elapsedTime,
   }) {
@@ -106,7 +106,7 @@ class PrintState {
       progress: progress ?? this.progress,
       isCompleted: isCompleted ?? this.isCompleted,
       isCancelled: isCancelled ?? this.isCancelled,
-
+      details: details ?? this.details,
       startTime: startTime ?? this.startTime,
       elapsedTime: elapsedTime ?? this.elapsedTime,
     );
@@ -116,6 +116,7 @@ class PrintState {
   PrintState clearError() => copyWith(currentError: null);
   PrintState clearMessage() => copyWith(currentMessage: null);
   PrintState clearAutoResumeAction() => copyWith(autoResumeAction: null);
+  PrintState clearDetails() => copyWith(details: null);
 
 
   /// Computed properties
@@ -194,6 +195,7 @@ class PrintState {
           progress == other.progress &&
           isCompleted == other.isCompleted &&
           isCancelled == other.isCancelled &&
+          details == other.details &&
           startTime == other.startTime &&
           elapsedTime == other.elapsedTime;
 
@@ -212,6 +214,7 @@ class PrintState {
       progress.hashCode ^
       isCompleted.hashCode ^
       isCancelled.hashCode ^
+      details.hashCode ^
       startTime.hashCode ^
       elapsedTime.hashCode;
 
