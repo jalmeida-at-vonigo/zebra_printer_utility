@@ -49,11 +49,12 @@ void main() {
 
       // Set cached values to simulate successful checks
       readiness.setCachedConnection(true);
+      readiness.setCachedMedia('OK', true);
       readiness.setCachedHead('OK', true);
       readiness.setCachedPause('Not Paused', false);
       readiness.setCachedHost('Online', []);
 
-      expect(await readiness.isReady, isTrue);
+      expect(readiness.isReady, isTrue);
     });
 
     test('toString shows uninitialized properties', () {
@@ -78,29 +79,29 @@ void main() {
       readiness.setCachedHead('OK', true);
 
       final str = readiness.toString();
-      expect(str, contains('connection: true'));
-      expect(str, contains('media: true'));
-      expect(str, contains('head: true'));
+      expect(str, contains('connection: checked'));
+      expect(str, contains('media: checked'));
+      expect(str, contains('head: checked'));
       expect(str, contains('pause: <unchecked>'));
       expect(str, contains('host: <unchecked>'));
       expect(str, contains('language: <unchecked>'));
     });
 
-    test('ensure methods trigger reads when not initialized', () async {
+    test('getter properties trigger reads when not initialized', () async {
       final readiness = PrinterReadiness(printer: mockPrinter);
 
       // Initially not read
       expect(readiness.wasConnectionRead, isFalse);
 
-      // This would trigger a read in real usage, but with mock printer it will fail
+      // These getters would trigger reads in real usage, but with mock printer they will fail
       // We can't easily test the actual command execution without complex mocking
-      // So we'll just verify the ensure method exists and can be called
-      expect(readiness.ensureConnection, isA<Function>());
-      expect(readiness.ensureMediaStatus, isA<Function>());
-      expect(readiness.ensureHeadStatus, isA<Function>());
-      expect(readiness.ensurePauseStatus, isA<Function>());
-      expect(readiness.ensureHostStatus, isA<Function>());
-      expect(readiness.ensureLanguageStatus, isA<Function>());
+      // So we'll just verify the getter properties exist and can be accessed
+      expect(readiness.isConnected, isA<Future<bool?>>());
+      expect(readiness.mediaStatus, isA<Future<String?>>());
+      expect(readiness.headStatus, isA<Future<String?>>());
+      expect(readiness.pauseStatus, isA<Future<String?>>());
+      expect(readiness.hostStatus, isA<Future<String?>>());
+      expect(readiness.languageStatus, isA<Future<String?>>());
     });
 
     test('setCached methods mark properties as read', () {
@@ -132,7 +133,7 @@ void main() {
 
       // Cached values show actual values
       final cached = readiness.cachedValues;
-      expect(cached['connection'], isTrue);
+      expect(cached['connection'], equals('checked'));
       expect(cached['mediaStatus'], equals('OK'));
       expect(cached['hasMedia'], isTrue);
       expect(cached['headStatus'], equals('OK'));

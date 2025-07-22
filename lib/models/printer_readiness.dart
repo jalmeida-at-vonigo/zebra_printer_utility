@@ -45,8 +45,11 @@ class PrinterReadiness {
 
   // Private fields to store actual values
   String? _mediaStatus;
+  bool? _hasMedia;
   String? _headStatus;
+  bool? _headClosed;
   String? _pauseStatus;
+  bool? _isPaused;
   String? _hostStatus;
   List<String> _errors = [];
   String? _languageStatus;
@@ -251,32 +254,63 @@ class PrinterReadiness {
 
   /// Set cached values (for use during prepare process)
   void setCachedConnection(bool connected) {
-    _connectionCompleter?.complete(connected);
+    _connectionCompleter ??= Completer<bool?>();
+    _connectionCompleter!.complete(connected);
     _lastConnectionError = null;
   }
 
   void setCachedMedia(String status, bool hasMedia) {
-    _mediaStatusCompleter?.complete(status);
+    _mediaStatusCompleter ??= Completer<String?>();
+    _mediaStatusCompleter!.complete(status);
+    _mediaStatus = status;
+    _hasMedia = hasMedia;
+
+    _hasMediaCompleter ??= Completer<bool?>();
+    _hasMediaCompleter!.complete(hasMedia);
+    
     _lastMediaError = null;
   }
 
   void setCachedHead(String status, bool headClosed) {
-    _headStatusCompleter?.complete(status);
+    _headStatusCompleter ??= Completer<String?>();
+    _headStatusCompleter!.complete(status);
+    _headStatus = status;
+    _headClosed = headClosed;
+
+    _headClosedCompleter ??= Completer<bool?>();
+    _headClosedCompleter!.complete(headClosed);
+    
     _lastHeadError = null;
   }
 
   void setCachedPause(String status, bool isPaused) {
-    _pauseStatusCompleter?.complete(status);
+    _pauseStatusCompleter ??= Completer<String?>();
+    _pauseStatusCompleter!.complete(status);
+    _pauseStatus = status;
+    _isPaused = isPaused;
+
+    _isPausedCompleter ??= Completer<bool?>();
+    _isPausedCompleter!.complete(isPaused);
+    
     _lastPauseError = null;
   }
 
   void setCachedHost(String status, List<String> errors) {
-    _hostStatusCompleter?.complete(status);
+    _hostStatusCompleter ??= Completer<String?>();
+    _hostStatusCompleter!.complete(status);
+    _hostStatus = status;
+    _errors = List.from(errors);
+
+    _errorsCompleter ??= Completer<List<String>>();
+    _errorsCompleter!.complete(List.from(errors));
+    
     _lastHostError = null;
   }
 
   void setCachedLanguage(String status) {
-    _languageStatusCompleter?.complete(status);
+    _languageStatusCompleter ??= Completer<String?>();
+    _languageStatusCompleter!.complete(status);
+    _languageStatus = status;
     _lastLanguageError = null;
   }
 
@@ -487,17 +521,11 @@ class PrinterReadiness {
     return {
       'connection': wasConnectionRead ? 'checked' : '<unchecked>',
       'mediaStatus': wasMediaRead ? (_mediaStatus ?? '<null>') : '<unchecked>',
-      'hasMedia': wasHasMediaRead
-          ? (_mediaStatus != null ? ParserUtil.hasMedia(_mediaStatus!) : null)
-          : '<unchecked>',
+      'hasMedia': wasHasMediaRead ? _hasMedia : '<unchecked>',
       'headStatus': wasHeadRead ? (_headStatus ?? '<null>') : '<unchecked>',
-      'headClosed': wasHeadClosedRead
-          ? (_headStatus != null ? ParserUtil.isHeadClosed(_headStatus!) : null)
-          : '<unchecked>',
+      'headClosed': wasHeadClosedRead ? _headClosed : '<unchecked>',
       'pauseStatus': wasPauseRead ? (_pauseStatus ?? '<null>') : '<unchecked>',
-      'isPaused': wasIsPausedRead
-          ? (_pauseStatus != null ? ParserUtil.toBool(_pauseStatus!) : null)
-          : '<unchecked>',
+      'isPaused': wasIsPausedRead ? _isPaused : '<unchecked>',
       'hostStatus': wasHostRead ? (_hostStatus ?? '<null>') : '<unchecked>',
       'errors': wasErrorsRead ? List.from(_errors) : '<unchecked>',
       'languageStatus':
