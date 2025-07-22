@@ -153,17 +153,21 @@ class ZebraPrinterReadinessManager {
     _logger.debug('ZebraPrinterReadinessManager disposed');
   }
 
-  /// Prepare printer for printing with specified options
+  /// Prepare printer for print operation with comprehensive status checking and fixes
   Future<Result<ReadinessResult>> prepareForPrint(
     PrintFormat format,
     ReadinessOptions options, {
     void Function(ReadinessOperationEvent)? onStatus,
+    CancellationToken? cancellationToken,
   }) async {
-    final stopwatch = Stopwatch()..start();
+    final startTime = DateTime.now();
     _logger.info(
         'ZebraPrinterReadinessManager: Starting prepareForPrint operation');
-    _logger.info(
+    _logger.debug(
         'ZebraPrinterReadinessManager: Format: ${format.name}, Options: $options');
+    _logger.debug(
+        'ZebraPrinterReadinessManager: Called from ${StackTrace.current.toString().split('\n')[1].trim()}');
+    
     _log('Starting printer preparation for print (format: ${format.name})...');
     if (onStatus != null) {
       onStatus(ReadinessOperationEvent(
@@ -183,12 +187,32 @@ class ZebraPrinterReadinessManager {
       final failedFixes = <String>[];
       final fixErrors = <String, String>{};
 
+      // Check for cancellation before starting operations
+      if (cancellationToken?.isCancelled ?? false) {
+        _logger.info(
+            'ZebraPrinterReadinessManager: Operation cancelled before starting');
+        return Result.errorCode(
+          ErrorCodes.operationCancelled,
+          formatArgs: ['Readiness preparation cancelled'],
+        );
+      }
+
       // 1. Check and fix connection
       if (options.checkConnection) {
         _logger
             .info('ZebraPrinterReadinessManager: Performing connection check');
         await _checkAndFixConnection(
             readiness, appliedFixes, failedFixes, fixErrors, onStatus);
+        
+        // Check for cancellation after connection check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after connection check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping connection check (disabled)');
@@ -199,6 +223,16 @@ class ZebraPrinterReadinessManager {
         _logger.info('ZebraPrinterReadinessManager: Performing media check');
         await _checkAndFixMedia(
             readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
+        
+        // Check for cancellation after media check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after media check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping media check (disabled)');
@@ -209,6 +243,16 @@ class ZebraPrinterReadinessManager {
         _logger.info('ZebraPrinterReadinessManager: Performing head check');
         await _checkAndFixHead(
             readiness, appliedFixes, failedFixes, fixErrors, onStatus);
+        
+        // Check for cancellation after head check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after head check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping head check (disabled)');
@@ -221,6 +265,16 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Performing pause check (always required for printing)');
         await _checkAndFixPause(
             readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
+        
+        // Check for cancellation after pause check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after pause check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       }
 
       // 5. Check and fix errors (format-specific)
@@ -229,6 +283,16 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Performing error check for ${format.name}');
         await _checkAndFixErrors(readiness, appliedFixes, failedFixes,
             fixErrors, options, format, onStatus);
+        
+        // Check for cancellation after error check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after error check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping error check (disabled)');
@@ -240,6 +304,16 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Performing language check for ${format.name}');
         await _checkAndFixLanguage(readiness, appliedFixes, failedFixes,
             fixErrors, format, options, onStatus);
+        
+        // Check for cancellation after language check
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after language check');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping language check (disabled)');
@@ -251,6 +325,16 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Performing buffer clear for ${format.name}');
         await _checkAndFixBuffer(
             appliedFixes, failedFixes, fixErrors, format, onStatus);
+        
+        // Check for cancellation after buffer clear
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after buffer clear');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping buffer clear (disabled)');
@@ -261,6 +345,16 @@ class ZebraPrinterReadinessManager {
             'ZebraPrinterReadinessManager: Performing buffer flush for ${format.name}');
         await _checkAndFixFlush(
             appliedFixes, failedFixes, fixErrors, format, onStatus);
+        
+        // Check for cancellation after buffer flush
+        if (cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'ZebraPrinterReadinessManager: Operation cancelled after buffer flush');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Readiness preparation cancelled'],
+          );
+        }
       } else {
         _logger.info(
             'ZebraPrinterReadinessManager: Skipping buffer flush (disabled)');
@@ -276,11 +370,11 @@ class ZebraPrinterReadinessManager {
         appliedFixes,
         failedFixes,
         fixErrors,
-        stopwatch.elapsed,
+        startTime.difference(DateTime.now()).abs(),
       );
 
       _logger.info(
-          'ZebraPrinterReadinessManager: PrepareForPrint completed in ${stopwatch.elapsed.inMilliseconds}ms');
+          'ZebraPrinterReadinessManager: PrepareForPrint completed in ${startTime.difference(DateTime.now()).abs().inMilliseconds}ms');
       _logger
           .info('ZebraPrinterReadinessManager: Applied fixes: $appliedFixes');
       _logger.info('ZebraPrinterReadinessManager: Failed fixes: $failedFixes');

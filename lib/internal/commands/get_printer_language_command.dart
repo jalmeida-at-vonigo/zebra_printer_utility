@@ -12,6 +12,7 @@ class GetPrinterLanguageCommand extends PrinterCommand<String> {
   @override
   Future<Result<String>> execute() async {
     logger.debug('Getting printer language');
+    logger.debug('GetPrinterLanguageCommand: Starting language retrieval');
     
     // ZebraPrinter method is exception-free and already bridged
     final result = await printer.getSetting('device.languages');
@@ -26,16 +27,22 @@ class GetPrinterLanguageCommand extends PrinterCommand<String> {
           // Parse the language string to determine primary language
           final language = _parseLanguage(languages);
           logger.debug('Detected primary language: $language');
+          logger.debug(
+              'GetPrinterLanguageCommand: Language retrieval successful: $language');
 
           return Result.success(language);
         }
       }
     } else {
+      logger.debug(
+          'GetPrinterLanguageCommand: Language retrieval failed: ${result.error?.message}');
       // Propagate ZebraPrinter error, preserve context
       return Result.errorFromResult(result, 'Language retrieval failed');
     }
     
     logger.debug('Could not determine printer language, defaulting to ZPL');
+    logger.debug(
+        'GetPrinterLanguageCommand: Language retrieval completed with default');
     return Result.success('ZPL');
   }
 

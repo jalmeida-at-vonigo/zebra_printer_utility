@@ -42,7 +42,6 @@ class SmartPrintManager {
   StreamController<PrintEvent>? _eventController;
 
   // Timers
-  Timer? _timeoutTimer;
   Timer? _statusCheckTimer;
 
   // Immutable state management
@@ -75,7 +74,6 @@ class SmartPrintManager {
     required String data,
     ZebraDevice? device,
     int maxAttempts = 3,
-    Duration timeout = const Duration(seconds: 60),
     PrintOptions? options,
   }) async {
     if (_currentState.isRunning) {
@@ -118,19 +116,12 @@ class SmartPrintManager {
     
     // Ensure event controller is initialized
     _eventController ??= StreamController<PrintEvent>.broadcast();
-    
-    _timeoutTimer = Timer(timeout, () {
-      if (!isCancelled) {
-        _logger.warning('Print operation timed out after ${timeout.inSeconds} seconds');
-        _handleError(
-          errorCode: ErrorCodes.operationTimeout,
-          formatArgs: [timeout.inSeconds],
-        );
-      }
-    });
 
     try {
       await _updateStep(PrintStep.initializing, 'Initializing print operation');
+
+      // Check for cancellation before format detection
+      if (_checkCancellationAndEmit()) return;
 
       final PrintFormat? format = options?.formatOrDefault ?? ZebraSGDCommands.detectDataLanguage(data);
       if (format == null) {
@@ -153,6 +144,9 @@ class SmartPrintManager {
       options = options?.copyWith(PrintOptions(format: format)) ??
           PrintOptions(format: format);
 
+      // Check for cancellation before validation
+      if (_checkCancellationAndEmit()) return;
+
       final validationResult = await _validatePrintData(data);
       if (!validationResult.success) {
         _emitEvent(PrintEvent(
@@ -170,16 +164,7 @@ class SmartPrintManager {
       }
 
       // Check for cancellation before connection attempt
-      if (isCancelled) {
-        _emitEvent(PrintEvent(
-          type: PrintEventType.cancelled,
-          timestamp: DateTime.now(),
-          stepInfo:
-              _createStepInfo(PrintStep.cancelled, 'Print operation cancelled'),
-          printState: _currentState,
-        ));
-        return;
-      }
+      if (_checkCancellationAndEmit()) return;
 
       final connectResult = await _connectToPrinter(device);
       if (!connectResult.success) {
@@ -209,6 +194,9 @@ class SmartPrintManager {
         return;
       }
       
+      // Check for cancellation before readiness preparation
+      if (_checkCancellationAndEmit()) return;
+      
       // Use readiness manager for comprehensive status checking and preparation
       final readinessResult = await _preparePrinterForPrint(format, options);
       if (!readinessResult.success) {
@@ -228,11 +216,17 @@ class SmartPrintManager {
         return;
       }
 
+      // Check for cancellation after readiness preparation
+      if (_checkCancellationAndEmit()) return;
+
       // Update options with cancellation token
       options =
           options.copyWith(PrintOptions(cancellationToken: _cancellationToken));
 
-      final printResult = await _sendPrintData(data, timeout);
+      // Check for cancellation before sending print data
+      if (_checkCancellationAndEmit()) return;
+
+      final printResult = await _sendPrintData(data);
       if (!printResult.success) {
         // Check if failure was due to cancellation
         if (printResult.error?.code == 'OPERATION_CANCELLED' || isCancelled) {
@@ -265,16 +259,7 @@ class SmartPrintManager {
 
       if (options.waitForPrintCompletionOrDefault && tracker != null) {
         // Check for cancellation before waiting for completion
-        if (isCancelled) {
-          _emitEvent(PrintEvent(
-            type: PrintEventType.cancelled,
-            timestamp: DateTime.now(),
-            stepInfo: _createStepInfo(
-                PrintStep.cancelled, 'Print completion wait cancelled'),
-            printState: _currentState,
-          ));
-          return;
-        }
+        if (_checkCancellationAndEmit()) return;
         
         await _updateStep(
             PrintStep.waitingForCompletion, 'Waiting for print completion');
@@ -371,9 +356,7 @@ class SmartPrintManager {
     // and stops all ongoing operations (CommunicationPolicy, status polling, etc.)
     _cancellationToken?.cancel();
     
-    // Cancel timeout timer to prevent timeout-triggered errors
-    _timeoutTimer?.cancel();
-    _timeoutTimer = null;
+
 
     // Stop any active status checking
     _statusCheckTimer?.cancel();
@@ -414,8 +397,6 @@ class SmartPrintManager {
 
   /// Enhanced cleanup that doesn't update step (used by cancel)
   void _cleanupWithoutStepUpdate() {
-    _timeoutTimer?.cancel();
-    _timeoutTimer = null;
     _statusCheckTimer?.cancel();
     _statusCheckTimer = null;
 
@@ -446,7 +427,7 @@ class SmartPrintManager {
     await _updateStep(PrintStep.validating, 'Validating print data');
 
     // Check for cancellation before validation
-    if (isCancelled) {
+    if (_checkCancellationAndEmit()) {
       return Result.errorCode(ErrorCodes.operationCancelled);
     }
 
@@ -619,7 +600,7 @@ class SmartPrintManager {
     await _updateStep(PrintStep.checkingStatus, 'Preparing printer for print');
 
     // Check for cancellation before preparation
-    if (isCancelled) {
+    if (_checkCancellationAndEmit()) {
       return Result.errorCode(ErrorCodes.operationCancelled);
     }
 
@@ -685,6 +666,7 @@ class SmartPrintManager {
       final prepareResult = await readinessManager.prepareForPrint(
         format,
         readinessOptions,
+        cancellationToken: _cancellationToken,
       );
 
       if (!prepareResult.success) {
@@ -713,21 +695,8 @@ class SmartPrintManager {
         final errorInfo = _classifyReadinessErrors(
             readiness.failedFixes, readiness.fixErrors);
         readinessError = errorInfo;
-        
-        _logger.info('=== READINESS DEBUG ===');
-        _logger.info('Failed fixes: ${readiness.failedFixes}');
-        _logger.info('Fix errors: ${readiness.fixErrors}');
-        _logger.info(
-            'Classified error: ${errorInfo.recoverability} - ${errorInfo.message}');
-        _logger.info('Is ready: ${readiness.isReady}');
-        _logger.info('======================');
-      } else {
-        _logger.info('=== READINESS DEBUG ===');
-        _logger.info('No failed fixes - printer ready');
-        _logger.info('Is ready: ${readiness.isReady}');
-        _logger.info('======================');
       }
-      
+
       _currentState = _currentState.copyWith(
         details: readiness.isReady
             ? 'Printer ready for print'
@@ -768,8 +737,7 @@ class SmartPrintManager {
   }
 
   /// Send print data with retry logic and return tracker
-  Future<Result<PrintOperationTracker>> _sendPrintData(
-      String data, Duration timeout) async {
+  Future<Result<PrintOperationTracker>> _sendPrintData(String data) async {
     while (_currentState.currentAttempt <= _currentState.maxAttempts &&
         !isCancelled) {
       await _updateStep(PrintStep.sending, 'Sending print data');
@@ -780,6 +748,7 @@ class SmartPrintManager {
           options: PrintOptions(
             readinessOptions: const ReadinessOptions(),
             cancellationToken: _cancellationToken,
+            skipConnectionHealthCheck: true,
           ),
         );
         if (result.success) {
@@ -1079,8 +1048,6 @@ class SmartPrintManager {
 
   /// Cleanup resources with enhanced safety
   void _cleanup() {
-    _timeoutTimer?.cancel();
-    _timeoutTimer = null;
     _statusCheckTimer?.cancel();
     _statusCheckTimer = null;
     
@@ -1154,6 +1121,38 @@ class SmartPrintManager {
 
   /// Check if operation is cancelled
   bool get isCancelled => _cancellationToken?.isCancelled ?? false;
+
+  /// Check for cancellation and emit event if cancelled
+  /// Returns true if cancelled, false if not cancelled
+  /// This method handles the cancellation check and event emission in one place
+  bool _checkCancellationAndEmit() {
+    if (isCancelled) {
+      _logger.info(
+        'Print operation cancelled by user at step: ${_currentState.currentStep} '
+        '(attempt ${_currentState.currentAttempt}/${_currentState.maxAttempts}, '
+        'elapsed: ${DateTime.now().difference(_currentState.startTime ?? DateTime.now()).inMilliseconds}ms)',
+      );
+
+      _emitEvent(PrintEvent(
+        type: PrintEventType.cancelled,
+        timestamp: DateTime.now(),
+        stepInfo: _createStepInfo(
+            PrintStep.cancelled, 'Print operation cancelled by user'),
+        printState: _currentState,
+        metadata: {
+          'cancelledAtStep': _currentState.currentStep.toString(),
+          'cancelledAtAttempt': _currentState.currentAttempt,
+          'totalAttempts': _currentState.maxAttempts,
+          'elapsedMs': DateTime.now()
+              .difference(_currentState.startTime ?? DateTime.now())
+              .inMilliseconds,
+          'cancelledByUser': true,
+        },
+      ));
+      return true;
+    }
+    return false;
+  }
 
   /// Check if there's an active operation that can be cancelled
   bool get canCancel => _currentState.isRunning && !isCancelled;

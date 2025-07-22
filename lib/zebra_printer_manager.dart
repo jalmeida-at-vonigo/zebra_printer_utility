@@ -294,25 +294,37 @@ class ZebraPrinterManager {
     }
 
     try {
-      // Step 1: Ensure connection health before printing
-      _logger.info('Manager: Ensuring connection health before printing');
-      final healthResult = await _communicationPolicy!.getConnectionStatus();
-      if (!healthResult.success || !healthResult.data!) {
-        _logger.warning(
-            'Manager: Connection health check failed, attempting reconnection');
-        final reconnectResult = await connect(
-          connectedPrinter!,
-          options: CommunicationPolicyOptions(
-            skipConnectionRetry: true,
-            cancellationToken: options?.cancellationToken,
-          ),
-        );
+      // Step 1: Ensure connection health before printing (skip if called from SmartPrintManager)
+      final skipConnectionCheck = options?.skipConnectionHealthCheck ?? false;
+      if (!skipConnectionCheck) {
+        _logger.info('Manager: Ensuring connection health before printing');
+        _logger.debug(
+            'Manager: Connection health check triggered by ZebraPrinterManager.print() - this may be redundant if called from SmartPrintManager');
+        
+        final healthResult = await _communicationPolicy!.getConnectionStatus();
+        if (!healthResult.success || !healthResult.data!) {
+          _logger.warning(
+              'Manager: Connection health check failed, attempting reconnection');
+          final reconnectResult = await connect(
+            connectedPrinter!,
+            options: CommunicationPolicyOptions(
+              skipConnectionRetry: true,
+              cancellationToken: options?.cancellationToken,
+            ),
+          );
 
-        if (!reconnectResult.success) {
-          _logger.error(
-              'Manager: Failed to reconnect after connection health failure');
-          return Result.error('Failed to establish connection for printing');
+          if (!reconnectResult.success) {
+            _logger.error(
+                'Manager: Failed to reconnect after connection health failure');
+            return Result.error('Failed to establish connection for printing');
+          }
+        } else {
+          _logger.debug(
+              'Manager: Connection health check passed - printer is ready for printing');
         }
+      } else {
+        _logger.debug(
+            'Manager: Skipping connection health check (already handled by SmartPrintManager)');
       }
 
       // Step 2: Detect data format
@@ -332,6 +344,7 @@ class ZebraPrinterManager {
       final prepareResult = await _readinessManager!.prepareForPrint(
         detectedFormat,
         readinessOptions,
+        cancellationToken: options.cancellationToken,
       );
 
       if (!prepareResult.success) {
@@ -343,6 +356,16 @@ class ZebraPrinterManager {
           formatArgs: [
             'Printer preparation failed: ${prepareResult.error?.message}'
           ],
+        );
+      }
+
+      // Check for cancellation after readiness preparation
+      if (options.cancellationToken?.isCancelled ?? false) {
+        _logger.info(
+            'Print operation cancelled by user after readiness preparation');
+        return Result.errorCode(
+          ErrorCodes.operationCancelled,
+          formatArgs: ['Print operation cancelled'],
         );
       }
 
@@ -363,6 +386,15 @@ class ZebraPrinterManager {
       // Step 5: Send print data with connection failure handling
       _logger.info('Manager: Sending print data to printer');
       _statusStreamController?.add('Sending print data...');
+
+      // Check for cancellation before sending print data
+      if (options.cancellationToken?.isCancelled ?? false) {
+        _logger.info('Print operation cancelled by user before sending data');
+        return Result.errorCode(
+          ErrorCodes.operationCancelled,
+          formatArgs: ['Print operation cancelled'],
+        );
+      }
 
       final printResult = await _communicationPolicy!.execute(
         () => _printer!.print(data: preparedData, format: detectedFormat),
@@ -402,6 +434,16 @@ class ZebraPrinterManager {
 
       // Step 6: Post-print buffer operations (format-specific)
       if (detectedFormat == PrintFormat.cpcl) {
+        // Check for cancellation before buffer operations
+        if (options.cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'Print operation cancelled by user before buffer operations');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Print operation cancelled'],
+          );
+        }
+        
         _logger.info('Manager: Sending CPCL flush command');
         try {
           final flushCommand =
@@ -409,10 +451,11 @@ class ZebraPrinterManager {
           final flushResult = await _communicationPolicy!.execute(
             () => flushCommand.execute(),
             flushCommand.operationName,
-            options: const CommunicationPolicyOptions(
+            options: CommunicationPolicyOptions(
               skipConnectionCheck: true, // We just printed successfully
               skipConnectionRetry: true, // This is optional cleanup
               maxAttempts: 1,
+              cancellationToken: options.cancellationToken,
             ),
           );
           if (flushResult.success) {
@@ -429,6 +472,16 @@ class ZebraPrinterManager {
 
       // Step 7: Wait for print completion with format-specific delays (if enabled)
       if (options.waitForPrintCompletionOrDefault && tracker != null) {
+        // Check for cancellation before waiting for completion
+        if (options.cancellationToken?.isCancelled ?? false) {
+          _logger.info(
+              'Manager: Print operation cancelled before completion wait');
+          return Result.errorCode(
+            ErrorCodes.operationCancelled,
+            formatArgs: ['Print operation cancelled'],
+          );
+        }
+        
         final completionResult = await tracker.waitForCompletion(
           data: preparedData,
           format: detectedFormat,

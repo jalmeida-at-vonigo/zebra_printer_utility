@@ -6,6 +6,7 @@ import '../../models/result.dart';
 import '../../zebra_printer.dart';
 import '../../zebra_printer_manager.dart';
 import 'logger.dart';
+import 'policies/policies.dart' as policies;
 import 'zebra_error_bridge.dart';
 
 /// Centralized communication policy for printer operations with optimistic execution
@@ -49,7 +50,7 @@ class CommunicationPolicy {
   
   /// Connection timeout settings
   static const Duration _connectionCheckTimeout = Duration(minutes: 5);
-  static const Duration _operationTimeout = Duration(seconds: 10);
+  static const Duration _operationTimeout = Duration(seconds: 7);
   static const Duration _retryDelay = Duration(milliseconds: 500);
   static const int _maxRetries = 2;
   
@@ -122,7 +123,7 @@ class CommunicationPolicy {
   }) async {
     _logger.info('Executing $operationName with optimistic workflow');
     onStatusUpdate?.call('Starting $operationName...');
-    final opTimeout = timeout ?? _operationTimeout;
+    
     // Step 1: Preemptive connection check (only if needed)
     final shouldCheckConnection = !skipConnectionCheck && _shouldCheckConnection();
     if (shouldCheckConnection) {
@@ -136,31 +137,56 @@ class CommunicationPolicy {
             connectionResult, 'Connection check failed');
       }
     }
-    // Step 2: Optimistic execution (run first, react to failures)
-    _logger.debug('Executing $operationName optimistically');
+    
+    // Step 2: Use policy system for timeout handling
+    _logger.debug('Executing $operationName with policy system');
     onStatusUpdate?.call('Executing $operationName...');
+    
+    final effectiveTimeout = timeout ?? _operationTimeout;
+    final timeoutPolicy = policies.TimeoutPolicy.of(effectiveTimeout);
+    
     try {
-      final result = await operation().timeout(opTimeout);
-      if (result.success) {
-        _logger.info('$operationName completed successfully');
-        onStatusUpdate?.call('$operationName completed');
-        return result;
-      }
-      // Step 3: React to failures - check if it's connection-related
-      final errorMessage = result.error!.message.toLowerCase();
-      if (errorMessage.contains('connection') ||
-          errorMessage.contains('timeout') ||
-          errorMessage.contains('network') ||
-          errorMessage.contains('bluetooth')) {
-        _logger.warning('Connection error detected in $operationName: ${result.error?.message}');
-        onStatusUpdate?.call('Connection error - attempting recovery...');
-        // Step 4: Handle connection failure and retry
-        return await _handleConnectionFailureAndRetry(operation, operationName);
-      }
-      // Non-connection error, return immediately
-      _logger.debug('Non-connection error in $operationName: ${result.error?.message}');
-      onStatusUpdate?.call('$operationName failed: ${result.error?.message}');
-      return result;
+      final result = await timeoutPolicy.execute<T>(
+        () async {
+          final operationResult = await operation();
+
+          if (operationResult.success) {
+            _logger.info('$operationName completed successfully');
+            onStatusUpdate?.call('$operationName completed');
+            return operationResult.data as T;
+          }
+          
+          // Step 3: React to failures - check if it's connection-related
+          final errorMessage = operationResult.error!.message.toLowerCase();
+          if (errorMessage.contains('connection') ||
+              errorMessage.contains('timeout') ||
+              errorMessage.contains('network') ||
+              errorMessage.contains('bluetooth')) {
+            _logger.warning(
+                'Connection error detected in $operationName: ${operationResult.error?.message}');
+            onStatusUpdate?.call('Connection error - attempting recovery...');
+            // Step 4: Handle connection failure and retry
+            final retryResult = await _handleConnectionFailureAndRetry(
+                operation, operationName);
+            if (retryResult.success) {
+              return retryResult.data as T;
+            } else {
+              throw Exception(retryResult.error ?? 'Retry failed');
+            }
+          }
+
+          // Non-connection error, throw exception
+          _logger.debug(
+              'Non-connection error in $operationName: ${operationResult.error?.message}');
+          onStatusUpdate?.call(
+              '$operationName failed: ${operationResult.error?.message}');
+          throw Exception(operationResult.error ?? 'Operation failed');
+        },
+        operationName: operationName,
+      );
+
+      // Convert T back to Result<T>
+      return Result.success(result);
     } catch (e) {
       _logger.error('Unexpected error in $operationName: $e');
       onStatusUpdate?.call('Unexpected error: $e');
@@ -179,199 +205,149 @@ class CommunicationPolicy {
     void Function(CommunicationPolicyEvent event)? onEvent,
     CancellationToken? cancellationToken,
   }) async {
-    int attempt = 1;
-    final opTimeout = timeout ?? _operationTimeout;
-    while (attempt <= maxAttempts) {
-      // Check for cancellation before each attempt
-      if (cancellationToken?.isCancelled == true) {
-        _logger.info(
-            '[$operationName] Operation cancelled before attempt $attempt');
-        onEvent?.call(CommunicationPolicyEvent(
-          type: CommunicationPolicyEventType.failed,
-          attempt: attempt,
-          maxAttempts: maxAttempts,
-          message: '$operationName cancelled by token',
-        ));
-        return ZebraErrorBridge.fromError<T>(
-          Exception('$operationName cancelled'),
-          stackTrace: StackTrace.current,
-        );
-      }
+    _logger.info('[$operationName] Using policy system for retry logic');
+    _logger.debug(
+        '[$operationName] Retry configuration: maxAttempts=$maxAttempts, timeout=${timeout?.inSeconds}s, retryDelay=${_retryDelay.inMilliseconds}ms');
 
-      onEvent?.call(CommunicationPolicyEvent(
-        type: CommunicationPolicyEventType.attempt,
-        attempt: attempt,
-        maxAttempts: maxAttempts,
-        message: 'Attempt $attempt/$maxAttempts for $operationName',
-      ));
-      _logger.info('[$operationName] Attempt $attempt/$maxAttempts');
-      try {
-        final result = await _executeOperation(
-          operation,
-          operationName,
-          skipConnectionCheck: skipConnectionCheck,
-          timeout: opTimeout,
-        );
-        if (result.success) {
-          onEvent?.call(CommunicationPolicyEvent(
-            type: CommunicationPolicyEventType.success,
-            attempt: attempt,
-            maxAttempts: maxAttempts,
-            message: '$operationName succeeded on attempt $attempt',
-          ));
-          return result;
-        } else {
-          onEvent?.call(CommunicationPolicyEvent(
-            type: CommunicationPolicyEventType.error,
-            attempt: attempt,
-            maxAttempts: maxAttempts,
-            message: '$operationName failed: ${result.error?.message}',
-            error: result.error,
-          ));
-          
-          // Use type-safe Result properties to determine if we should abort early
-          if (result.isPermissionError) {
-            _logger.warning(
-                'Permission error detected - aborting retries for $operationName');
-            onEvent?.call(CommunicationPolicyEvent(
-              type: CommunicationPolicyEventType.failed,
-              attempt: attempt,
-              maxAttempts: maxAttempts,
-              message: '$operationName aborted due to permission error',
-              error: result.error,
-            ));
-            return result; // Don't re-bridge, preserve original ZebraPrinter error
-          } else if (result.isHardwareError) {
-            _logger.warning(
-                'Hardware error detected - aborting retries for $operationName');
-            onEvent?.call(CommunicationPolicyEvent(
-              type: CommunicationPolicyEventType.failed,
-              attempt: attempt,
-              maxAttempts: maxAttempts,
-              message: '$operationName aborted due to hardware error',
-              error: result.error,
-            ));
-            return result; // Don't re-bridge, preserve original ZebraPrinter error
-          }
-        }
-      } catch (e) {
-        onEvent?.call(CommunicationPolicyEvent(
-          type: CommunicationPolicyEventType.error,
-          attempt: attempt,
-          maxAttempts: maxAttempts,
-          message: '$operationName threw: $e',
-          error: e,
-        ));
-        _logger.error('[$operationName] Error on attempt $attempt: $e');
-      }
-      
-      if (attempt < maxAttempts) {
-        // Check for cancellation before retry delay
-        if (cancellationToken?.isCancelled == true) {
-          _logger
-              .info('[$operationName] Operation cancelled during retry delay');
-          onEvent?.call(CommunicationPolicyEvent(
-            type: CommunicationPolicyEventType.failed,
-            attempt: attempt,
-            maxAttempts: maxAttempts,
-            message: '$operationName cancelled during retry',
-          ));
-          return ZebraErrorBridge.fromError<T>(
-            Exception('$operationName cancelled during retry'),
-            stackTrace: StackTrace.current,
-          );
-        }
-
-        onEvent?.call(CommunicationPolicyEvent(
-          type: CommunicationPolicyEventType.retry,
-          attempt: attempt,
-          maxAttempts: maxAttempts,
-          message: 'Retrying $operationName after failure',
-        ));
-        await Future.delayed(_retryDelay * attempt);
-      }
-      attempt++;
-    }
-    onEvent?.call(CommunicationPolicyEvent(
-      type: CommunicationPolicyEventType.failed,
-      attempt: maxAttempts,
-      maxAttempts: maxAttempts,
-      message: '$operationName failed after $maxAttempts attempts',
-    ));
-    // Use bridge for final failure with context about what types of errors were encountered
-    return ZebraErrorBridge.fromError<T>(
-      Exception('$operationName failed after $maxAttempts attempts'),
-      stackTrace: StackTrace.current,
+    // Create policy wrapper with timeout and retry
+    final policy = policies.PolicyWrapper.withTimeoutAndRetryWithDelay(
+      timeout ?? _operationTimeout,
+      maxAttempts,
+      _retryDelay,
     );
+
+    // Emit initial attempt event
+    onEvent?.call(CommunicationPolicyEvent(
+      type: CommunicationPolicyEventType.attempt,
+      attempt: 1,
+      maxAttempts: maxAttempts,
+      message: 'Starting $operationName with policy system',
+    ));
+
+    try {
+      // Use policy system for the entire retry logic
+      final result = await policy.execute<T>(
+        () async {
+          _logger.debug('[$operationName] Executing operation attempt');
+
+          // Execute the operation with connection check if needed
+          final operationResult = await _executeOperation(
+            operation,
+            operationName,
+            skipConnectionCheck: skipConnectionCheck,
+            timeout: timeout,
+          );
+          
+          // Convert Result<T> to T or throw exception
+          if (operationResult.success) {
+            _logger.debug('[$operationName] Operation succeeded');
+            return operationResult.data as T;
+          } else {
+            _logger.debug(
+                '[$operationName] Operation failed: ${operationResult.error?.message}');
+            throw Exception(operationResult.error ?? 'Operation failed');
+          }
+        },
+        operationName: operationName,
+        cancellationToken: cancellationToken,
+      );
+
+      // Emit success event
+      onEvent?.call(CommunicationPolicyEvent(
+        type: CommunicationPolicyEventType.success,
+        attempt: 1,
+        maxAttempts: maxAttempts,
+        message: '$operationName succeeded',
+      ));
+      
+      // Convert T back to Result<T>
+      return Result.success(result);
+    } catch (e) {
+      _logger.error('[$operationName] Policy execution failed: $e');
+      _logger.debug(
+          '[$operationName] This failure may trigger retry attempts by the policy system');
+      
+      onEvent?.call(CommunicationPolicyEvent(
+        type: CommunicationPolicyEventType.failed,
+        attempt: maxAttempts,
+        maxAttempts: maxAttempts,
+        message: '$operationName failed with exception: $e',
+        error: e,
+      ));
+      return ZebraErrorBridge.fromError<T>(e, stackTrace: StackTrace.current);
+    }
   }
   
   /// Check if connection check is needed based on timeout
   bool _shouldCheckConnection() {
     if (_lastConnectionCheck == null) {
+      _logger.debug('Connection check needed: never checked before');
       return true; // Never checked before
     }
     
     final timeSinceLastCheck = DateTime.now().difference(_lastConnectionCheck!);
-    return timeSinceLastCheck > _connectionCheckTimeout;
+    final shouldCheck = timeSinceLastCheck > _connectionCheckTimeout;
+
+    if (shouldCheck) {
+      _logger.debug(
+          'Connection check needed: ${timeSinceLastCheck.inMinutes} minutes since last check (timeout: ${_connectionCheckTimeout.inMinutes} minutes)');
+    } else {
+      _logger.debug(
+          'Connection check skipped: ${timeSinceLastCheck.inMinutes} minutes since last check (timeout: ${_connectionCheckTimeout.inMinutes} minutes)');
+    }
+
+    return shouldCheck;
   }
   
   /// Check connection with timeout and retry logic
   Future<Result<bool>> _checkConnection() async {
     _lastConnectionCheck = DateTime.now();
     
-    int attempts = 0;
-    while (attempts <= _maxRetries) {
-      attempts++;
-      _logger.debug('Connection check attempt $attempts/${_maxRetries + 1}');
-      
-      try {
-        final connectionResult =
-            await _printer.isPrinterConnected().timeout(_operationTimeout);
-        
-        if (connectionResult.success && (connectionResult.data ?? false)) {
-          _logger.info('Connection verified successfully');
-          return Result.success(true);
-        }
-        
-        _logger.warning(
-            'Connection check failed on attempt $attempts: ${connectionResult.error?.message}');
-        if (attempts > _maxRetries) {
-          return Result.errorFromResult(connectionResult,
-              'Connection check failed after $_maxRetries attempts');
-        }
-        
-        await Future.delayed(_retryDelay * attempts);
-        
-      } catch (e) {
-        _logger.error('Connection check error on attempt $attempts: $e');
-        
-        // Check error type for better error handling
-        final errorMessage = e.toString().toLowerCase();
-        if (errorMessage.contains('timeout')) {
-          _logger.warning('Connection check timed out on attempt $attempts');
-        } else if (errorMessage.contains('permission')) {
-          _logger.error(
-              'Permission error during connection check - aborting retries');
-          return ZebraErrorBridge.fromConnectionError<bool>(
-            e,
-            stackTrace: StackTrace.current,
-          );
-        }
-        
-        if (attempts > _maxRetries) {
-          return ZebraErrorBridge.fromConnectionError<bool>(
-            e,
-            stackTrace: StackTrace.current,
-          );
-        }
-        await Future.delayed(_retryDelay * attempts);
-      }
-    }
+    _logger.debug(
+        'Starting connection check (triggered by policy timeout or explicit call)');
     
-    return ZebraErrorBridge.fromConnectionError<bool>(
-      Exception('Unexpected: exceeded maximum connection attempts'),
-      stackTrace: StackTrace.current,
+    // Use policy system for connection check with timeout and retry
+    final policy = policies.PolicyWrapper.withTimeoutAndRetryWithDelay(
+      const Duration(seconds: 7),
+      _maxRetries + 1,
+      _retryDelay,
     );
+
+    try {
+      await policy.execute<bool>(
+        () async {
+          final connectionResult = await _printer.isPrinterConnected();
+          if (connectionResult.success && (connectionResult.data ?? false)) {
+            return true;
+          } else {
+            throw Exception(
+                connectionResult.error?.message ?? 'Connection check failed');
+          }
+        },
+        operationName: 'Connection Check',
+        cancellationToken: null, // Connection check doesn't need cancellation
+      );
+      
+      _logger.info('Connection verified successfully');
+      return Result.success(true);
+    } catch (e) {
+      _logger.error('Connection check error: $e');
+
+      // Check error type for better error handling
+      final errorMessage = e.toString().toLowerCase();
+      if (errorMessage.contains('permission')) {
+        _logger.error('Permission error during connection check');
+        return ZebraErrorBridge.fromConnectionError<bool>(
+          e,
+          stackTrace: StackTrace.current,
+        );
+      }
+      
+      return ZebraErrorBridge.fromConnectionError<bool>(
+        e,
+        stackTrace: StackTrace.current,
+      );
+    }
   }
   
   /// Handle connection failure and retry the operation
@@ -396,7 +372,8 @@ class CommunicationPolicy {
     
     // Retry the operation
     try {
-      final retryResult = await operation().timeout(_operationTimeout);
+      // For operations that already have native timeouts, don't add another timeout
+      final retryResult = await operation();
       
       if (retryResult.success) {
         _logger.info('$operationName completed successfully after reconnection');

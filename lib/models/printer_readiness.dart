@@ -203,18 +203,15 @@ class PrinterReadiness {
 
   /// Get overall readiness status (lazy)
   Future<bool> get isReady async {
-
+    // Only read all statuses once, then use cached values
     await readAllStatuses();
 
-    if (wasConnectionRead && (await isConnected) == false) return false;
-
-    if (wasMediaRead && (await hasMedia) == false) return false;
-
-    if (wasHeadRead && (await headClosed) == false) return false;
-
-    if (wasPauseRead && (await isPaused) == true) return false;
-
-    if (wasHostRead && (await errors).isNotEmpty) return false;
+    // Use cached values instead of triggering new reads
+    if (_connectionRead && _isConnected == false) return false;
+    if (_mediaRead && _hasMedia == false) return false;
+    if (_headRead && _headClosed == false) return false;
+    if (_pauseRead && _isPaused == true) return false;
+    if (_hostRead && _errors.isNotEmpty) return false;
 
     return true;
   }
@@ -268,9 +265,16 @@ class PrinterReadiness {
 
   // Private methods to read statuses
   Future<void> _readConnectionStatus() async {
-    if (_connectionRead) return;
+    if (_connectionRead) {
+      _logger.debug(
+          'PrinterReadiness: Connection status already read, skipping duplicate read');
+      return;
+    }
 
     _logger.info('PrinterReadiness: Reading connection status');
+    _logger.debug(
+        'PrinterReadiness: Connection status read triggered by ensureConnection() call');
+    
     try {
       // Use centralized connection assurance
       final result = await _communicationPolicy.getConnectionStatus();
@@ -285,9 +289,16 @@ class PrinterReadiness {
   }
 
   Future<void> _readMediaStatus() async {
-    if (_mediaRead) return;
+    if (_mediaRead) {
+      _logger.debug(
+          'PrinterReadiness: Media status already read, skipping duplicate read');
+      return;
+    }
 
     _logger.info('PrinterReadiness: Reading media status');
+    _logger.debug(
+        'PrinterReadiness: Media status read triggered by ensureMediaStatus() call');
+    
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetMediaStatusCommand(_printer);
@@ -317,9 +328,16 @@ class PrinterReadiness {
   }
 
   Future<void> _readHeadStatus() async {
-    if (_headRead) return;
+    if (_headRead) {
+      _logger.debug(
+          'PrinterReadiness: Head status already read, skipping duplicate read');
+      return;
+    }
 
     _logger.info('PrinterReadiness: Reading head status');
+    _logger.debug(
+        'PrinterReadiness: Head status read triggered by ensureHeadStatus() call');
+    
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetHeadStatusCommand(_printer);
@@ -432,9 +450,16 @@ class PrinterReadiness {
   }
   
   Future<void> _readLanguageStatus() async {
-    if (_languageRead) return;
+    if (_languageRead) {
+      _logger.debug(
+          'PrinterReadiness: Language status already read, skipping duplicate read');
+      return;
+    }
     
     _logger.info('PrinterReadiness: Reading language status');
+    _logger.debug(
+        'PrinterReadiness: Language status read triggered by ensureLanguageStatus() call');
+    
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetLanguageCommand(_printer);

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import '../../models/operation_log_entry.dart';
 import '../../models/result.dart';
+import '../../zebra_printer_manager.dart';
 import 'native_operation.dart';
+import 'policies/policies.dart' as policies;
 
 /// Result-based OperationManager with logging capabilities
 class OperationManager {
@@ -57,6 +59,7 @@ class OperationManager {
     required String method,
     Map<String, dynamic>? arguments,
     Duration timeout = const Duration(seconds: 30),
+    CancellationToken? cancellationToken,
   }) async {
     final operationId = _generateOperationId();
     final startTime = DateTime.now();
@@ -83,6 +86,15 @@ class OperationManager {
     onLog?.call('Starting operation $operationId: $method');
 
     try {
+      // Check for cancellation before starting
+      if (cancellationToken?.isCancelled ?? false) {
+        onLog?.call('Operation $operationId cancelled before start');
+        return Result.errorCode(
+          ErrorCodes.operationCancelled,
+          formatArgs: ['Operation cancelled'],
+        );
+      }
+      
       // Add operation ID to arguments
       final args = Map<String, dynamic>.from(arguments ?? {});
       args['operationId'] = operationId;
@@ -90,33 +102,15 @@ class OperationManager {
       // Invoke the native method
       await channel.invokeMethod(method, args);
 
-      // Wait for completion with timeout
-      final result = await operation.completer.future.timeout(
-        timeout,
-        onTimeout: () {
-          _activeOperations.remove(operationId);
-          onLog?.call('Operation $operationId timed out');
-          
-          final duration = DateTime.now().difference(startTime);
-          final timeoutEntry = OperationLogEntry(
-            operationId: operationId,
-            method: method,
-            status: 'timeout',
-            timestamp: DateTime.now(),
-            arguments: arguments,
-            error: 'Operation timed out after ${timeout.inSeconds}s',
-            duration: duration,
-            channelName: channel.name,
-            stackTrace: StackTrace.current,
-          );
-          _addLogEntry(timeoutEntry);
-          
-          throw TimeoutException(
-            'Operation "$method" (ID: $operationId) timed out after ${timeout.inSeconds}s on channel "${channel.name}". '
-            'Arguments: ${arguments.toString()}',
-            timeout,
-          );
+      // Use policy system for timeout handling
+      final timeoutPolicy = policies.TimeoutPolicy.of(timeout);
+      final result = await timeoutPolicy.execute<T>(
+        () async {
+          final futureResult = await operation.completer.future;
+          return futureResult;
         },
+        operationName: 'Operation $operationId ($method)',
+        cancellationToken: cancellationToken,
       );
 
       final duration = DateTime.now().difference(startTime);
@@ -133,7 +127,7 @@ class OperationManager {
       _addLogEntry(successEntry);
       
       onLog?.call('Operation $operationId completed successfully');
-      return Result<T>.success(result as T);
+      return Result<T>.success(result);
     } on TimeoutException catch (e) {
       final duration = DateTime.now().difference(startTime);
       final timeoutEntry = OperationLogEntry(

@@ -200,7 +200,7 @@ class ZebraPrinter {
         final result = await _operationManager.execute<bool>(
           method: 'connectToPrinter',
           arguments: {'Address': address},
-          timeout: const Duration(seconds: 10),
+          timeout: const Duration(seconds: 7),
         );
         if (result.success && (result.data ?? false)) {
           _logger.info('Successfully connected to printer: $address');
@@ -362,7 +362,7 @@ class ZebraPrinter {
         final result = await _operationManager.execute<String>(
           method: 'getSetting',
           arguments: {'setting': setting},
-          timeout: const Duration(seconds: 10),
+          timeout: const Duration(seconds: 7),
         );
         if (result.success) {
           final data = result.data?.isNotEmpty == true ? result.data : null;
@@ -388,7 +388,7 @@ class ZebraPrinter {
         final result = await _operationManager.execute<bool>(
           method: 'isPrinterConnected',
           arguments: {},
-          timeout: const Duration(seconds: 5),
+          timeout: const Duration(seconds: 7),
         );
         if (result.success) {
           return result.data ?? false;

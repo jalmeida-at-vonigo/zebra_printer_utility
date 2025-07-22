@@ -10,6 +10,7 @@ class PrintOptions {
     this.readinessOptions,
     this.format,
     this.cancellationToken,
+    this.skipConnectionHealthCheck,
   });
 
   /// Default print options with completion waiting enabled
@@ -43,8 +44,10 @@ class PrintOptions {
   /// Cancellation token for aborting operations
   final CancellationToken? cancellationToken;
 
-  /// Gets waitForPrintCompletion with default value
+  /// Whether to skip connection health check (useful when called from SmartPrintManager)
+  final bool? skipConnectionHealthCheck;
 
+  /// Gets waitForPrintCompletion with default value
   bool get waitForPrintCompletionOrDefault => waitForPrintCompletion ?? true;
 
   /// Gets readinessOptions with default value
@@ -62,6 +65,8 @@ class PrintOptions {
       readinessOptions: other?.readinessOptions ?? readinessOptions,
       format: other?.format ?? format,
       cancellationToken: other?.cancellationToken ?? cancellationToken,
+      skipConnectionHealthCheck:
+          other?.skipConnectionHealthCheck ?? skipConnectionHealthCheck,
     );
   }
 } 

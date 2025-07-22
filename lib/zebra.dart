@@ -294,7 +294,6 @@ class Zebra {
     String data, {
     ZebraDevice? device,
     int maxAttempts = 3,
-    Duration timeout = const Duration(seconds: 60),
     PrintOptions? options,
   }) async* {
     // Convert null options to empty instance to avoid ?? operators throughout
@@ -331,7 +330,6 @@ class Zebra {
       data: data,
       device: device,
       maxAttempts: maxAttempts,
-      timeout: timeout,
       options: options,
     );
     
