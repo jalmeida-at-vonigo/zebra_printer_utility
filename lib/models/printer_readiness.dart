@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import '../internal/commands/command_factory.dart';
-import '../internal/communication_policy.dart';
 import '../internal/logger.dart';
 import '../internal/parser_util.dart';
+import '../internal/policies/policies.dart' as policies;
 import '../zebra_printer.dart';
 import 'readiness_options.dart';
 
@@ -13,287 +15,292 @@ class PrinterReadiness {
     required ZebraPrinter printer,
     ReadinessOptions? options,
   })  : _printer = printer,
-        _options = options {
-    _communicationPolicy = CommunicationPolicy(printer);
-  }
+        _options = options;
+        
   final ZebraPrinter _printer;
   final Logger _logger = Logger.withPrefix('PrinterReadiness');
-  
-  /// Communication policy for connection assurance and command execution
-  late final CommunicationPolicy _communicationPolicy;
-
-  // Connection status
-  bool? _isConnected;
-  bool _connectionRead = false;
-
-  // Media status
-  String? _mediaStatus;
-  bool? _hasMedia;
-  bool _mediaRead = false;
-
-  // Head status
-  String? _headStatus;
-  bool? _headClosed;
-  bool _headRead = false;
-
-  // Pause status
-  String? _pauseStatus;
-  bool? _isPaused;
-  bool _pauseRead = false;
-
-  // Host/Error status
-  String? _hostStatus;
-  List<String> _errors = [];
-  bool _hostRead = false;
-
-  // Language status
-  String? _languageStatus;
-  bool _languageRead = false;
 
   // Readiness options to control what gets read
   final ReadinessOptions? _options;
 
+  // Completers for lazy loading - prevents concurrent reads
+  Completer<bool?>? _connectionCompleter;
+  Completer<String?>? _mediaStatusCompleter;
+  Completer<bool?>? _hasMediaCompleter;
+  Completer<String?>? _headStatusCompleter;
+  Completer<bool?>? _headClosedCompleter;
+  Completer<String?>? _pauseStatusCompleter;
+  Completer<bool?>? _isPausedCompleter;
+  Completer<String?>? _hostStatusCompleter;
+  Completer<List<String>>? _errorsCompleter;
+  Completer<String?>? _languageStatusCompleter;
+
+  // Error tracking for status reads
+  String? _lastConnectionError;
+  String? _lastMediaError;
+  String? _lastHeadError;
+  String? _lastPauseError;
+  String? _lastHostError;
+  String? _lastLanguageError;
+
+  // Private fields to store actual values
+  String? _mediaStatus;
+  String? _headStatus;
+  String? _pauseStatus;
+  String? _hostStatus;
+  List<String> _errors = [];
+  String? _languageStatus;
+
+  // Timeout policy for all operations
+  static final _timeoutPolicy =
+      policies.TimeoutPolicy.of(const Duration(seconds: 7));
+
   /// Get connection status (lazy)
   Future<bool?> get isConnected async {
-    return await ensureConnection();
-  }
-
-  /// Ensure connection status is checked and return the value
-  Future<bool?> ensureConnection() async {
-    if (!_connectionRead && (_options?.checkConnection ?? true)) {
-      await _readConnectionStatus();
+    if (_connectionCompleter == null && (_options?.checkConnection ?? true)) {
+      _connectionCompleter = Completer<bool?>();
+      _readConnectionStatus()
+          .then((connected) => _connectionCompleter!.complete(connected))
+          .catchError((error) {
+        _lastConnectionError = error.toString();
+        _connectionCompleter!.complete(null);
+      });
     }
-    return _isConnected;
+    return _connectionCompleter?.future ?? Future.value(null);
   }
 
   /// Whether connection status has been read
-  bool get wasConnectionRead => _connectionRead;
+  bool get wasConnectionRead => _connectionCompleter?.isCompleted ?? false;
 
   /// Get media status (lazy)
   Future<String?> get mediaStatus async {
-    return await ensureMediaStatus();
-  }
-
-  /// Ensure media status is checked and return the value
-  Future<String?> ensureMediaStatus() async {
-    if (!_mediaRead && (_options?.checkMedia ?? true)) {
-      await _readMediaStatus();
+    if (_mediaStatusCompleter == null && (_options?.checkMedia ?? true)) {
+      _mediaStatusCompleter = Completer<String?>();
+      _readMediaStatus()
+          .then((_) => _mediaStatusCompleter!.complete(_mediaStatus))
+          .catchError((error) {
+        _lastMediaError = error.toString();
+        _mediaStatusCompleter!.complete(null);
+      });
     }
-    return _mediaStatus;
+    return _mediaStatusCompleter?.future ?? Future.value(null);
   }
 
   /// Whether media status has been read
-  bool get wasMediaRead => _mediaRead;
+  bool get wasMediaRead => _mediaStatusCompleter?.isCompleted ?? false;
 
   /// Get has media (lazy)
   Future<bool?> get hasMedia async {
-    return await ensureHasMedia();
+    if (_hasMediaCompleter == null && (_options?.checkMedia ?? true)) {
+      _hasMediaCompleter = Completer<bool?>();
+      // Ensure media status is read first
+      final status = await mediaStatus;
+      _hasMediaCompleter!
+          .complete(status != null ? ParserUtil.hasMedia(status) : null);
+    }
+    return _hasMediaCompleter?.future ?? Future.value(null);
   }
 
-  /// Ensure has media is checked and return the value
-  Future<bool?> ensureHasMedia() async {
-    if (!_mediaRead && (_options?.checkMedia ?? true)) {
-      await _readMediaStatus();
-    }
-    return _hasMedia;
-  }
+  /// Whether has media has been read
+  bool get wasHasMediaRead => _hasMediaCompleter?.isCompleted ?? false;
 
   /// Get head status (lazy)
   Future<String?> get headStatus async {
-    return await ensureHeadStatus();
-  }
-
-  /// Ensure head status is checked and return the value
-  Future<String?> ensureHeadStatus() async {
-    if (!_headRead && (_options?.checkHead ?? true)) {
-      await _readHeadStatus();
+    if (_headStatusCompleter == null && (_options?.checkHead ?? true)) {
+      _headStatusCompleter = Completer<String?>();
+      _readHeadStatus()
+          .then((_) => _headStatusCompleter!.complete(_headStatus))
+          .catchError((error) {
+        _lastHeadError = error.toString();
+        _headStatusCompleter!.complete(null);
+      });
     }
-    return _headStatus;
+    return _headStatusCompleter?.future ?? Future.value(null);
   }
 
   /// Whether head status has been read
-  bool get wasHeadRead => _headRead;
+  bool get wasHeadRead => _headStatusCompleter?.isCompleted ?? false;
 
   /// Get head closed status (lazy)
   Future<bool?> get headClosed async {
-    return await ensureHeadClosed();
+    if (_headClosedCompleter == null && (_options?.checkHead ?? true)) {
+      _headClosedCompleter = Completer<bool?>();
+      // Ensure head status is read first
+      final status = await headStatus;
+      _headClosedCompleter!
+          .complete(status != null ? ParserUtil.isHeadClosed(status) : null);
+    }
+    return _headClosedCompleter?.future ?? Future.value(null);
   }
 
-  /// Ensure head closed is checked and return the value
-  Future<bool?> ensureHeadClosed() async {
-    if (!_headRead && (_options?.checkHead ?? true)) {
-      await _readHeadStatus();
-    }
-    return _headClosed;
-  }
+  /// Whether head closed has been read
+  bool get wasHeadClosedRead => _headClosedCompleter?.isCompleted ?? false;
 
   /// Get pause status (lazy)
   Future<String?> get pauseStatus async {
-    return await ensurePauseStatus();
-  }
-
-  /// Ensure pause status is checked and return the value
-  Future<String?> ensurePauseStatus() async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
-      await _readPauseStatus();
+    if (_pauseStatusCompleter == null && (_options?.checkPause ?? true)) {
+      _pauseStatusCompleter = Completer<String?>();
+      _readPauseStatus()
+          .then((_) => _pauseStatusCompleter!.complete(_pauseStatus))
+          .catchError((error) {
+        _lastPauseError = error.toString();
+        _pauseStatusCompleter!.complete(null);
+      });
     }
-    return _pauseStatus;
+    return _pauseStatusCompleter?.future ?? Future.value(null);
   }
 
   /// Whether pause status has been read
-  bool get wasPauseRead => _pauseRead;
+  bool get wasPauseRead => _pauseStatusCompleter?.isCompleted ?? false;
 
   /// Get is paused status (lazy)
   Future<bool?> get isPaused async {
-    return await ensureIsPaused();
+    if (_isPausedCompleter == null && (_options?.checkPause ?? true)) {
+      _isPausedCompleter = Completer<bool?>();
+      // Ensure pause status is read first
+      final status = await pauseStatus;
+      _isPausedCompleter!
+          .complete(status != null ? ParserUtil.toBool(status) : null);
+    }
+    return _isPausedCompleter?.future ?? Future.value(null);
   }
 
-  /// Ensure is paused is checked and return the value
-  Future<bool?> ensureIsPaused() async {
-    if (!_pauseRead && (_options?.checkPause ?? true)) {
-      await _readPauseStatus();
-    }
-    return _isPaused;
-  }
+  /// Whether is paused has been read
+  bool get wasIsPausedRead => _isPausedCompleter?.isCompleted ?? false;
 
   /// Get host status (lazy)
   Future<String?> get hostStatus async {
-    return await ensureHostStatus();
-  }
-
-  /// Ensure host status is checked and return the value
-  Future<String?> ensureHostStatus() async {
-    if (!_hostRead && (_options?.checkErrors ?? true)) {
-      await _readHostStatus();
+    if (_hostStatusCompleter == null && (_options?.checkErrors ?? true)) {
+      _hostStatusCompleter = Completer<String?>();
+      _readHostStatus()
+          .then((_) => _hostStatusCompleter!.complete(_hostStatus))
+          .catchError((error) {
+        _lastHostError = error.toString();
+        _hostStatusCompleter!.complete(null);
+      });
     }
-    return _hostStatus;
+    return _hostStatusCompleter?.future ?? Future.value(null);
   }
 
   /// Whether host status has been read
-  bool get wasHostRead => _hostRead;
+  bool get wasHostRead => _hostStatusCompleter?.isCompleted ?? false;
 
   /// Get errors (lazy)
   Future<List<String>> get errors async {
-    return await ensureErrors();
+    if (_errorsCompleter == null && (_options?.checkErrors ?? true)) {
+      _errorsCompleter = Completer<List<String>>();
+      // Ensure host status is read first
+      await hostStatus;
+      _errorsCompleter!.complete(List.unmodifiable(_errors));
+    }
+    return _errorsCompleter?.future ?? Future.value([]);
   }
 
-  /// Ensure errors are checked and return the value
-  Future<List<String>> ensureErrors() async {
-    if (!_hostRead && (_options?.checkErrors ?? true)) {
-      await _readHostStatus();
-    }
-    return List.unmodifiable(_errors);
-  }
+  /// Whether errors have been read
+  bool get wasErrorsRead => _errorsCompleter?.isCompleted ?? false;
 
   /// Get language status (lazy)
   Future<String?> get languageStatus async {
-    return await ensureLanguageStatus();
-  }
-
-  /// Ensure language status is checked and return the value
-  Future<String?> ensureLanguageStatus() async {
-    if (!_languageRead && (_options?.checkLanguage ?? true)) {
-      await _readLanguageStatus();
+    if (_languageStatusCompleter == null && (_options?.checkLanguage ?? true)) {
+      _languageStatusCompleter = Completer<String?>();
+      _readLanguageStatus()
+          .then((_) => _languageStatusCompleter!.complete(_languageStatus))
+          .catchError((error) {
+        _lastLanguageError = error.toString();
+        _languageStatusCompleter!.complete(null);
+      });
     }
-    return _languageStatus;
+    return _languageStatusCompleter?.future ?? Future.value(null);
   }
 
   /// Whether language status has been read
-  bool get wasLanguageRead => _languageRead;
+  bool get wasLanguageRead => _languageStatusCompleter?.isCompleted ?? false;
 
   /// Get overall readiness status (lazy)
-  Future<bool> get isReady async {
-    // Only read all statuses once, then use cached values
-    await readAllStatuses();
+  /// Does NOT trigger new reads if values are already cached
+  bool get isReady {
+    // Check if all configured checks have been done and passed
+    // Note: This uses cached values and doesn't trigger new reads
 
-    // Use cached values instead of triggering new reads
-    if (_connectionRead && _isConnected == false) return false;
-    if (_mediaRead && _hasMedia == false) return false;
-    if (_headRead && _headClosed == false) return false;
-    if (_pauseRead && _isPaused == true) return false;
-    if (_hostRead && _errors.isNotEmpty) return false;
+    // Use cached values to avoid triggering new reads
+    final connectionReady =
+        wasConnectionRead || !(_options?.checkConnection ?? true);
+    final mediaReady = wasHasMediaRead || !(_options?.checkMedia ?? true);
+    final headReady = wasHeadClosedRead || !(_options?.checkHead ?? true);
+    final pauseReady = wasIsPausedRead || !(_options?.checkPause ?? true);
+    final errorsReady = wasErrorsRead || !(_options?.checkErrors ?? true);
 
-    return true;
+    return connectionReady &&
+        mediaReady &&
+        headReady &&
+        pauseReady &&
+        errorsReady;
   }
 
   /// Force read all statuses based on options
   Future<void> readAllStatuses() async {
     _logger.info('PrinterReadiness: Reading all statuses based on options');
 
-    await ensureConnection();
-    await ensureMediaStatus();
-    await ensureHeadStatus();
-    await ensurePauseStatus();
-    await ensureHostStatus();
-    await ensureLanguageStatus();
+    await isConnected;
+    await mediaStatus;
+    await headStatus;
+    await pauseStatus;
+    await hostStatus;
+    await languageStatus;
   }
 
   /// Set cached values (for use during prepare process)
   void setCachedConnection(bool connected) {
-    _isConnected = connected;
-    _connectionRead = true;
+    _connectionCompleter?.complete(connected);
+    _lastConnectionError = null;
   }
 
   void setCachedMedia(String status, bool hasMedia) {
-    _mediaStatus = status;
-    _hasMedia = hasMedia;
-    _mediaRead = true;
+    _mediaStatusCompleter?.complete(status);
+    _lastMediaError = null;
   }
 
   void setCachedHead(String status, bool headClosed) {
-    _headStatus = status;
-    _headClosed = headClosed;
-    _headRead = true;
+    _headStatusCompleter?.complete(status);
+    _lastHeadError = null;
   }
 
   void setCachedPause(String status, bool isPaused) {
-    _pauseStatus = status;
-    _isPaused = isPaused;
-    _pauseRead = true;
+    _pauseStatusCompleter?.complete(status);
+    _lastPauseError = null;
   }
 
   void setCachedHost(String status, List<String> errors) {
-    _hostStatus = status;
-    _errors = List.from(errors);
-    _hostRead = true;
+    _hostStatusCompleter?.complete(status);
+    _lastHostError = null;
   }
 
   void setCachedLanguage(String status) {
-    _languageStatus = status;
-    _languageRead = true;
+    _languageStatusCompleter?.complete(status);
+    _lastLanguageError = null;
   }
 
   // Private methods to read statuses
-  Future<void> _readConnectionStatus() async {
-    if (_connectionRead) {
-      _logger.debug(
-          'PrinterReadiness: Connection status already read, skipping duplicate read');
-      return;
-    }
-
+  Future<bool> _readConnectionStatus() async {
     _logger.info('PrinterReadiness: Reading connection status');
-    _logger.debug(
-        'PrinterReadiness: Connection status read triggered by ensureConnection() call');
     
     try {
-      // Use centralized connection assurance
-      final result = await _communicationPolicy.getConnectionStatus();
-      _isConnected = result.data ?? false;
-      _connectionRead = true;
-      _logger.info('PrinterReadiness: Connection status read: $_isConnected');
+      // Use timeout policy directly for connection check
+      final result =
+          await _timeoutPolicy.execute(() => _printer.isPrinterConnected());
+      final connected = result.success && (result.data ?? false);
+      _lastConnectionError = null;
+      _logger.info('PrinterReadiness: Connection status read: $connected');
+      return connected;
     } catch (e) {
+      _lastConnectionError = e.toString();
       _logger.error('PrinterReadiness: Error reading connection status: $e');
-      _isConnected = false;
-      _connectionRead = true;
+      return false;
     }
   }
 
   Future<void> _readMediaStatus() async {
-    if (_mediaRead) {
-      _logger.debug(
-          'PrinterReadiness: Media status already read, skipping duplicate read');
-      return;
-    }
+    if (_mediaStatusCompleter == null) return;
 
     _logger.info('PrinterReadiness: Reading media status');
     _logger.debug(
@@ -302,37 +309,28 @@ class PrinterReadiness {
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetMediaStatusCommand(_printer);
-      final result = await _communicationPolicy.execute(
-        () => command.execute(),
-        command.operationName,
-      );
+      final result = await _timeoutPolicy.execute(() => command.execute());
       
       if (result.success && result.data != null) {
         _mediaStatus = result.data;
-        _hasMedia = ParserUtil.hasMedia(result.data);
+        _lastMediaError = null;
         _logger.info(
-            'PrinterReadiness: Media status read: $_mediaStatus, hasMedia: $_hasMedia');
+            'PrinterReadiness: Media status read: ${result.data}, hasMedia: ${ParserUtil.hasMedia(result.data)}');
       } else {
         _mediaStatus = null;
-        _hasMedia = null;
+        _lastMediaError = result.error?.message ?? 'Unknown media status error';
         _logger.warning(
             'PrinterReadiness: Failed to read media status: ${result.error?.message}');
       }
-      _mediaRead = true;
     } catch (e) {
-      _logger.error('PrinterReadiness: Error reading media status: $e');
+      _lastMediaError = e.toString();
       _mediaStatus = null;
-      _hasMedia = null;
-      _mediaRead = true;
+      _logger.error('PrinterReadiness: Error reading media status: $e');
     }
   }
 
   Future<void> _readHeadStatus() async {
-    if (_headRead) {
-      _logger.debug(
-          'PrinterReadiness: Head status already read, skipping duplicate read');
-      return;
-    }
+    if (_headStatusCompleter == null) return;
 
     _logger.info('PrinterReadiness: Reading head status');
     _logger.debug(
@@ -341,82 +339,70 @@ class PrinterReadiness {
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetHeadStatusCommand(_printer);
-      final result = await _communicationPolicy.execute(
-        () => command.execute(),
-        command.operationName,
-      );
+      final result = await _timeoutPolicy.execute(() => command.execute());
       
       if (result.success && result.data != null) {
         _headStatus = result.data;
-        _headClosed = ParserUtil.isHeadClosed(result.data);
+        _lastHeadError = null;
         _logger.info(
-            'PrinterReadiness: Head status read: $_headStatus, headClosed: $_headClosed');
+            'PrinterReadiness: Head status read: ${result.data}, headClosed: ${ParserUtil.isHeadClosed(result.data)}');
       } else {
         _headStatus = null;
-        _headClosed = null;
+        _lastHeadError = result.error?.message ?? 'Unknown head status error';
         _logger.warning(
             'PrinterReadiness: Failed to read head status: ${result.error?.message}');
       }
-      _headRead = true;
     } catch (e) {
-      _logger.error('PrinterReadiness: Error reading head status: $e');
+      _lastHeadError = e.toString();
       _headStatus = null;
-      _headClosed = null;
-      _headRead = true;
+      _logger.error('PrinterReadiness: Error reading head status: $e');
     }
   }
 
   Future<void> _readPauseStatus() async {
-    if (_pauseRead) return;
+    if (_pauseStatusCompleter == null) return;
     
     _logger.info('PrinterReadiness: Reading pause status');
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetPauseStatusCommand(_printer);
-      final result = await _communicationPolicy.execute(
-        () => command.execute(),
-        command.operationName,
-      );
+      final result = await _timeoutPolicy.execute(() => command.execute());
       
       if (result.success && result.data != null) {
         _pauseStatus = result.data;
-        _isPaused = ParserUtil.toBool(result.data);
+        _lastPauseError = null;
         _logger.info(
-            'PrinterReadiness: Pause status read: $_pauseStatus, isPaused: $_isPaused');
+            'PrinterReadiness: Pause status read: ${result.data}, isPaused: ${ParserUtil.toBool(result.data)}');
       } else {
         _pauseStatus = null;
-        _isPaused = null;
+        _lastPauseError = result.error?.message ?? 'Unknown pause status error';
         _logger.warning(
             'PrinterReadiness: Failed to read pause status: ${result.error?.message}');
       }
-      _pauseRead = true;
     } catch (e) {
-      _logger.error('PrinterReadiness: Error reading pause status: $e');
+      _lastPauseError = e.toString();
       _pauseStatus = null;
-      _isPaused = null;
-      _pauseRead = true;
+      _logger.error('PrinterReadiness: Error reading pause status: $e');
     }
   }
   
   Future<void> _readHostStatus() async {
-    if (_hostRead) return;
+    if (_hostStatusCompleter == null) return;
     
     _logger.info('PrinterReadiness: Reading host status');
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetHostStatusCommand(_printer);
-      final result = await _communicationPolicy.execute(
-        () => command.execute(),
-        command.operationName,
-      );
+      final result = await _timeoutPolicy.execute(() => command.execute());
       
       if (result.success && result.data != null) {
         final hostStatusInfo = result.data!;
         _hostStatus = hostStatusInfo.details['rawStatus'] as String?;
+        _lastHostError = null;
         _logger.info('PrinterReadiness: Host status read: $hostStatusInfo');
         
         // Clear previous errors
-        _errors.clear();
+        _errors = [];
         
         // Only add errors if the status indicates problems
         if (!hostStatusInfo.isOk) {
@@ -436,25 +422,21 @@ class PrinterReadiness {
         }
       } else {
         _hostStatus = null;
-        _errors.clear();
+        _lastHostError = result.error?.message ?? 'Unknown host status error';
+        _errors = [];
         _logger.warning(
             'PrinterReadiness: Failed to read host status: ${result.error?.message}');
       }
-      _hostRead = true;
     } catch (e) {
-      _logger.error('PrinterReadiness: Error reading host status: $e');
+      _lastHostError = e.toString();
       _hostStatus = null;
-      _errors.clear();
-      _hostRead = true;
+      _errors = [];
+      _logger.error('PrinterReadiness: Error reading host status: $e');
     }
   }
   
   Future<void> _readLanguageStatus() async {
-    if (_languageRead) {
-      _logger.debug(
-          'PrinterReadiness: Language status already read, skipping duplicate read');
-      return;
-    }
+    if (_languageStatusCompleter == null) return;
     
     _logger.info('PrinterReadiness: Reading language status');
     _logger.debug(
@@ -463,165 +445,168 @@ class PrinterReadiness {
     try {
       // Use centralized command execution with assurance
       final command = CommandFactory.createGetLanguageCommand(_printer);
-      final result = await _communicationPolicy.execute(
-        () => command.execute(),
-        command.operationName,
-      );
+      final result = await _timeoutPolicy.execute(() => command.execute());
       
       if (result.success && result.data != null) {
         _languageStatus = result.data;
+        _lastLanguageError = null;
         _logger
-            .info('PrinterReadiness: Language status read: $_languageStatus');
+            .info('PrinterReadiness: Language status read: ${result.data}');
       } else {
         _languageStatus = null;
+        _lastLanguageError =
+            result.error?.message ?? 'Unknown language status error';
         _logger.warning(
             'PrinterReadiness: Failed to read language status: ${result.error?.message}');
       }
-      _languageRead = true;
     } catch (e) {
-      _logger.error('PrinterReadiness: Error reading language status: $e');
+      _lastLanguageError = e.toString();
       _languageStatus = null;
-      _languageRead = true;
+      _logger.error('PrinterReadiness: Error reading language status: $e');
     }
   }
   
-  /// Get read status for diagnostics
+  /// Get read status for each check
   Map<String, bool> get readStatus {
     return {
-      'connection': _connectionRead,
-      'media': _mediaRead,
-      'head': _headRead,
-      'pause': _pauseRead,
-      'host': _hostRead,
-      'language': _languageRead,
+      'connection': wasConnectionRead,
+      'media': wasMediaRead,
+      'hasMedia': wasHasMediaRead,
+      'head': wasHeadRead,
+      'headClosed': wasHeadClosedRead,
+      'pause': wasPauseRead,
+      'isPaused': wasIsPausedRead,
+      'host': wasHostRead,
+      'errors': wasErrorsRead,
+      'language': wasLanguageRead,
     };
   }
 
-  /// Get cached values for diagnostics (without triggering reads)
+  /// Get cached values
   Map<String, dynamic> get cachedValues {
     return {
-      'connection': _connectionRead ? _isConnected : '<unchecked>',
-      'mediaStatus': _mediaRead ? _mediaStatus : '<unchecked>',
-      'hasMedia': _mediaRead ? _hasMedia : '<unchecked>',
-      'headStatus': _headRead ? _headStatus : '<unchecked>',
-      'headClosed': _headRead ? _headClosed : '<unchecked>',
-      'pauseStatus': _pauseRead ? _pauseStatus : '<unchecked>',
-      'isPaused': _pauseRead ? _isPaused : '<unchecked>',
-      'hostStatus': _hostRead ? _hostStatus : '<unchecked>',
-      'errors': _hostRead ? List.from(_errors) : '<unchecked>',
-      'languageStatus': _languageRead ? _languageStatus : '<unchecked>',
+      'connection': wasConnectionRead ? 'checked' : '<unchecked>',
+      'mediaStatus': wasMediaRead ? (_mediaStatus ?? '<null>') : '<unchecked>',
+      'hasMedia': wasHasMediaRead
+          ? (_mediaStatus != null ? ParserUtil.hasMedia(_mediaStatus!) : null)
+          : '<unchecked>',
+      'headStatus': wasHeadRead ? (_headStatus ?? '<null>') : '<unchecked>',
+      'headClosed': wasHeadClosedRead
+          ? (_headStatus != null ? ParserUtil.isHeadClosed(_headStatus!) : null)
+          : '<unchecked>',
+      'pauseStatus': wasPauseRead ? (_pauseStatus ?? '<null>') : '<unchecked>',
+      'isPaused': wasIsPausedRead
+          ? (_pauseStatus != null ? ParserUtil.toBool(_pauseStatus!) : null)
+          : '<unchecked>',
+      'hostStatus': wasHostRead ? (_hostStatus ?? '<null>') : '<unchecked>',
+      'errors': wasErrorsRead ? List.from(_errors) : '<unchecked>',
+      'languageStatus':
+          wasLanguageRead ? (_languageStatus ?? '<null>') : '<unchecked>',
     };
   }
   
   @override
   String toString() {
     return 'PrinterReadiness('
-        'connection: ${_connectionRead ? _isConnected : '<unchecked>'}, '
-        'media: ${_mediaRead ? _hasMedia : '<unchecked>'}, '
-        'head: ${_headRead ? _headClosed : '<unchecked>'}, '
-        'pause: ${_pauseRead ? _isPaused : '<unchecked>'}, '
-        'host: ${_hostRead ? _hostStatus : '<unchecked>'}, '
-        'language: ${_languageRead ? _languageStatus : '<unchecked>'}'
+        'connection: ${wasConnectionRead ? 'checked' : '<unchecked>'}, '
+        'media: ${wasMediaRead ? 'checked' : '<unchecked>'}, '
+        'head: ${wasHeadRead ? 'checked' : '<unchecked>'}, '
+        'pause: ${wasPauseRead ? 'checked' : '<unchecked>'}, '
+        'host: ${wasHostRead ? 'checked' : '<unchecked>'}, '
+        'language: ${wasLanguageRead ? 'checked' : '<unchecked>'}'
         ')';
   }
 
   /// Reset connection status and re-read
   Future<bool?> resetConnection() async {
-    _connectionRead = false;
-    _isConnected = null;
+    _connectionCompleter = null;
+    _lastConnectionError = null;
     return await isConnected;
   }
 
   /// Reset media status and re-read
   Future<String?> resetMediaStatus() async {
-    _mediaRead = false;
-    _mediaStatus = null;
-    _hasMedia = null;
+    _mediaStatusCompleter = null;
+    _lastMediaError = null;
     return await mediaStatus;
   }
 
   /// Reset has media and re-read
   Future<bool?> resetHasMedia() async {
-    _mediaRead = false;
-    _mediaStatus = null;
-    _hasMedia = null;
+    _hasMediaCompleter = null;
+    _lastMediaError = null;
     return await hasMedia;
   }
 
   /// Reset head status and re-read
   Future<String?> resetHeadStatus() async {
-    _headRead = false;
-    _headStatus = null;
-    _headClosed = null;
+    _headStatusCompleter = null;
+    _lastHeadError = null;
     return await headStatus;
   }
 
   /// Reset head closed and re-read
   Future<bool?> resetHeadClosed() async {
-    _headRead = false;
-    _headStatus = null;
-    _headClosed = null;
+    _headClosedCompleter = null;
+    _lastHeadError = null;
     return await headClosed;
   }
 
   /// Reset pause status and re-read
   Future<String?> resetPauseStatus() async {
-    _pauseRead = false;
-    _pauseStatus = null;
-    _isPaused = null;
+    _pauseStatusCompleter = null;
+    _lastPauseError = null;
     return await pauseStatus;
   }
 
   /// Reset is paused and re-read
   Future<bool?> resetIsPaused() async {
-    _pauseRead = false;
-    _pauseStatus = null;
-    _isPaused = null;
+    _isPausedCompleter = null;
+    _lastPauseError = null;
     return await isPaused;
   }
 
   /// Reset host status and re-read
   Future<String?> resetHostStatus() async {
-    _hostRead = false;
-    _hostStatus = null;
-    _errors.clear();
+    _hostStatusCompleter = null;
+    _lastHostError = null;
+    _errors = [];
     return await hostStatus;
   }
 
   /// Reset errors and re-read
   Future<List<String>> resetErrors() async {
-    _hostRead = false;
-    _hostStatus = null;
-    _errors.clear();
+    _errorsCompleter?.complete([]);
+    _lastHostError = null;
     return await errors;
   }
 
   /// Reset language status and re-read
   Future<String?> resetLanguageStatus() async {
-    _languageRead = false;
-    _languageStatus = null;
+    _languageStatusCompleter = null;
+    _lastLanguageError = null;
     return await languageStatus;
   }
 
   /// Reset all statuses and re-read
   Future<void> resetAllStatuses() async {
-    _connectionRead = false;
-    _mediaRead = false;
-    _headRead = false;
-    _pauseRead = false;
-    _hostRead = false;
-    _languageRead = false;
+    _connectionCompleter = null;
+    _mediaStatusCompleter = null;
+    _hasMediaCompleter = null;
+    _headStatusCompleter = null;
+    _headClosedCompleter = null;
+    _pauseStatusCompleter = null;
+    _isPausedCompleter = null;
+    _hostStatusCompleter = null;
+    _languageStatusCompleter = null;
+    _errorsCompleter?.complete([]);
 
-    _isConnected = null;
-    _mediaStatus = null;
-    _hasMedia = null;
-    _headStatus = null;
-    _headClosed = null;
-    _pauseStatus = null;
-    _isPaused = null;
-    _hostStatus = null;
-    _errors.clear();
-    _languageStatus = null;
+    _lastConnectionError = null;
+    _lastMediaError = null;
+    _lastHeadError = null;
+    _lastPauseError = null;
+    _lastHostError = null;
+    _lastLanguageError = null;
 
     await readAllStatuses();
   }

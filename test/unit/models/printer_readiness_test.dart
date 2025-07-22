@@ -143,29 +143,5 @@ void main() {
       expect(cached['errors'], isEmpty);
       expect(cached['languageStatus'], equals('zpl'));
     });
-
-    test('readStatus shows correct read flags', () {
-      final readiness = PrinterReadiness(printer: mockPrinter);
-
-      final readStatus = readiness.readStatus;
-      expect(readStatus['connection'], isFalse);
-      expect(readStatus['media'], isFalse);
-      expect(readStatus['head'], isFalse);
-      expect(readStatus['pause'], isFalse);
-      expect(readStatus['host'], isFalse);
-      expect(readStatus['language'], isFalse);
-      
-      // Set some cached values
-      readiness.setCachedConnection(true);
-      readiness.setCachedMedia('OK', true);
-      
-      final updatedReadStatus = readiness.readStatus;
-      expect(updatedReadStatus['connection'], isTrue);
-      expect(updatedReadStatus['media'], isTrue);
-      expect(updatedReadStatus['head'], isFalse);
-      expect(updatedReadStatus['pause'], isFalse);
-      expect(updatedReadStatus['host'], isFalse);
-      expect(updatedReadStatus['language'], isFalse);
-    });
   });
 }

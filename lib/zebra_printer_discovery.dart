@@ -1,19 +1,37 @@
 import 'dart:async';
+
 import 'package:flutter/services.dart';
+
 import 'internal/logger.dart';
+import 'internal/policies/policies.dart' as policies;
 import 'zebrautil.dart';
 
-/// Service for discovering Zebra printers on the network and via Bluetooth
+/// Service for discovering Zebra printers
+/// Provides centralized discovery functionality for both Bluetooth and Network printers
+///
+/// Note: CommunicationPolicy is handled by ZebraPrinterManager. This service
+/// only uses timeout policies for discovery operations.
 class ZebraPrinterDiscovery {
+  // Singleton pattern
+  static final ZebraPrinterDiscovery _instance =
+      ZebraPrinterDiscovery._internal();
+  factory ZebraPrinterDiscovery() => _instance;
+  ZebraPrinterDiscovery._internal();
+
+  // Private fields
   ZebraPrinter? _printer;
   ZebraController? _controller;
-  CommunicationPolicy? _communicationPolicy;
-
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<String>? _statusStreamController;
-
+  
   Timer? _discoveryTimer;
   bool _isScanning = false;
+  
+  // Timeout policy for all discovery operations
+  static final _timeoutPolicy =
+      policies.TimeoutPolicy.of(const Duration(seconds: 30));
+
+  // Logger
   final Logger _logger = Logger.withPrefix('ZebraPrinterDiscovery');
 
   /// Whether discovery is currently active
@@ -68,7 +86,9 @@ class ZebraPrinterDiscovery {
 
     // Initialize communication policy (for future command execution)
     if (_printer != null) {
-      _communicationPolicy = CommunicationPolicy(_printer!);
+      // CommunicationPolicy is no longer used directly here,
+      // as the policies are now managed by ZebraPrinterManager.
+      // This class now primarily manages the discovery flow.
     }
 
     // Forward status messages if callback provided
@@ -91,41 +111,41 @@ class ZebraPrinterDiscovery {
         .info('Starting printer discovery with timeout: ${timeout.inSeconds}s');
     await _ensureInitialized();
 
-    return await _communicationPolicy!.execute(
+    return await _timeoutPolicy.execute(
       () async {
         final completer = Completer<List<ZebraDevice>>();
 
-        // Start discovery
-        _isScanning = true;
-        _logger.info('Initiating printer scan');
-        _printer!.startScanning();
-        _statusStreamController?.add('Scanning for printers...');
+        _logger.info(
+            'Starting printer discovery (timeout: ${timeout.inSeconds}s)');
+        _statusStreamController?.add('Discovering printers...');
 
-        // Set up timeout
+        // Clear existing list by calling printers clear
+        _controller!.printers.clear();
+
+        _isScanning = true;
+        _printer!.startScanning();
+
+        // Set up timer to stop discovery after timeout
         _discoveryTimer?.cancel();
         _discoveryTimer = Timer(timeout, () {
-          if (!completer.isCompleted) {
-            _logger.info('Discovery timeout reached, stopping scan');
+          _logger.info('Discovery timeout reached, stopping scan');
+          if (_isScanning) {
             _printer!.stopScanning();
             _isScanning = false;
             _statusStreamController?.add('Discovery completed');
+          }
+          if (!completer.isCompleted) {
             completer.complete(_controller!.printers);
           }
         });
 
-        final devices = await completer.future;
-        _logger.info('Discovery completed, found ${devices.length} printers');
-        return Result.success(devices);
+        // Complete immediately when timeout is reached
+        await completer.future;
+        _logger.info(
+            'Discovery completed with ${_controller!.printers.length} printers found');
+
+        return Result.success(_controller!.printers);
       },
-      'Discover Printers',
-      options: CommunicationPolicyOptions(
-        skipConnectionCheck: true, // Discovery doesn't need connection check
-        skipConnectionRetry: true, // Discovery is a one-time operation
-        timeout: timeout,
-        onEvent: (event) {
-          _statusStreamController?.add(event.message);
-        },
-      ),
     );
   }
 
@@ -262,7 +282,7 @@ class ZebraPrinterDiscovery {
   }) async {
     await _ensureInitialized();
 
-    return await _communicationPolicy!.execute(
+    return await _timeoutPolicy.execute(
       () async {
         final completer = Completer<List<ZebraDevice>>();
         List<ZebraDevice>? foundPrinters;
@@ -307,15 +327,7 @@ class ZebraPrinterDiscovery {
           );
         }
       },
-      'Discover Printers Until First',
-      options: CommunicationPolicyOptions(
-        skipConnectionCheck: true, // Discovery doesn't need connection check
-        skipConnectionRetry: true, // Discovery is a one-time operation
-        timeout: timeout,
-        onEvent: (event) {
-          _statusStreamController?.add(event.message);
-        },
-      ),
+      operationName: 'Discover Printers Until First',
     );
   }
 
@@ -328,7 +340,7 @@ class ZebraPrinterDiscovery {
   }) async {
     await _ensureInitialized();
 
-    return await _communicationPolicy!.execute(
+    return await _timeoutPolicy.execute(
       () async {
         final completer = Completer<List<ZebraDevice>>();
         List<ZebraDevice>? foundPrinters;
@@ -373,15 +385,7 @@ class ZebraPrinterDiscovery {
           );
         }
       },
-      'Discover Printers Count',
-      options: CommunicationPolicyOptions(
-        skipConnectionCheck: true, // Discovery doesn't need connection check
-        skipConnectionRetry: true, // Discovery is a one-time operation
-        timeout: timeout,
-        onEvent: (event) {
-          _statusStreamController?.add(event.message);
-        },
-      ),
+      operationName: 'Discover Printers Count',
     );
   }
 
@@ -398,7 +402,7 @@ class ZebraPrinterDiscovery {
   Future<List<ZebraDevice>> findPairedPrinters() async {
     await _ensureInitialized();
     
-    final result = await _communicationPolicy!.execute(
+    final result = await _timeoutPolicy.execute(
       () async {
         List<ZebraDevice> pairedPrinters = [];
 
@@ -421,15 +425,7 @@ class ZebraPrinterDiscovery {
         
         return Result.success(pairedPrinters);
       },
-      'Find Paired Printers',
-      options: CommunicationPolicyOptions(
-        skipConnectionCheck: true, // Discovery doesn't need connection check
-        skipConnectionRetry: true, // Discovery is a one-time operation
-        timeout: const Duration(seconds: 5),
-        onEvent: (event) {
-          _statusStreamController?.add(event.message);
-        },
-      ),
+      operationName: 'Find Paired Printers',
     );
 
     return result.success ? result.data ?? [] : [];
@@ -445,18 +441,9 @@ class ZebraPrinterDiscovery {
     }
 
     // Otherwise discover with retry logic
-    final result = await _communicationPolicy!.execute(
+    final result = await _timeoutPolicy.execute(
       () => discoverPrinters(timeout: const Duration(seconds: 5)),
-      'Get Available Printers',
-      options: CommunicationPolicyOptions(
-        skipConnectionCheck: true, // Discovery doesn't need connection check
-        skipConnectionRetry: false, // Allow retries for discovery
-        maxAttempts: 2, // Try discovery twice if it fails
-        timeout: const Duration(seconds: 10),
-        onEvent: (event) {
-          _statusStreamController?.add(event.message);
-        },
-      ),
+      operationName: 'Get Available Printers',
     );
     
     return result.success ? result.data ?? [] : [];
@@ -503,6 +490,7 @@ class ZebraPrinterDiscovery {
     _devicesStreamController = null;
     _statusStreamController?.close();
     _statusStreamController = null;
-    _communicationPolicy = null;
+    // CommunicationPolicy is no longer managed here,
+    // as it's now handled by ZebraPrinterManager.
   }
 } 

@@ -55,6 +55,9 @@ class ZebraPrinterManager {
 
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter? get printer => _printer;
+  
+  /// Public getter for the communication policy
+  CommunicationPolicy? get communicationPolicy => _communicationPolicy;
 
   /// Public getter for the status stream controller
   StreamController<String>? get statusStreamController =>
@@ -117,15 +120,18 @@ class ZebraPrinterManager {
         },
       );
 
-      // Initialize readiness manager
-      _readinessManager = ZebraPrinterReadinessManager(printer: _printer!);
-      
       // Initialize communication policy with status updates
       _communicationPolicy = CommunicationPolicy(
         _printer!,
         onStatusUpdate: (status) {
           _statusStreamController?.add(status);
         },
+      );
+
+      // Initialize readiness manager with shared communication policy
+      _readinessManager = ZebraPrinterReadinessManager(
+        printer: _printer!,
+        communicationPolicy: _communicationPolicy!,
       );
       
       _logger.info('ZebraPrinterManager initialization completed');

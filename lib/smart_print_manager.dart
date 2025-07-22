@@ -12,8 +12,8 @@ import 'models/readiness_options.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 import 'zebra_printer_manager.dart';
-import 'zebra_printer_readiness_manager.dart';
 import 'zebra_sgd_commands.dart';
+import 'zebrautil.dart';
 
 /// Smart print manager for handling complex print workflows
 /// 
@@ -613,9 +613,19 @@ class SmartPrintManager {
         );
       }
 
-      // Use readiness manager for comprehensive status checking and preparation
+      // Get shared communication policy from printer manager
+      final communicationPolicy = _printerManager.communicationPolicy;
+      if (communicationPolicy == null) {
+        return Result.errorCode(
+          ErrorCodes.statusCheckFailed,
+          formatArgs: ['No communication policy available'],
+        );
+      }
+
+      // Create readiness manager with shared communication policy
       final readinessManager = ZebraPrinterReadinessManager(
         printer: printer,
+        communicationPolicy: communicationPolicy,
         statusCallback: (event) {
           // Extract readiness details for UI display
           final operationType = event.operationType.toString().split('.').last;

@@ -156,7 +156,7 @@ class CommunicationPolicy {
             return operationResult.data as T;
           }
           
-          // Step 3: React to failures - check if it's connection-related
+          // For connection errors, just throw - let the retry policy handle it
           final errorMessage = operationResult.error!.message.toLowerCase();
           if (errorMessage.contains('connection') ||
               errorMessage.contains('timeout') ||
@@ -164,15 +164,9 @@ class CommunicationPolicy {
               errorMessage.contains('bluetooth')) {
             _logger.warning(
                 'Connection error detected in $operationName: ${operationResult.error?.message}');
-            onStatusUpdate?.call('Connection error - attempting recovery...');
-            // Step 4: Handle connection failure and retry
-            final retryResult = await _handleConnectionFailureAndRetry(
-                operation, operationName);
-            if (retryResult.success) {
-              return retryResult.data as T;
-            } else {
-              throw Exception(retryResult.error ?? 'Retry failed');
-            }
+            onStatusUpdate?.call('Connection error detected');
+            throw Exception(
+                operationResult.error?.message ?? 'Connection error');
           }
 
           // Non-connection error, throw exception
@@ -180,7 +174,7 @@ class CommunicationPolicy {
               'Non-connection error in $operationName: ${operationResult.error?.message}');
           onStatusUpdate?.call(
               '$operationName failed: ${operationResult.error?.message}');
-          throw Exception(operationResult.error ?? 'Operation failed');
+          throw Exception(operationResult.error?.message ?? 'Operation failed');
         },
         operationName: operationName,
       );
@@ -347,103 +341,6 @@ class CommunicationPolicy {
         e,
         stackTrace: StackTrace.current,
       );
-    }
-  }
-  
-  /// Handle connection failure and retry the operation
-  Future<Result<T>> _handleConnectionFailureAndRetry<T>(
-    Future<Result<T>> Function() operation,
-    String operationName,
-  ) async {
-    _logger.info('Handling connection failure for $operationName');
-    onStatusUpdate?.call('Connection lost - attempting reconnection...');
-    
-    // Attempt reconnection
-    final reconnectResult = await _attemptReconnection();
-    
-    if (!reconnectResult.success) {
-      _logger.error('Failed to reconnect: ${reconnectResult.error?.message}');
-      onStatusUpdate?.call('Reconnection failed');
-      return Result.errorFromResult(reconnectResult, 'Failed to reconnect');
-    }
-    
-    _logger.info('Successfully reconnected, retrying $operationName');
-    onStatusUpdate?.call('Reconnected - retrying $operationName...');
-    
-    // Retry the operation
-    try {
-      // For operations that already have native timeouts, don't add another timeout
-      final retryResult = await operation();
-      
-      if (retryResult.success) {
-        _logger.info('$operationName completed successfully after reconnection');
-        onStatusUpdate?.call('$operationName completed after reconnection');
-        return retryResult;
-      } else {
-        _logger.error('$operationName failed after reconnection: ${retryResult.error?.message}');
-        onStatusUpdate?.call('$operationName failed after reconnection');
-        return retryResult;
-      }
-    } catch (e) {
-      _logger.error('Unexpected error in $operationName retry: $e');
-      onStatusUpdate?.call('Unexpected error during retry: $e');
-      
-      // Use centralized error bridge for better error handling
-      return ZebraErrorBridge.fromError<T>(e);
-    }
-  }
-  
-  /// Attempt to reconnect to the printer
-  Future<Result<bool>> _attemptReconnection() async {
-    try {
-      // First check if connection is actually lost
-      final connectionResult = await _checkConnection();
-      if (connectionResult.success) {
-        return Result.success(true);
-      }
-      
-      // Try to force reconnection
-      _logger.info('Attempting to reconnect to printer');
-      try {
-        // Call disconnect to clean up any stale connections
-        await _printer.disconnect();
-      } catch (e) {
-        _logger.debug('Disconnect during reconnection attempt: $e');
-        // Ignore disconnect errors as connection may already be lost
-      }
-
-      // Wait a moment before reconnecting
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Attempt to reconnect - Since ZebraPrinter manages its own connection
-      // we'll just check if it can re-establish connection
-      try {
-        // Get the currently selected address from the printer controller
-        final selectedAddress = _printer.controller.selectedAddress;
-        if (selectedAddress == null) {
-          _logger.warning('No printer address available for reconnection');
-          return Result.error('No printer address available for reconnection');
-        }
-
-        // Attempt to reconnect to the same printer
-        final reconnectResult =
-            await _printer.connectToPrinter(selectedAddress);
-
-        if (reconnectResult.success) {
-          _logger.info('Successfully reconnected to printer');
-          return Result.success(true);
-        } else {
-          _logger.warning(
-              'Reconnection failed: ${reconnectResult.error?.message}');
-          return Result.success(false);
-        }
-      } catch (e) {
-        _logger.error('Failed to reconnect: $e');
-        return Result.error('Failed to reconnect: $e');
-      }
-    } catch (e) {
-      _logger.error('Reconnection error: $e');
-      return Result.error('Reconnection error: $e');
     }
   }
   

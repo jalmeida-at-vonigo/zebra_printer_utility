@@ -9,10 +9,11 @@ class ZebraPrinterReadinessManager {
   /// Constructor with instantiation count check
   ZebraPrinterReadinessManager({
     required ZebraPrinter printer,
+    required CommunicationPolicy communicationPolicy,
     void Function(ReadinessOperationEvent)? statusCallback,
   })  : _printer = printer,
+        _communicationPolicy = communicationPolicy,
         _statusCallback = statusCallback {
-    _communicationPolicy = CommunicationPolicy(printer);
     _logger.debug('ZebraPrinterReadinessManager instantiated');
   }
 
@@ -26,7 +27,7 @@ class ZebraPrinterReadinessManager {
   final void Function(ReadinessOperationEvent)? _statusCallback;
 
   /// Communication policy for connection assurance and retry logic
-  late final CommunicationPolicy _communicationPolicy;
+  final CommunicationPolicy _communicationPolicy;
 
   /// Log a message to both callback and logger
   void _log(String message) {
