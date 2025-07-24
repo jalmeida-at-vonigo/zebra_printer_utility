@@ -54,7 +54,7 @@ void main() {
       readiness.setCachedPause('Not Paused', false);
       readiness.setCachedHost('Online', []);
 
-      expect(readiness.isReady, isTrue);
+      expect(await readiness.isReady, isTrue);
     });
 
     test('toString shows uninitialized properties', () {

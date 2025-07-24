@@ -7,7 +7,7 @@ void main() {
   group('RetryPolicy', () {
     group('constructor', () {
       test('should create with default configuration', () {
-        final policy = RetryPolicy(RetryPolicyConfig());
+        final policy = RetryPolicy(const RetryPolicyConfig());
         expect(policy.config.maxAttempts, 3);
         expect(policy.config.delay, isNull);
         expect(policy.config.maxDelay, isNull);
@@ -18,7 +18,7 @@ void main() {
       });
 
       test('should create with custom configuration', () {
-        final policy = RetryPolicy(RetryPolicyConfig(
+        final policy = RetryPolicy(const RetryPolicyConfig(
           maxAttempts: 5,
           delay: Duration(seconds: 1),
           maxDelay: Duration(seconds: 10),
@@ -135,7 +135,7 @@ void main() {
       });
 
       test('should not retry on timeout when retryOnTimeout is false', () async {
-        final policy = RetryPolicy(RetryPolicyConfig(
+        final policy = RetryPolicy(const RetryPolicyConfig(
           maxAttempts: 3,
           retryOnTimeout: false,
         ));
@@ -156,7 +156,7 @@ void main() {
       });
 
       test('should not retry on exception when retryOnException is false', () async {
-        final policy = RetryPolicy(RetryPolicyConfig(
+        final policy = RetryPolicy(const RetryPolicyConfig(
           maxAttempts: 3,
           retryOnException: false,
         ));
@@ -177,7 +177,7 @@ void main() {
       });
 
       test('should retry only on specific exception types', () async {
-        final policy = RetryPolicy(RetryPolicyConfig(
+        final policy = RetryPolicy(const RetryPolicyConfig(
           maxAttempts: 3,
           retryOnExceptionTypes: [ArgumentError],
         ));

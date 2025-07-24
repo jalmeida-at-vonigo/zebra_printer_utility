@@ -10,6 +10,7 @@ import 'package:mockito/mockito.dart' as _i1;
 import 'package:zebrautil/internal/operation_manager.dart' as _i4;
 import 'package:zebrautil/models/operation_log_entry.dart' as _i5;
 import 'package:zebrautil/models/result.dart' as _i3;
+import 'package:zebrautil/zebra_printer_manager.dart' as _i7;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -94,6 +95,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
     required String? method,
     Map<String, dynamic>? arguments,
     Duration? timeout = const Duration(seconds: 30),
+    _i7.CancellationToken? cancellationToken,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -103,6 +105,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
             #method: method,
             #arguments: arguments,
             #timeout: timeout,
+            #cancellationToken: cancellationToken,
           },
         ),
         returnValue: _i6.Future<_i3.Result<T>>.value(_FakeResult_1<T>(
@@ -114,6 +117,7 @@ class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
               #method: method,
               #arguments: arguments,
               #timeout: timeout,
+              #cancellationToken: cancellationToken,
             },
           ),
         )),

@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'result.dart';
 import '../../zebra_printer_manager.dart';
 import '../logger.dart';
+import 'result.dart';
 
 /// Retry policy configuration
 class RetryPolicyConfig {

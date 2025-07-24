@@ -12,11 +12,19 @@ import 'zebrautil.dart';
 /// Note: CommunicationPolicy is handled by ZebraPrinterManager. This service
 /// only uses timeout policies for discovery operations.
 class ZebraPrinterDiscovery {
-  // Singleton pattern
+
+  // Factory constructor
+  factory ZebraPrinterDiscovery() => _instance;
+
+  // Private constructor
+  ZebraPrinterDiscovery._internal();
+  // Static fields
   static final ZebraPrinterDiscovery _instance =
       ZebraPrinterDiscovery._internal();
-  factory ZebraPrinterDiscovery() => _instance;
-  ZebraPrinterDiscovery._internal();
+  
+  // Timeout policy for all discovery operations
+  static final _timeoutPolicy =
+      policies.TimeoutPolicy.of(const Duration(seconds: 30));
 
   // Private fields
   ZebraPrinter? _printer;
@@ -26,10 +34,6 @@ class ZebraPrinterDiscovery {
   
   Timer? _discoveryTimer;
   bool _isScanning = false;
-  
-  // Timeout policy for all discovery operations
-  static final _timeoutPolicy =
-      policies.TimeoutPolicy.of(const Duration(seconds: 30));
 
   // Logger
   final Logger _logger = Logger.withPrefix('ZebraPrinterDiscovery');

@@ -7,7 +7,7 @@ void main() {
   group('TimeoutPolicy', () {
     group('constructor', () {
       test('should create with required timeout', () {
-        final policy = TimeoutPolicy(timeout: Duration(seconds: 5));
+        final policy = TimeoutPolicy(timeout: const Duration(seconds: 5));
         expect(policy.timeout, const Duration(seconds: 5));
         expect(policy.throwOnTimeout, isTrue);
         expect(policy.timeoutMessage, isNull);
@@ -15,7 +15,7 @@ void main() {
 
       test('should create with custom configuration', () {
         final policy = TimeoutPolicy(
-          timeout: Duration(seconds: 10),
+          timeout: const Duration(seconds: 10),
           throwOnTimeout: false,
           timeoutMessage: 'Custom timeout message',
         );
@@ -146,7 +146,7 @@ void main() {
 
       test('should not throw on timeout when throwOnTimeout is false', () async {
         final policy = TimeoutPolicy(
-          timeout: Duration(milliseconds: 50),
+          timeout: const Duration(milliseconds: 50),
           throwOnTimeout: false,
         );
 

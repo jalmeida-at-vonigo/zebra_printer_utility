@@ -2,17 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'internal/logger.dart';
-import 'models/communication_policy_options.dart';
-import 'models/print_enums.dart';
-import 'models/print_event.dart';
-import 'models/print_operation_tracker.dart';
-import 'models/print_options.dart';
-import 'models/print_state.dart';
-import 'models/readiness_options.dart';
-import 'models/result.dart';
-import 'models/zebra_device.dart';
-import 'zebra_printer_manager.dart';
-import 'zebra_sgd_commands.dart';
 import 'zebrautil.dart';
 
 /// Smart print manager for handling complex print workflows
@@ -626,7 +615,7 @@ class SmartPrintManager {
       final readinessManager = ZebraPrinterReadinessManager(
         printer: printer,
         communicationPolicy: communicationPolicy,
-        statusCallback: (event) {
+        statusCallback: (event) async {
           // Extract readiness details for UI display
           final operationType = event.operationType.toString().split('.').last;
           final operationKind = event.operationKind.toString().split('.').last;
@@ -655,7 +644,7 @@ class SmartPrintManager {
               'operationKind': event.operationKind.toString(),
               'result': event.result.toString(),
               'errorDetails': event.errorDetails,
-              'isReady': event.readiness.isReady,
+              'isReady': await event.readiness.isReady,
               'canAutoResume':
                   false, // Will be updated by completion monitoring
               'issueDetails': [],

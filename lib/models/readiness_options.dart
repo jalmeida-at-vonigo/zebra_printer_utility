@@ -134,11 +134,18 @@ class ReadinessOptions {
   /// Check if any readiness check is enabled
   bool get hasAnyCheckEnabled =>
       checkConnection ||
+      clearBuffer ||
+      flushBuffer ||
+      fixBufferIssues ||
       checkMedia ||
+      fixMediaCalibration ||
       checkHead ||
       checkPause ||
+      fixPausedPrinter ||
       checkErrors ||
-      checkLanguage;
+      fixPrinterErrors ||
+      checkLanguage ||
+      fixLanguageMismatch;
 
   /// Creates a copy with modified options
   ReadinessOptions copyWith({

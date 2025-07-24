@@ -221,17 +221,17 @@ class PrinterReadiness {
 
   /// Get overall readiness status (lazy)
   /// Does NOT trigger new reads if values are already cached
-  bool get isReady {
+  Future<bool> get isReady async {
     // Check if all configured checks have been done and passed
     // Note: This uses cached values and doesn't trigger new reads
 
-    // Use cached values to avoid triggering new reads
-    final connectionReady =
-        wasConnectionRead || !(_options?.checkConnection ?? true);
-    final mediaReady = wasHasMediaRead || !(_options?.checkMedia ?? true);
-    final headReady = wasHeadClosedRead || !(_options?.checkHead ?? true);
-    final pauseReady = wasIsPausedRead || !(_options?.checkPause ?? true);
-    final errorsReady = wasErrorsRead || !(_options?.checkErrors ?? true);
+    // Use cached values to avoid triggering new reads...
+    // this is for readiness so if null then it should not be read, and the it is ready
+    final connectionReady = (await isConnected) ?? true;
+    final mediaReady = (await hasMedia) ?? true;
+    final headReady = (await headClosed) ?? true;
+    final pauseReady = (await isPaused) ?? true;
+    final errorsReady = (await errors).isNotEmpty;
 
     return connectionReady &&
         mediaReady &&
@@ -530,6 +530,14 @@ class PrinterReadiness {
       'errors': wasErrorsRead ? List.from(_errors) : '<unchecked>',
       'languageStatus':
           wasLanguageRead ? (_languageStatus ?? '<null>') : '<unchecked>',
+      'lastErrors': {
+        'connection': _lastConnectionError,
+        'media': _lastMediaError,
+        'head': _lastHeadError,
+        'pause': _lastPauseError,
+        'host': _lastHostError,
+        'language': _lastLanguageError,
+      },
     };
   }
   

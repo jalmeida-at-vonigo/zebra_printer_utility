@@ -1,8 +1,8 @@
 import 'dart:async';
+import '../../zebra_printer_manager.dart';
 import 'result.dart';
 import 'retry_policy.dart';
 import 'timeout_policy.dart';
-import '../../zebra_printer_manager.dart';
 
 /// Policy wrapper that combines multiple policies
 class PolicyWrapper {

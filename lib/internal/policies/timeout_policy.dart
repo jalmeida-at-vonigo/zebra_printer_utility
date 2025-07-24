@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'result.dart';
 import '../../zebra_printer_manager.dart';
 import '../logger.dart';
+import 'result.dart';
 
 /// Polly-like timeout policy for Dart
 class TimeoutPolicy {
