@@ -105,66 +105,11 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     }
   }
 
-  Widget _buildUserActionButtons() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'User Action Required',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.red[700],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            if (_printState?.canAutoResume == true) ...[
-              ElevatedButton.icon(
-                onPressed: _autoResume,
-                icon: const Icon(Icons.play_arrow, size: 16),
-                label: const Text('Auto-Resume'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 12),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            ElevatedButton.icon(
-              onPressed: _retryOperation,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Retry'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
-  void _autoResume() {
-    _addLog('Attempting auto-resume...', 'info');
-    // The SmartPrintManager handles auto-resume automatically
-    // This is just for user feedback
-  }
 
-  void _retryOperation() {
-    _addLog('Retrying operation...', 'info');
-    // The SmartPrintManager handles retries automatically
-    // This is just for user feedback
-  }
+
+
+
 
   void _handlePrintEvent(PrintEvent event) {
     // Update state from event
@@ -495,11 +440,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
               _buildRichStateInfo(_printState!),
             ],
 
-            // Action buttons for user intervention
-            if (_printState?.isWaitingForUserFix == true) ...[
-              const SizedBox(height: 12),
-              _buildUserActionButtons(),
-            ],
+
           ],
         ),
       ),
@@ -559,49 +500,8 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
           ],
         ),
         const SizedBox(height: 4),
-        // Issues and auto-resume info
-        if (state.hasIssues)
-          Row(
-            children: [
-              Icon(
-                Icons.warning,
-                size: 14,
-                color: Colors.red[600],
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Issues: ${state.currentIssues.length}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.red[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        if (state.canAutoResume)
-          Row(
-            children: [
-              Icon(
-                Icons.play_arrow,
-                size: 14,
-                color: Colors.blue[600],
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  state.autoResumeAction ?? 'Auto-resume available',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blue[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
+
+
         // Elapsed time
         if (state.startTime != null) ...[
           const SizedBox(height: 4),

@@ -59,7 +59,7 @@ class Zebra {
     return Result.success(_smartPrintManager!);
   }
 
-  /// Ensures the manager is initialized, returning Result<void>
+  /// Ensures the manager is initialized, returning Result
   static Future<Result<void>> _ensureInitialized() async {
     // Return cached result if already attempted
     if (_initializationResult != null) {

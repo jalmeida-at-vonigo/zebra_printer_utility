@@ -82,17 +82,12 @@ class SmartPrintManager {
       isRunning: true,
       currentMessage: 'Initializing print operation',
       currentError: null, // Clear any previous errors
-      currentIssues: const [],
-      canAutoResume: false,
-      autoResumeAction: null,
-      isWaitingForUserFix: false,
       currentAttempt: 1,
       maxAttempts: maxAttempts,
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
       details: null,
-      printerWarnings: const [],
       startTime: DateTime.now(),
       elapsedTime: Duration.zero,
     );
@@ -260,15 +255,10 @@ class SmartPrintManager {
               printState: _currentState,
               metadata: {
                 'message': status,
-                'progressHint': status,
                 'isReady': false,
-                'canAutoResume': false,
                 'issueDetails': [],
-                'autoResumeAction': null,
                 'progress': _currentState.getProgress(),
                 'currentStep': _currentState.currentStep.toString(),
-                'consecutiveErrors': 0,
-                'enhancedMetadata': true,
               },
             ));
           },
@@ -392,10 +382,6 @@ class SmartPrintManager {
       isRunning: false,
       // Don't clear currentError - UI may still need to display it
       // Don't clear currentMessage - it contains the final status
-      autoResumeAction: null,
-      canAutoResume: false,
-      isWaitingForUserFix: false,
-      currentIssues: [],
     );
   }
 
@@ -633,15 +619,9 @@ class SmartPrintManager {
               'result': event.result.toString(),
               'errorDetails': event.errorDetails,
               'isReady': await event.readiness.isReady,
-              'canAutoResume':
-                  false, // Will be updated by completion monitoring
               'issueDetails': [],
-              'progressHint': event.message,
-              'autoResumeAction': null,
               'progress': _currentState.getProgress(),
               'currentStep': _currentState.currentStep.toString(),
-              'consecutiveErrors': 0,
-              'enhancedMetadata': true,
             },
           ));
         },
@@ -689,7 +669,6 @@ class SmartPrintManager {
             ? 'Printer ready for print'
             : 'Printer prepared with warnings',
         currentError: readinessError,
-        printerWarnings: const [], // Keep empty for backward compatibility
       );
       
       // Emit final readiness status
@@ -699,15 +678,9 @@ class SmartPrintManager {
         printState: _currentState,
         metadata: {
           'isReady': readiness.isReady,
-          'canAutoResume':
-              false, // This will be updated by _waitForPrintCompletion
           'issueDetails': readiness.failedFixes,
-          'progressHint': 'Printer ready for print',
-          'autoResumeAction': null,
           'progress': _currentState.getProgress(),
           'currentStep': _currentState.currentStep.toString(),
-          'consecutiveErrors': 0,
-          'enhancedMetadata': true,
           'readinessResult': readiness,
         },
       ));

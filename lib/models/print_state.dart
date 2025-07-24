@@ -11,17 +11,12 @@ class PrintState {
     required this.isRunning,
     required this.currentMessage,
     required this.currentError,
-    required this.currentIssues,
-    required this.canAutoResume,
-    required this.autoResumeAction,
-    required this.isWaitingForUserFix,
     required this.currentAttempt,
     required this.maxAttempts,
     required this.progress,
     required this.isCompleted,
     required this.isCancelled,
     required this.details,
-    required this.printerWarnings,
     required this.startTime,
     required this.elapsedTime,
   });
@@ -33,17 +28,12 @@ class PrintState {
       isRunning: false,
       currentMessage: null,
       currentError: null,
-      currentIssues: [],
-      canAutoResume: false,
-      autoResumeAction: null,
-      isWaitingForUserFix: false,
       currentAttempt: 1,
       maxAttempts: 3,
       progress: 0.0,
       isCompleted: false,
       isCancelled: false,
       details: null,
-      printerWarnings: [],
       startTime: null,
       elapsedTime: Duration.zero,
     );
@@ -54,10 +44,6 @@ class PrintState {
   final bool isRunning;
   final String? currentMessage;
   final PrintErrorInfo? currentError;
-  final List<String> currentIssues;
-  final bool canAutoResume;
-  final String? autoResumeAction;
-  final bool isWaitingForUserFix;
   
   // Progress tracking
   final int currentAttempt;
@@ -71,9 +57,6 @@ class PrintState {
   // Step-specific details (e.g., readiness check information)
   final String? details;
   
-  // Printer warnings from readiness checks
-  final List<String> printerWarnings;
-  
   // Timing
   final DateTime? startTime;
   final Duration elapsedTime;
@@ -84,17 +67,12 @@ class PrintState {
     bool? isRunning,
     String? currentMessage,
     PrintErrorInfo? currentError,
-    List<String>? currentIssues,
-    bool? canAutoResume,
-    String? autoResumeAction,
-    bool? isWaitingForUserFix,
     int? currentAttempt,
     int? maxAttempts,
     double? progress,
     bool? isCompleted,
     bool? isCancelled,
     String? details,
-    List<String>? printerWarnings,
     DateTime? startTime,
     Duration? elapsedTime,
   }) {
@@ -103,17 +81,12 @@ class PrintState {
       isRunning: isRunning ?? this.isRunning,
       currentMessage: currentMessage ?? this.currentMessage,
       currentError: currentError ?? this.currentError,
-      currentIssues: currentIssues ?? this.currentIssues,
-      canAutoResume: canAutoResume ?? this.canAutoResume,
-      autoResumeAction: autoResumeAction ?? this.autoResumeAction,
-      isWaitingForUserFix: isWaitingForUserFix ?? this.isWaitingForUserFix,
       currentAttempt: currentAttempt ?? this.currentAttempt,
       maxAttempts: maxAttempts ?? this.maxAttempts,
       progress: progress ?? this.progress,
       isCompleted: isCompleted ?? this.isCompleted,
       isCancelled: isCancelled ?? this.isCancelled,
       details: details ?? this.details,
-      printerWarnings: printerWarnings ?? this.printerWarnings,
       startTime: startTime ?? this.startTime,
       elapsedTime: elapsedTime ?? this.elapsedTime,
     );
@@ -122,16 +95,14 @@ class PrintState {
   /// Helper to clear nullable fields
   PrintState clearError() => copyWith(currentError: null);
   PrintState clearMessage() => copyWith(currentMessage: null);
-  PrintState clearAutoResumeAction() => copyWith(autoResumeAction: null);
-  PrintState clearDetails() => copyWith(details: null);
 
+  PrintState clearDetails() => copyWith(details: null);
 
   /// Computed properties
   bool get isPrinting => isRunning && !isCompleted && !isCancelled;
   bool get hasFailed => currentError != null && !isRunning;
   bool get isRetrying => currentAttempt > 1 && isRunning;
   int get retryCount => currentAttempt > 1 ? currentAttempt - 1 : 0;
-  bool get hasIssues => currentIssues.isNotEmpty;
 
   /// Get current status for UI
   PrintStatus get currentStatus {
@@ -193,10 +164,6 @@ class PrintState {
           isRunning == other.isRunning &&
           currentMessage == other.currentMessage &&
           currentError == other.currentError &&
-          listEquals(currentIssues, other.currentIssues) &&
-          canAutoResume == other.canAutoResume &&
-          autoResumeAction == other.autoResumeAction &&
-          isWaitingForUserFix == other.isWaitingForUserFix &&
           currentAttempt == other.currentAttempt &&
           maxAttempts == other.maxAttempts &&
           progress == other.progress &&
@@ -212,10 +179,6 @@ class PrintState {
       isRunning.hashCode ^
       currentMessage.hashCode ^
       currentError.hashCode ^
-      currentIssues.hashCode ^
-      canAutoResume.hashCode ^
-      autoResumeAction.hashCode ^
-      isWaitingForUserFix.hashCode ^
       currentAttempt.hashCode ^
       maxAttempts.hashCode ^
       progress.hashCode ^
@@ -231,7 +194,6 @@ class PrintState {
         'step: $currentStep, '
         'running: $isRunning, '
         'message: $currentMessage, '
-        'issues: ${currentIssues.length}, '
         'attempt: $currentAttempt/$maxAttempts, '
         'progress: ${(progress * 100).toStringAsFixed(1)}%'
         ')';
