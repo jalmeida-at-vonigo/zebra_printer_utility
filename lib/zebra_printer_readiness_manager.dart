@@ -281,7 +281,7 @@ class ZebraPrinterReadinessManager {
       }
       if (options.checkPause || options.fixPausedPrinter) {
         _logger.info(
-            'ZebraPrinterReadinessManager: Performing pause check (always required for printing)');
+            'ZebraPrinterReadinessManager: Performing pause check');
         await _checkAndFixPause(
             readiness, appliedFixes, failedFixes, fixErrors, options, onStatus);
 

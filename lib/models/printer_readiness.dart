@@ -231,7 +231,7 @@ class PrinterReadiness {
     final mediaReady = (await hasMedia) ?? true;
     final headReady = (await headClosed) ?? true;
     final pauseReady = (await isPaused) ?? true;
-    final errorsReady = (await errors).isNotEmpty;
+    final errorsReady = (await errors).isEmpty;
 
     return connectionReady &&
         mediaReady &&
