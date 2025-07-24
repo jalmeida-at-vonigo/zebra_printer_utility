@@ -30,9 +30,6 @@ class SmartPrintManager {
   // Event stream
   StreamController<PrintEvent>? _eventController;
 
-  // Timers
-  Timer? _statusCheckTimer;
-
   // Immutable state management
   PrintState _currentState = PrintState.initial();
   
@@ -344,12 +341,6 @@ class SmartPrintManager {
     // Cancel the cancellation token - this immediately makes isCancelled return true
     // and stops all ongoing operations (CommunicationPolicy, status polling, etc.)
     _cancellationToken?.cancel();
-    
-
-
-    // Stop any active status checking
-    _statusCheckTimer?.cancel();
-    _statusCheckTimer = null;
 
     // Log which step was interrupted for debugging
     _logger.info(
@@ -386,9 +377,6 @@ class SmartPrintManager {
 
   /// Enhanced cleanup that doesn't update step (used by cancel)
   void _cleanupWithoutStepUpdate() {
-    _statusCheckTimer?.cancel();
-    _statusCheckTimer = null;
-
     // Cancel and clear cancellation token
     _cancellationToken?.cancel();
     _cancellationToken = null;
@@ -908,14 +896,6 @@ class SmartPrintManager {
     );
   }
 
-
-
-
-
-
-
-
-
   /// Update current step and emit event
   Future<void> _updateStep(PrintStep step, String message) async {
     _currentState = _currentState.copyWith(
@@ -1047,9 +1027,6 @@ class SmartPrintManager {
 
   /// Cleanup resources with enhanced safety
   void _cleanup() {
-    _statusCheckTimer?.cancel();
-    _statusCheckTimer = null;
-    
     // Cancel and clear cancellation token
     _cancellationToken?.cancel();
     _cancellationToken = null;
@@ -1114,9 +1091,6 @@ class SmartPrintManager {
         return 'Cancelled';
     }
   }
-
-
-
 
   /// Check if operation is cancelled
   bool get isCancelled => _cancellationToken?.isCancelled ?? false;
