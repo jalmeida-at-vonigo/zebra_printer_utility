@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:7.3.0")
+        classpath("com.android.tools.build:gradle:8.11.1")
     }
 }
 
@@ -27,34 +27,34 @@ android {
         namespace = "com.rubdev.zebrautil"
     }
 
-    compileSdk = 34
+    compileSdk = 35
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
     }
-
-    packagingOptions {
-        resources.excludes.add("META-INF/DEPENDENCIES")
-        resources.excludes.add("META-INF/LICENSE")
-        resources.excludes.add("META-INF/LICENSE.txt")
-        resources.excludes.add("META-INF/license.txt")
-        resources.excludes.add("META-INF/NOTICE")
-        resources.excludes.add("META-INF/NOTICE.txt")
-        resources.excludes.add("META-INF/notice.txt")
-        resources.excludes.add("META-INF/ASL2.0")
-        resources.excludes.add("META-INF/*.kotlin_module")
-    }
-
 
     dependencies {
         testImplementation("junit:junit:4.13.2")
         testImplementation("org.mockito:mockito-core:5.0.0")
-        implementation fileTree(dir: 'libs', include: ['*.jar'])
+        
+        // Replace old JAR dependencies with modern Maven dependencies
+        implementation 'org.apache.httpcomponents:httpcore:4.4.16'
+        implementation 'org.apache.httpcomponents:httpmime:4.5.14'
+        implementation 'com.fasterxml.jackson.core:jackson-core:2.15.3'
+        implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.3'
+        implementation 'com.fasterxml.jackson.core:jackson-annotations:2.15.3'
+        implementation 'org.apache.commons:commons-lang3:3.12.0'
+        implementation 'commons-net:commons-net:3.9.0'
+        implementation 'commons-validator:commons-validator:1.7'
+        implementation 'com.opencsv:opencsv:5.8'
+        
+        // Keep the ZSDK JAR as it's proprietary
+        implementation fileTree(dir: 'libs', include: ['ZSDK_ANDROID_API.jar'])
     }
 
     testOptions {
