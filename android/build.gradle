@@ -37,6 +37,13 @@ android {
     defaultConfig {
         minSdk = 23
     }
+    
+    // Ensure Java 17 toolchain is used
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
 
     dependencies {
         testImplementation("junit:junit:4.13.2")
