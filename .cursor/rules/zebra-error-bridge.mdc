@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+---
+
 # ZEBRA ERROR BRIDGE PATTERN
 
 ## Purpose
@@ -258,7 +262,3 @@ catch (e) {
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 - [Edge Case Error Handling](mdc:.cursor/rules/edge-case-error-handling.mdc)
 - [Command Files](mdc:.cursor/rules/command-files.mdc)
-description:
-globs:
-alwaysApply: false
----

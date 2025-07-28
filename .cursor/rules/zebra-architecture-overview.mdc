@@ -1,4 +1,8 @@
-# Zebra Printer Utility - Complete Architecture Overview
+---
+applyTo: ["lib/**/*.dart"]
+---
+
+# Zebra Printer Architecture Overview
 
 ## Overview
 The Zebra printer utility provides a comprehensive, robust interface for interacting with Zebra printers. It uses a layered architecture with centralized communication policies, command patterns, and manager-based workflows.
@@ -175,7 +179,3 @@ print('Max retries: ${stats['maxRetries']}');
 - **Result Objects**: Standardized error information
 - **Error Classification**: Automatic error type detection
 - **Retry Tracking**: Automatic retry attempt logging
-description:
-globs:
-alwaysApply: false
----

@@ -1,3 +1,7 @@
+---
+applyTo: ["**/*.dart"]
+---
+
 # Dart/Flutter Code Standards
 
 - Follow Flutter plugin best practices for all Dart code.

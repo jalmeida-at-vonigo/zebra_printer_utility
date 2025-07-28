@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart", "example/**/*.dart"]
+---
+
 # Event System for Print Workflows
 
 ## Overview
@@ -382,7 +386,3 @@ testWidgets('UI should update based on print events', (tester) async {
   expect(find.text('Connecting to printer...'), findsOneWidget);
 });
 ```
-description:
-globs:
-alwaysApply: false
----

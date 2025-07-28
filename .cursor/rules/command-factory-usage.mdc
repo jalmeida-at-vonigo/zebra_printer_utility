@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+---
+
 # CommandFactory and CommunicationPolicy Integration
 
 ## Overview
@@ -251,7 +255,3 @@ final manager = ZebraPrinterManager();
 await manager.initialize();
 final status = await manager.getPrinterStatus();
 ```
-description:
-globs:
-alwaysApply: false
----

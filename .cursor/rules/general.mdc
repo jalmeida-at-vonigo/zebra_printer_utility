@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Unified Project Rules
 
 This document consolidates all general project standards,code cleanup guidelines, testing standards, documentation rules, and completion criteria into a single set of direct rules. These must be followed for all tasks without exception.

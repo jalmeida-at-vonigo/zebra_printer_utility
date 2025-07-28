@@ -1,6 +1,8 @@
 ---
 alwaysApply: true
+applyTo: ["ios/**/*.{swift,m,h}", "android/**/*.{java,kt}"]
 ---
+
 # Native Layer Responsibility Standards
 
 ## Purpose
@@ -79,5 +81,8 @@ When reviewing changes to native code, ensure:
 1. Methods are simple pass-throughs to SDK calls
 2. No conditional logic beyond null checks
 3. No string manipulation or formatting
+4. No delays or timing logic
+5. Return raw SDK data without interpretation
+
 4. No delays or timing logic
 5. Return raw SDK data without interpretation

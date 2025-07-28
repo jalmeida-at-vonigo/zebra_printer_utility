@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+---
+
 **See also:**
 - [Error Handling Guide](mdc:.readme/guides/error-handling.md)
 - [Development Docs](mdc:.readme/development/README.md)

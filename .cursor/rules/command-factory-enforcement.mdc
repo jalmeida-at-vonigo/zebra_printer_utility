@@ -1,4 +1,8 @@
-# CommandFactory Enforcement Rule
+---
+applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+---
+
+# CommandFactory Enforcement
 
 ## 🚨 CRITICAL ENFORCEMENT: No Direct Command Instantiation
 
@@ -134,7 +138,3 @@ try {
 - **Architecture Violation**: Breaks the command pattern implementation
 - **Testing Difficulty**: Makes mocking and testing harder
 - **Maintenance Issues**: Scattered command creation across codebase
-description:
-globs:
-alwaysApply: false
----

@@ -1,4 +1,8 @@
-# PRINTER FORMAT-SPECIFIC COMMAND NAMING & USAGE
+---
+applyTo: ["lib/internal/commands/**/*.dart", "test/unit/internal/commands/**/*.dart"]
+---
+
+# Command Format and Naming Standards
 
 ## Naming Rule
 * If a command is specific to a printer format (e.g., ZPL or CPCL), its class and file name **MUST** include the format in the name.

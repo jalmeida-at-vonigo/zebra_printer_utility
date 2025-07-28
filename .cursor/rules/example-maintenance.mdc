@@ -1,3 +1,7 @@
+---
+applyTo: ["example/**/*.dart"]
+---
+
 # Example App Maintenance Rule
 
 ## Purpose

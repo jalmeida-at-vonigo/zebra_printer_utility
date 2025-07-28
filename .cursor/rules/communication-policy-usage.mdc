@@ -1,4 +1,8 @@
-# CommunicationPolicy Usage Standards
+---
+applyTo: ["lib/**/*.dart"]
+---
+
+# Communication Policy Usage Guidelines
 
 ## Purpose
 The [CommunicationPolicy](mdc:lib/internal/communication_policy.dart) provides centralized connection assurance, timeout handling, and retry logic for all printer operations. **ALL** printer command execution should go through CommunicationPolicy.

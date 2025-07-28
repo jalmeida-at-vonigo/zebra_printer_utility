@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart"]
+---
+
 # Communication Policy Architecture
 
 ## Overview
@@ -142,7 +146,3 @@ CommunicationPolicy.resetPolicyDepth(); // For testing only
 **See also:**
 - [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
-description:
-globs:
-alwaysApply: false
----

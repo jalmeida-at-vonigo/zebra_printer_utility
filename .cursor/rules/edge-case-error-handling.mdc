@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+---
+
 # EDGE CASE ERROR HANDLING ARCHITECTURE
 
 ## Purpose
@@ -316,7 +320,3 @@ try {
 
 ## Last Updated
 2024-12-19 - Comprehensive edge case error handling architecture
-description:
-globs:
-alwaysApply: false
----

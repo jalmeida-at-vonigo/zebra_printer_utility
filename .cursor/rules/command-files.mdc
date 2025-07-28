@@ -1,5 +1,8 @@
+---
+applyTo: ["lib/internal/commands/**/*.dart", "test/unit/internal/commands/**/*.dart"]
+---
 
-# COMMAND SYSTEM ARCHITECTURE
+# Command System Architecture
 
 _Last updated: 2024-06-13_
 

@@ -1,3 +1,7 @@
+---
+applyTo: ["lib/internal/commands/**/*.dart", "test/unit/internal/commands/**/*.dart"]
+---
+
 # Command Pattern Standards
 
 ## MANDATORY: Use CommandFactory for ALL Command Creation

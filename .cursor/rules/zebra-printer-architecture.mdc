@@ -1,4 +1,11 @@
+---
+alwaysApply: true
+applyTo: ["lib/**/*.dart"]
+---
+
 # Zebra Printer Plugin Architecture & Dependency Direction
+
+_Last updated: 2024-12-20_
 
 _Last updated: 2024-12-20_
 
@@ -601,5 +608,8 @@ await printer.sendCommand(clearCommand);
 - [Command System Architecture](mdc:.cursor/rules/command-files.mdc)
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 - [Event System](mdc:.cursor/rules/event-system.mdc)
+- [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
+- [Platform-Specific Rules](mdc:.cursor/rules/ios/)
+
 - [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
 - [Platform-Specific Rules](mdc:.cursor/rules/ios/)

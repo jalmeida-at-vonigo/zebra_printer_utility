@@ -1,3 +1,7 @@
+---
+applyTo: ["ios/**/*.{swift,m,h}"]
+---
+
 # iOS ZSDK Integration and Update Guide
 
 ## Current Project Structure

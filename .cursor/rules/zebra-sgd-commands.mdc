@@ -1,7 +1,5 @@
 ---
-description: ZebraSGDCommands utility-only usage rules
-globs: lib/zebra_sgd_commands.dart
-alwaysApply: true
+applyTo: ["lib/zebra_sgd_commands.dart"]
 ---
 
 # ZEBRA SGD COMMANDS - UTILITY ONLY
@@ -92,6 +90,13 @@ class ZebraSGDCommands {
   static bool isLanguageMatch(String current, String expected) { ... }
   
   // ❌ NO COMMAND METHODS
+  // static String getCommand(String setting) { ... } - REMOVE
+  // static String zplClearErrors() { ... } - REMOVE
+  // static String cpclClearBuffer() { ... } - REMOVE
+}
+
+```
+
   // static String getCommand(String setting) { ... } - REMOVE
   // static String zplClearErrors() { ... } - REMOVE
   // static String cpclClearBuffer() { ... } - REMOVE
