@@ -12,88 +12,180 @@
 
 @implementation ZSDKWrapper
 
+#pragma mark - Helper Methods
+
+/**
+ * Enhances network printer info dictionary with complete metadata and model information.
+ * Uses SGD commands to retrieve actual printer model via temporary TCP connection.
+ *
+ * @param info Mutable dictionary to populate with printer information
+ * @param networkPrinter Discovered network printer object
+ * @param discoveryMethod String identifier for discovery method used
+ */
++ (void)enhanceNetworkPrinterInfo:(NSMutableDictionary *)info 
+                     withPrinter:(DiscoveredPrinterNetwork *)networkPrinter 
+                   discoveryMethod:(NSString *)discoveryMethod {
+    NSString *address = networkPrinter.address ?: @"";
+    NSString *printerName = networkPrinter.dnsName ?: networkPrinter.address ?: @"Unknown";
+    
+    info[@"Address"] = address;
+    info[@"port"] = @(networkPrinter.port);
+    info[@"Name"] = printerName;
+    info[@"Status"] = @"Found";
+    info[@"IsWifi"] = @YES;
+    info[@"isBluetooth"] = @NO;
+    info[@"connectionType"] = @"Network";
+    info[@"brand"] = @"Zebra";
+    info[@"displayName"] = [NSString stringWithFormat:@"Zebra Printer - %@", printerName];
+    info[@"discoveryMethod"] = discoveryMethod;
+    
+    // Try to get printer model information via SGD (with faster timeout)
+    @try {
+        TcpPrinterConnection *tempConnection = [[TcpPrinterConnection alloc] initWithAddress:address andWithPort:networkPrinter.port];
+        [tempConnection setMaxTimeoutForRead:2000];  // 2 second timeout instead of default
+        if ([tempConnection open]) {
+            NSError *sgdError = nil;
+            NSString *model = [SGD GET:@"appl.name" withPrinterConnection:tempConnection withMaxTimeoutForRead:2000 andWithTimeToWaitForMoreData:500 error:&sgdError];
+            if (model && model.length > 0 && !sgdError) {
+                info[@"model"] = model;
+                info[@"displayName"] = [NSString stringWithFormat:@"Zebra %@ - %@", model, printerName];
+            }
+            [tempConnection close];
+        }
+    } @catch (NSException *exception) {
+        // Ignore errors when trying to get model info - discovery should continue
+    }
+}
+
+/**
+ * Enhances generic printer info dictionary with basic metadata.
+ * Used for discovered printers that don't have network-specific information.
+ *
+ * @param info Mutable dictionary to populate with printer information
+ * @param discoveredPrinter Discovered printer object
+ * @param discoveryMethod String identifier for discovery method used
+ */
++ (void)enhanceGenericPrinterInfo:(NSMutableDictionary *)info 
+                      withPrinter:(DiscoveredPrinter *)discoveredPrinter 
+                    discoveryMethod:(NSString *)discoveryMethod {
+    NSString *address = discoveredPrinter.address ?: @"";
+    
+    info[@"Address"] = address;
+    info[@"Name"] = discoveredPrinter.address ?: @"Unknown";
+    info[@"Status"] = @"Found";
+    info[@"IsWifi"] = @YES;
+    info[@"isBluetooth"] = @NO;
+    info[@"connectionType"] = @"Network";
+    info[@"brand"] = @"Zebra";
+    info[@"displayName"] = discoveredPrinter.address ?: @"Unknown";
+    info[@"discoveryMethod"] = discoveryMethod;
+}
+
 #pragma mark - Discovery
 
 + (void)startNetworkDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error {
     // Ensure we're already on a background thread to prevent blocking
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         @try {
-            NSError *discoveryError = nil;
-            // Use a shorter timeout to prevent freezing
-            NSArray *printers = [NetworkDiscoverer localBroadcastWithTimeout:2 error:&discoveryError];
+            NSMutableArray *allPrinters = [NSMutableArray array];
+            NSMutableSet *uniqueAddresses = [NSMutableSet set];
             
-            if (discoveryError) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    error([discoveryError localizedDescription]);
-                });
-            } else {
-                NSMutableArray *printerInfo = [NSMutableArray array];
-                for (id printer in printers) {
+            // Use dispatch group for parallel execution and faster discovery
+            dispatch_group_t discoveryGroup = dispatch_group_create();
+            __block NSArray *localBroadcastPrinters = nil;
+            __block NSArray *hotspotPrinters = nil;
+            __block NSArray *homePrinters = nil;
+            
+            // Method 1: Local Broadcast (parallel execution)
+            dispatch_group_enter(discoveryGroup);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                NSError *localBroadcastError = nil;
+                localBroadcastPrinters = [NetworkDiscoverer localBroadcastWithTimeout:2000 error:&localBroadcastError];
+                dispatch_group_leave(discoveryGroup);
+            });
+            
+            // Method 2a: iPad Hotspot Range (parallel execution)
+            dispatch_group_enter(discoveryGroup);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                hotspotPrinters = [NetworkDiscoverer subnetSearchWithRange:@"172.20.10.*" andWaitForResponsesTimeout:800 error:nil];
+                dispatch_group_leave(discoveryGroup);
+            });
+            
+            // Method 2b: Common Network Range (parallel execution)
+            dispatch_group_enter(discoveryGroup);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                homePrinters = [NetworkDiscoverer subnetSearchWithRange:@"192.168.1.*" andWaitForResponsesTimeout:800 error:nil];
+                dispatch_group_leave(discoveryGroup);
+            });
+            
+            // Wait for all discovery methods to complete (max 2 seconds total)
+            dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC));
+            dispatch_group_wait(discoveryGroup, timeout);
+            
+            // Process results from all discovery methods
+            // Process Local Broadcast results
+            if (localBroadcastPrinters) {
+                for (id printer in localBroadcastPrinters) {
                     NSMutableDictionary *info = [NSMutableDictionary dictionary];
-                    NSString *printerAddress = nil;
-                    NSString *printerName = nil;
                     
                     if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
                         DiscoveredPrinterNetwork *networkPrinter = (DiscoveredPrinterNetwork *)printer;
-                        printerAddress = networkPrinter.address;
-                        printerName = networkPrinter.dnsName ?: networkPrinter.address;
-                        
-                        if (printerAddress && printerAddress.length > 0) {
-                            info[@"address"] = printerAddress;
-                            info[@"port"] = @(networkPrinter.port);
-                            info[@"name"] = printerName ?: @"Unknown";
-                            info[@"isWifi"] = @YES;
-                            info[@"isBluetooth"] = @NO;
-                            info[@"connectionType"] = @"Network";
-                            
-                            // Add Zebra branding information
-                            info[@"brand"] = @"Zebra";
-                            info[@"displayName"] = [NSString stringWithFormat:@"Zebra Printer - %@", printerName ?: @"Unknown"];
-                            
-                            // Try to get printer model information via SGD
-                            @try {
-                                TcpPrinterConnection *tempConnection = [[TcpPrinterConnection alloc] initWithAddress:printerAddress andWithPort:networkPrinter.port];
-                                if ([tempConnection open]) {
-                                    NSString *model = [SGD GET:@"appl.name" withPrinterConnection:tempConnection error:nil];
-                                    if (model && model.length > 0) {
-                                        info[@"model"] = model;
-                                        info[@"displayName"] = [NSString stringWithFormat:@"Zebra %@ - %@", model, printerName ?: @"Unknown"];
-                                    }
-                                    [tempConnection close];
-                                }
-                            } @catch (NSException *exception) {
-                                // Ignore errors when trying to get model info
-                            }
+                        NSString *address = networkPrinter.address ?: @"";
+                        if (address.length > 0 && ![uniqueAddresses containsObject:address]) {
+                            [ZSDKWrapper enhanceNetworkPrinterInfo:info withPrinter:networkPrinter discoveryMethod:@"localBroadcast"];
+                            [allPrinters addObject:info];
+                            [uniqueAddresses addObject:address];
                         }
-                        
                     } else if ([printer isKindOfClass:[DiscoveredPrinter class]]) {
                         DiscoveredPrinter *discoveredPrinter = (DiscoveredPrinter *)printer;
-                        printerAddress = discoveredPrinter.address;
-                        printerName = discoveredPrinter.address;
-                        
-                        if (printerAddress && printerAddress.length > 0) {
-                            info[@"address"] = printerAddress;
-                            info[@"name"] = printerName ?: @"Unknown";
-                            info[@"isWifi"] = @YES;
-                            info[@"isBluetooth"] = @NO;
-                            info[@"connectionType"] = @"Network";
-                            
-                            // Add Zebra branding information
-                            info[@"brand"] = @"Zebra";
-                            info[@"displayName"] = [NSString stringWithFormat:@"Zebra Printer - %@", printerName ?: @"Unknown"];
+                        NSString *address = discoveredPrinter.address ?: @"";
+                        if (address.length > 0 && ![uniqueAddresses containsObject:address]) {
+                            [ZSDKWrapper enhanceGenericPrinterInfo:info withPrinter:discoveredPrinter discoveryMethod:@"localBroadcast"];
+                            [allPrinters addObject:info];
+                            [uniqueAddresses addObject:address];
                         }
                     }
-                    
-                    // Only add printer if it has a valid address
-                    if (printerAddress && printerAddress.length > 0) {
-                        [printerInfo addObject:info];
+                }
+            }
+            
+            // Process Subnet Search results (from parallel execution)
+            NSMutableArray *allSubnetPrinters = [NSMutableArray array];
+            if (hotspotPrinters) [allSubnetPrinters addObjectsFromArray:hotspotPrinters];
+            if (homePrinters) [allSubnetPrinters addObjectsFromArray:homePrinters];
+            
+            @try {
+                NSArray *subnetPrinters = [allSubnetPrinters copy];
+                if (subnetPrinters) {
+                    for (id printer in subnetPrinters) {
+                        NSMutableDictionary *info = [NSMutableDictionary dictionary];
+                        
+                        if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
+                            DiscoveredPrinterNetwork *networkPrinter = (DiscoveredPrinterNetwork *)printer;
+                            NSString *address = networkPrinter.address ?: @"";
+                            if (address.length > 0 && ![uniqueAddresses containsObject:address]) {
+                                [ZSDKWrapper enhanceNetworkPrinterInfo:info withPrinter:networkPrinter discoveryMethod:@"subnetSearch"];
+                                [allPrinters addObject:info];
+                                [uniqueAddresses addObject:address];
+                            }
+                        } else if ([printer isKindOfClass:[DiscoveredPrinter class]]) {
+                            DiscoveredPrinter *discoveredPrinter = (DiscoveredPrinter *)printer;
+                            NSString *address = discoveredPrinter.address ?: @"";
+                            if (address.length > 0 && ![uniqueAddresses containsObject:address]) {
+                                [ZSDKWrapper enhanceGenericPrinterInfo:info withPrinter:discoveredPrinter discoveryMethod:@"subnetSearch"];
+                                [allPrinters addObject:info];
+                                [uniqueAddresses addObject:address];
+                            }
+                        }
                     }
                 }
-                
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    success(printerInfo);
-                });
+            } @catch (NSException *subnetException) {
+                // Subnet search failed, continue with local broadcast results
             }
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                success(allPrinters);
+            });
+            
         } @catch (NSException *exception) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 error([exception reason]);

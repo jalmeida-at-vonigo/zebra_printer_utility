@@ -191,6 +191,20 @@ class ZebraPrinterInstance: NSObject {
     }
     
     private func startNetworkDiscovery() {
+        // Use ZSDK network discovery which includes multiple methods
+        ZSDKWrapper.startNetworkDiscovery { [weak self] printers in
+            DispatchQueue.main.async {
+                if let printers = printers {
+                    for printer in printers {
+                        self?.channel.invokeMethod("printerFound", arguments: printer)
+                    }
+                }
+            }
+        } error: { [weak self] error in
+            LogUtil.error("Network discovery error: \(error)")
+        }
+        
+        // Also try Bonjour discovery as fallback for iOS 13+
         #if canImport(Network)
         if #available(iOS 13.0, *) {
             // Create network browser for printer services
@@ -201,9 +215,9 @@ class ZebraPrinterInstance: NSObject {
             browser.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .ready:
-                    LogUtil.info("Network browser ready")
+                    LogUtil.info("Bonjour network browser ready")
                 case .failed(let error):
-                    LogUtil.error("Network browser failed: \(error)")
+                    LogUtil.error("Bonjour network browser failed: \(error)")
                 default:
                     break
                 }
@@ -218,10 +232,10 @@ class ZebraPrinterInstance: NSObject {
             networkBrowser = browser
             browser.start(queue: DispatchQueue.global())
         } else {
-            LogUtil.warn("Network discovery not available on iOS < 13.0")
+            LogUtil.warn("Bonjour discovery not available on iOS < 13.0")
         }
         #else
-        LogUtil.warn("Network framework not available")
+        LogUtil.warn("Network framework not available for Bonjour")
         #endif
     }
     
