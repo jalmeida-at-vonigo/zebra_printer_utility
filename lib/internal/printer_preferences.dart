@@ -32,14 +32,8 @@ class PrinterPreferences {
       final jsonString = prefs.getString(_keyLastSelectedPrinter);
       if (jsonString == null) return null;
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
-      // Check if last used is recent (within 7 days)
-      final lastUsed = DateTime.tryParse(json['lastUsed'] as String? ?? '') ??
-          DateTime.now();
-      final daysSinceLastUse = DateTime.now().difference(lastUsed).inDays;
-      if (daysSinceLastUse > 7) {
-        _logger.info('Last selected printer is too old ($daysSinceLastUse days), ignoring');
-        return null;
-      }
+      
+      // Return saved printer without expiration - kept until user selects a different printer
       return ZebraDevice.fromJson(json);
     } catch (e) {
       _logger.error('Failed to get last selected printer', e);

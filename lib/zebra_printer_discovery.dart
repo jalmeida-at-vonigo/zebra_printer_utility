@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import 'internal/logger.dart';
+import 'internal/network_discovery.dart';
 import 'internal/policies/policies.dart' as policies;
 import 'zebrautil.dart';
 
@@ -108,6 +109,7 @@ class ZebraPrinterDiscovery {
 
   /// Discover available printers (both Bluetooth and Network)
   /// Returns Result with list of discovered devices
+  /// Uses enhanced parallel network discovery with iOS HotSpot support
   Future<Result<List<ZebraDevice>>> discoverPrinters({
     Duration timeout = const Duration(seconds: 10),
   }) async {
@@ -117,38 +119,25 @@ class ZebraPrinterDiscovery {
 
     return await _timeoutPolicy.execute(
       () async {
-        final completer = Completer<List<ZebraDevice>>();
+        final List<ZebraDevice> allPrinters = [];
+        final Set<String> uniqueAddresses = {};
 
         _logger.info(
-            'Starting printer discovery (timeout: ${timeout.inSeconds}s)');
+            'Starting enhanced printer discovery (timeout: ${timeout.inSeconds}s)');
         _statusStreamController?.add('Discovering printers...');
 
-        // Clear existing list by calling printers clear
+        // Clear existing list
         _controller!.printers.clear();
 
-        _isScanning = true;
-        _printer!.startScanning();
+        // Start streaming discovery with real-time results
+        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters);
 
-        // Set up timer to stop discovery after timeout
-        _discoveryTimer?.cancel();
-        _discoveryTimer = Timer(timeout, () {
-          _logger.info('Discovery timeout reached, stopping scan');
-          if (_isScanning) {
-            _printer!.stopScanning();
-            _isScanning = false;
-            _statusStreamController?.add('Discovery completed');
-          }
-          if (!completer.isCompleted) {
-            completer.complete(_controller!.printers);
-          }
-        });
-
-        // Complete immediately when timeout is reached
-        await completer.future;
         _logger.info(
-            'Discovery completed with ${_controller!.printers.length} printers found');
+            'Enhanced discovery completed with ${allPrinters.length} unique printers found');
+        _statusStreamController
+            ?.add('Discovery completed. Found ${allPrinters.length} printers');
 
-        return Result.success(_controller!.printers);
+        return Result.success(allPrinters);
       },
     );
   }
@@ -479,6 +468,117 @@ class ZebraPrinterDiscovery {
       onDiscoveryError: onDiscoveryError,
       onPermissionDenied: onPermissionDenied,
     );
+  }
+
+  /// Discover Bluetooth printers with streaming callback
+  Future<void> _discoverBluetoothPrintersStream(
+    Duration timeout,
+    void Function(ZebraDevice) onPrinterFound,
+  ) async {
+    final completer = Completer<void>();
+    final discoveredAddresses = <String>{};
+
+    try {
+      _isScanning = true;
+      _printer!.startScanning();
+
+      // Listen for new printers and call callback immediately
+      void onControllerChanged() {
+        final btPrinters = _controller!.printers.where((p) => !p.isWifi);
+        for (final printer in btPrinters) {
+          if (discoveredAddresses.add(printer.address)) {
+            onPrinterFound(printer);
+          }
+        }
+      }
+
+      _controller!.addListener(onControllerChanged);
+
+      // Set up timer to stop discovery after timeout
+      final timer = Timer(timeout ~/ 2, () {
+        if (_isScanning) {
+          _printer!.stopScanning();
+          _isScanning = false;
+        }
+        _controller!.removeListener(onControllerChanged);
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      });
+
+      await completer.future;
+      timer.cancel();
+    } catch (e) {
+      _logger.warning('Bluetooth discovery stream failed: $e');
+    }
+  }
+
+  /// Discover network printers with streaming callback
+  Future<void> _discoverNetworkPrintersStream(
+    Duration timeout,
+    void Function(ZebraDevice) onPrinterFound,
+  ) async {
+    try {
+      await NetworkDiscovery.discoverNetworkPrintersStream(
+        timeout: timeout,
+        onPrinterFound: onPrinterFound,
+      );
+    } catch (e) {
+      _logger.warning('Network discovery stream failed: $e');
+    }
+  }
+
+  /// Start streaming discovery with real-time results
+  /// Printers are added to the UI as soon as they are found
+  Future<void> _startStreamingDiscovery(
+    Duration timeout,
+    Set<String> uniqueAddresses,
+    List<ZebraDevice> allPrinters,
+  ) async {
+    final completer = Completer<void>();
+    int completedMethods = 0;
+    const int totalMethods = 2; // Bluetooth + Network
+
+    void checkCompletion() {
+      completedMethods++;
+      if (completedMethods >= totalMethods && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    void addPrinter(ZebraDevice printer) {
+      if (uniqueAddresses.add(printer.address)) {
+        allPrinters.add(printer);
+        _controller!.printers.add(printer);
+        // Immediately notify UI of new printer
+        _devicesStreamController?.add(_controller!.printers);
+        _logger.info('Found printer: ${printer.name} (${printer.address})');
+      }
+    }
+
+    // Start Bluetooth discovery with real-time callback
+    _statusStreamController?.add('Starting Bluetooth discovery...');
+    _discoverBluetoothPrintersStream(timeout, addPrinter).then((_) {
+      checkCompletion();
+    }).catchError((e) {
+      _logger.warning('Bluetooth discovery failed: $e');
+      checkCompletion();
+    });
+
+    // Start enhanced network discovery with real-time callback
+    _statusStreamController?.add('Starting enhanced network discovery...');
+    _discoverNetworkPrintersStream(timeout, addPrinter).then((_) {
+      checkCompletion();
+    }).catchError((e) {
+      _logger.warning('Network discovery failed: $e');
+      checkCompletion();
+    });
+
+    // Wait for all discovery methods to complete or timeout
+    await Future.any([
+      completer.future,
+      Future.delayed(timeout),
+    ]);
   }
 
   /// Dispose of resources

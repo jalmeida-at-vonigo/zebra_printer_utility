@@ -687,4 +687,32 @@ class ParserUtil {
 
     return cleaned;
   }
+
+  /// Parse address with optional port
+  /// Returns a map with 'address' and 'port' keys
+  /// Default port is 9100 for network printers
+  static Map<String, dynamic> parseAddress(String address) {
+    const int defaultPort = 9100;
+
+    if (address.isEmpty) {
+      return {'address': address, 'port': defaultPort};
+    }
+
+    // Check if address contains port (IP:port format)
+    final parts = address.split(':');
+    if (parts.length == 2) {
+      final ip = parts[0].trim();
+      final portStr = parts[1].trim();
+      final port = int.tryParse(portStr) ?? defaultPort;
+      return {'address': ip, 'port': port};
+    }
+
+    // No port specified, use address as-is with default port
+    return {'address': address.trim(), 'port': defaultPort};
+  }
+
+  /// Check if address is a network address (contains dots for IP)
+  static bool isNetworkAddress(String address) {
+    return address.contains('.');
+  }
 }

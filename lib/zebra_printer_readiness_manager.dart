@@ -780,35 +780,21 @@ class ZebraPrinterReadinessManager {
     final currentLanguage = await readiness.languageStatus;
 
     if (currentLanguage != null) {
-      _log('Current printer language: $currentLanguage');
+      _log('Current printer language: ${currentLanguage.name}');
 
-      // Check if current language matches expected format
-      bool languageMatches = false;
-      String expectedLanguage = '';
-
-      switch (format) {
-        case PrintFormat.zpl:
-          expectedLanguage = 'zpl';
-          languageMatches = ZebraSGDCommands.isLanguageMatch(
-              currentLanguage, expectedLanguage);
-          break;
-        case PrintFormat.cpcl:
-          expectedLanguage = 'line_print';
-          languageMatches = ZebraSGDCommands.isLanguageMatch(
-              currentLanguage, expectedLanguage);
-          break;
-      }
+      // Check if current language matches expected format (enum comparison)
+      final languageMatches = currentLanguage == format;
 
       if (!languageMatches) {
         _log(
-            'Language mismatch: current=$currentLanguage, expected=$expectedLanguage');
+            'Language mismatch: current=${currentLanguage.name}, expected=${format.name}');
 
         if (options.fixLanguageMismatch) {
           // Switch to correct language mode
           _logger.info(
               'ZebraPrinterReadinessManager: Language mismatch detected, attempting to switch');
           _log(
-              'Switching printer language from $currentLanguage to $expectedLanguage');
+              'Switching printer language from ${currentLanguage.name} to ${format.name}');
 
           final switchCommand = format == PrintFormat.zpl
               ? CommandFactory.createSendSetZplModeCommand(_printer)
@@ -850,7 +836,7 @@ class ZebraPrinterReadinessManager {
           // Only log the mismatch without switching
           failedFixes.add('language');
           fixErrors['language'] =
-              'Language mismatch: current=$currentLanguage, expected=$expectedLanguage';
+              'Language mismatch: current=${currentLanguage.name}, expected=${format.name}';
           _log('Language check failed: ${fixErrors['language']}');
           await _sendStatusEvent(
             readiness: readiness,

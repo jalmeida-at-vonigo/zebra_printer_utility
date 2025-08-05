@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:zebrautil/models/zebra_device.dart';
+import 'package:zebrautil/models/print_enums.dart';
 import 'print_data_editor.dart' as editor;
 import 'printer_selector.dart';
 import 'log_panel.dart';
 
 class MobileTabbedLayout extends StatefulWidget {
   final TextEditingController dataController;
-  final editor.PrintFormat format;
-  final ValueChanged<editor.PrintFormat> onFormatChanged;
+  final PrintFormat format;
+  final ValueChanged<PrintFormat> onFormatChanged;
   final VoidCallback? onPrint;
   final bool isPrinting;
   final List<LogEntry> logs;

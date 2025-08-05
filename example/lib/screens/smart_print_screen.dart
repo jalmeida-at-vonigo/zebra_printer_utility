@@ -20,7 +20,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
   final List<LogEntry> _logs = [];
   
   ZebraDevice? _selectedPrinter;
-  editor.PrintFormat _format = editor.PrintFormat.zpl;
+  PrintFormat _format = PrintFormat.zpl;
   
   // Local copy of PrintState from events
   PrintState? _printState;
@@ -83,7 +83,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
         device: _selectedPrinter!,
         maxAttempts: 3,
         options: PrintOptions(
-          format: _format == editor.PrintFormat.zpl ? PrintFormat.zpl : PrintFormat.cpcl,
+          format: _format,
         ),
       );
 

@@ -4,18 +4,14 @@
 @class ZebraPrinterConnection;
 @class ZebraPrinterFactory;
 @class TcpPrinterConnection;
-@class NetworkDiscoverer;
-@class DiscoveredPrinter;
-@class DiscoveredPrinterNetwork;
+
 @class SGD;
 
 @interface ZSDKWrapper : NSObject
 
 #pragma mark - Discovery
 
-+ (void)startNetworkDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error;
 + (void)startMfiBluetoothDiscovery:(void (^)(NSArray *))success error:(void (^)(NSString *))error;
-+ (void)stopDiscovery;
 
 #pragma mark - Connection
 

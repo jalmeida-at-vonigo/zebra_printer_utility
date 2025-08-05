@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zebrautil/internal/logger.dart';
+import 'package:zebrautil/models/print_enums.dart';
 
 import '../widgets/print_data_editor.dart' as editor;
 import '../widgets/log_panel.dart';
@@ -168,7 +169,7 @@ class _DirectPrintScreenState extends State<DirectPrintScreen> {
   bool _isConnected = false;
   bool _isPrinting = false;
   bool _isDiscovering = false;
-  editor.PrintFormat _format = editor.PrintFormat.cpcl;
+  PrintFormat _format = PrintFormat.cpcl;
 
   @override
   void initState() {
@@ -353,7 +354,7 @@ PRINT''';
       String preparedData = _dataController.text;
       
       // CPCL data preparation (same as library implementation)
-      if (_format == editor.PrintFormat.cpcl) {
+      if (_format == PrintFormat.cpcl) {
         preparedData = preparedData.replaceAll(RegExp(r'(?<!\r)\n'), '\r\n');
 
         if (preparedData.trim().endsWith('FORM') &&
@@ -378,7 +379,7 @@ PRINT''';
         _addLog('Print data sent', 'success');
         
         // CPCL buffer flush
-        if (_format == editor.PrintFormat.cpcl) {
+        if (_format == PrintFormat.cpcl) {
           _addLog('Flushing CPCL buffer...', 'info');
           await _printerChannel!.sendDataWithResponse('\x0C', timeout: 1000);
           await Future.delayed(const Duration(milliseconds: 100));

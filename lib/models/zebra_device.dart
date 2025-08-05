@@ -23,10 +23,13 @@ class ZebraDevice {
     this.model,
     this.displayName,
     this.manufacturer,
+
     this.firmwareRevision,
     this.hardwareRevision,
     this.connectionType,
     this.isBluetooth,
+    this.port,
+    this.discoveryMethod,
       });
       
   factory ZebraDevice.empty() =>
@@ -54,6 +57,7 @@ class ZebraDevice {
       model: json['model'],
       displayName: json['displayName'],
       manufacturer: json['manufacturer'],
+  
       firmwareRevision: json['firmwareRevision'],
       hardwareRevision: json['hardwareRevision'],
       connectionType: json['connectionType'],
@@ -61,7 +65,9 @@ class ZebraDevice {
           ? null
           : (json['isBluetooth'] is bool
               ? json['isBluetooth']
-              : json['isBluetooth'].toString() == 'true'));
+              : json['isBluetooth'].toString() == 'true'),
+      port: json['port'],
+      discoveryMethod: json['discoveryMethod']);
 
   final String address;
   final String name;
@@ -75,10 +81,13 @@ class ZebraDevice {
   final String? model;
   final String? displayName;
   final String? manufacturer;
+
   final String? firmwareRevision;
   final String? hardwareRevision;
   final String? connectionType;
   final bool? isBluetooth;
+  final int? port;
+  final String? discoveryMethod;
 
   Map<String, dynamic> toJson() => {
         'address': address,
@@ -91,10 +100,13 @@ class ZebraDevice {
         'model': model,
         'displayName': displayName,
         'manufacturer': manufacturer,
+    
         'firmwareRevision': firmwareRevision,
         'hardwareRevision': hardwareRevision,
         'connectionType': connectionType,
         'isBluetooth': isBluetooth,
+        'port': port,
+        'discoveryMethod': discoveryMethod,
       };
 
   @override
@@ -121,10 +133,13 @@ class ZebraDevice {
     String? model,
     String? displayName,
     String? manufacturer,
+
     String? firmwareRevision,
     String? hardwareRevision,
     String? connectionType,
     bool? isBluetooth,
+    int? port,
+    String? discoveryMethod,
   }) {
     return ZebraDevice(
         address: address ?? this.address,
@@ -137,9 +152,12 @@ class ZebraDevice {
         model: model ?? this.model,
         displayName: displayName ?? this.displayName,
         manufacturer: manufacturer ?? this.manufacturer,
+
         firmwareRevision: firmwareRevision ?? this.firmwareRevision,
         hardwareRevision: hardwareRevision ?? this.hardwareRevision,
         connectionType: connectionType ?? this.connectionType,
-        isBluetooth: isBluetooth ?? this.isBluetooth);
+        isBluetooth: isBluetooth ?? this.isBluetooth,
+        port: port ?? this.port,
+        discoveryMethod: discoveryMethod ?? this.discoveryMethod);
   }
 }

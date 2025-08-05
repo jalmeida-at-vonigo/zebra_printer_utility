@@ -11,6 +11,7 @@ This example app showcases the key features of the zebra_printer_utility plugin 
 - **Responsive Design**: Adapts seamlessly to phones and tablets in both portrait and landscape orientations
 - **Consistent UI Components**: Reusable widgets for common functionality
 - **Real-time Logging**: All screens include operation logs for debugging and learning
+- **Real-time Discovery**: Printers appear immediately as they are found, no UI freezing
 - **Print Format Support**: Both ZPL and CPCL formats with built-in presets
 
 ## Screens
@@ -19,10 +20,11 @@ This example app showcases the key features of the zebra_printer_utility plugin 
 Demonstrates the simple print API with printer selection.
 
 **Key Features:**
-- Printer discovery and connection
+- Real-time printer discovery and connection
 - ZPL/CPCL editor with presets
 - Direct print using `Zebra.print()`
 - Real-time operation logging
+- Auto-stop discovery when printer is selected
 
 **API Usage:**
 ```dart
@@ -54,10 +56,12 @@ final eventStream = Zebra.smartPrint(
 Demonstrates printer discovery capabilities with advanced options.
 
 **Key Features:**
-- Configurable discovery timeout
+- Configurable discovery timeout  
 - WiFi/Bluetooth filtering
-- Real-time device listing
+- Real-time device listing with immediate UI updates
 - Connection testing
+- Auto-stop discovery when printer is selected
+- Proper stream subscription management
 
 **API Usage:**
 ```dart

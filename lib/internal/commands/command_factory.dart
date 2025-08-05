@@ -6,7 +6,8 @@ import 'get_host_status_command.dart';
 import 'get_language_command.dart';
 import 'get_media_status_command.dart';
 import 'get_pause_status_command.dart';
-import 'get_printer_language_command.dart';
+
+
 import 'get_printer_status_command.dart';
 import 'get_raw_printer_status_command.dart';
 import 'get_setting_command.dart';
@@ -165,11 +166,7 @@ class CommandFactory {
   ) =>
       GetDetailedPrinterStatusCommand(printer);
 
-  /// Creates a GetPrinterLanguageCommand for getting printer language
-  static GetPrinterLanguageCommand createGetPrinterLanguageCommand(
-    ZebraPrinter printer,
-  ) =>
-      GetPrinterLanguageCommand(printer);
+
 
   /// Creates a GetRawPrinterStatusCommand for getting raw printer status
   static GetRawPrinterStatusCommand createGetRawPrinterStatusCommand(

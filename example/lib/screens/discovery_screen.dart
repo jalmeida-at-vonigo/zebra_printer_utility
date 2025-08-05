@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 
@@ -19,11 +20,23 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   int _discoveryTimeout = 15;
   bool _includeWifi = true;
   bool _includeBluetooth = true;
+  StreamSubscription<List<ZebraDevice>>? _discoverySubscription;
 
   @override
   void initState() {
     super.initState();
     _addLog('Discovery screen initialized', 'info');
+  }
+
+  @override
+  void dispose() {
+    // Cancel any active discovery subscription
+    _discoverySubscription?.cancel();
+    // Stop discovery if still running
+    if (_isDiscovering) {
+      Zebra.stopDiscovery();
+    }
+    super.dispose();
   }
 
   void _addLog(String message, String level, {String? details}) {
@@ -48,6 +61,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Future<void> _startDiscovery() async {
     if (_isDiscovering) return;
 
+    // Cancel any existing subscription
+    await _discoverySubscription?.cancel();
+
     setState(() {
       _isDiscovering = true;
       _devices.clear();
@@ -64,42 +80,63 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       );
 
       if (result.success && result.data != null) {
-        await for (final devices in result.data!) {
-          if (!mounted) break;
-          
-          setState(() {
-            _devices.clear();
-            _devices.addAll(devices);
-          });
-          
-          _addLog('Found ${devices.length} printer(s)', 'info');
-          
-          // Log details about each device
-          for (final device in devices) {
-            _addLog(
-              'Printer discovered',
-              'success',
-              details: 'Name: ${device.name}\n'
-                  'Address: ${device.address}\n'
-                  'Type: ${device.isWifi ? "WiFi" : "Bluetooth"}\n'
-                  'Model: ${device.model ?? "Unknown"}',
-            );
-          }
-        }
-        
-        _addLog('Discovery completed', 'success', 
-          details: 'Total printers found: ${_devices.length}');
+        // Subscribe to the discovery stream for real-time updates
+        _discoverySubscription = result.data!.listen(
+          (devices) {
+            if (!mounted) return;
+            
+            // Real-time update: Update UI immediately when printers are found
+            final previousDeviceCount = _devices.length;
+            setState(() {
+              _devices.clear();
+              _devices.addAll(devices);
+            });
+            
+            // Log only new discoveries to avoid spam
+            if (devices.length > previousDeviceCount) {
+              _addLog('Found ${devices.length} printer(s)', 'info');
+              
+              // Log details about new devices only
+              final newDevices = devices.skip(previousDeviceCount);
+              for (final device in newDevices) {
+                _addLog(
+                  'Printer discovered',
+                  'success',
+                  details: 'Name: ${device.name}\n'
+                      'Address: ${device.address}\n'
+                      'Type: ${device.isWifi ? "WiFi" : "Bluetooth"}\n'
+                      'Model: ${device.model ?? "Unknown"}',
+                );
+              }
+            }
+          },
+          onError: (error) {
+            if (!mounted) return;
+            _addLog('Discovery error', 'error', details: '$error');
+            setState(() {
+              _isDiscovering = false;
+            });
+          },
+          onDone: () {
+            if (!mounted) return;
+            _addLog('Discovery completed', 'success',
+                details: 'Total printers found: ${_devices.length}');
+            setState(() {
+              _isDiscovering = false;
+            });
+          },
+        );
       } else {
         _addLog('Discovery failed', 'error', details: result.error?.message);
-      }
-    } catch (e, stack) {
-      _addLog('Discovery error', 'error', details: '$e\n$stack');
-    } finally {
-      if (mounted) {
         setState(() {
           _isDiscovering = false;
         });
       }
+    } catch (e, stack) {
+      _addLog('Discovery error', 'error', details: '$e\n$stack');
+      setState(() {
+        _isDiscovering = false;
+      });
     }
   }
 
@@ -109,7 +146,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     _addLog('Stopping discovery...', 'info');
 
     try {
+      // Cancel the stream subscription first
+      await _discoverySubscription?.cancel();
+      _discoverySubscription = null;
+
+      // Then stop the discovery service
       final result = await Zebra.stopDiscovery();
+      
+      setState(() {
+        _isDiscovering = false;
+      });
+      
       if (result.success) {
         _addLog('Discovery stopped', 'success');
       } else {
@@ -117,10 +164,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       }
     } catch (e) {
       _addLog('Error stopping discovery', 'error', details: '$e');
+      setState(() {
+        _isDiscovering = false;
+      });
     }
   }
 
   Future<void> _connectToDevice(ZebraDevice device) async {
+    // Stop discovery when user selects a printer
+    if (_isDiscovering) {
+      await _stopDiscovery();
+    }
+    
     _addLog('Connecting to ${device.name}...', 'info');
 
     try {

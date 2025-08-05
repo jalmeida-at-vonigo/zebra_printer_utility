@@ -17,7 +17,7 @@ class BasicPrintScreen extends StatefulWidget {
 
 class _BasicPrintScreenState extends State<BasicPrintScreen> {
   final _dataController = TextEditingController();
-  editor.PrintFormat _format = editor.PrintFormat.zpl;
+  PrintFormat _format = PrintFormat.zpl;
   bool _isPrinting = false;
   final List<LogEntry> _logs = [];
   ZebraDevice? _selectedPrinter;
@@ -72,7 +72,7 @@ class _BasicPrintScreenState extends State<BasicPrintScreen> {
       
       // Simple print using Zebra.print()
       final printOptions = PrintOptions(
-        format: _format == editor.PrintFormat.zpl ? PrintFormat.zpl : PrintFormat.cpcl,
+        format: _format,
       );
       
       _addLog('Sending data to printer...', 'info', 

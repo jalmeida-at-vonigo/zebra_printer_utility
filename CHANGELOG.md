@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.48] - 2025-08-05
+
+### Enhanced
+- **Real-time Streaming Discovery**: Implemented streaming discovery API that provides immediate UI updates
+  - **No UI Freezing**: Discovery operations run asynchronously without blocking the main thread
+  - **Immediate Results**: Printers appear in UI as soon as they are discovered, not after completion
+  - **Progressive Discovery**: Users see printers being found in real-time during the discovery process
+  - **Automatic Cleanup**: Discovery stops automatically when a printer is selected for better UX
+- **Stream Subscription Management**: Added proper lifecycle management for discovery streams
+  - **Memory Leak Prevention**: Subscriptions are properly cancelled and disposed
+  - **Resource Cleanup**: Discovery processes are stopped when widgets are disposed
+- **iPad Hotspot Network Discovery**: Enhanced network discovery specifically optimized for iOS HotSpot scenarios
+  - **Parallel Discovery Methods**: Multiple discovery techniques run simultaneously for faster results
+  - **Subnet Search Optimization**: Focused on 172.20.10.x range for iPad hotspots
+
+### Technical
+- Migrated network discovery from native iOS to pure Dart implementation for better control
+- Implemented real-time streaming in `ZebraPrinterDiscovery.discoverPrintersStream()`
+- Added automatic discovery termination when printers are selected
+- Enhanced `NetworkDiscovery` class with streaming capabilities and iOS HotSpot support
+- Updated example app to demonstrate best practices for streaming discovery API
+
+## [2.0.47] - 2025-01-22
+
+### Fixed
+- **Code Quality**: Fixed all lint and analysis warnings in network discovery
+  - Fixed import ordering in network_discovery.dart
+  - Applied const constructors for Duration and other constant values
+  - Removed incomplete TODO comment and replaced with documentation note
+- **Analysis Compliance**: Code now passes `flutter analyze` with zero issues
+
+### Technical
+- Improved const usage for better performance
+- Enhanced code documentation quality
+
 ## [2.0.46] - 2025-01-22
 
 ### Fixed

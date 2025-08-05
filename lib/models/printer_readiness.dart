@@ -5,6 +5,7 @@ import '../internal/logger.dart';
 import '../internal/parser_util.dart';
 import '../internal/policies/policies.dart' as policies;
 import '../zebra_printer.dart';
+import 'print_enums.dart';
 import 'readiness_options.dart';
 
 /// Lazy printer readiness status that only calls commands when first accessed
@@ -33,7 +34,7 @@ class PrinterReadiness {
   Completer<bool?>? _isPausedCompleter;
   Completer<String?>? _hostStatusCompleter;
   Completer<List<String>>? _errorsCompleter;
-  Completer<String?>? _languageStatusCompleter;
+  Completer<PrintFormat?>? _languageStatusCompleter;
 
   // Error tracking for status reads
   String? _lastConnectionError;
@@ -52,7 +53,7 @@ class PrinterReadiness {
   bool? _isPaused;
   String? _hostStatus;
   List<String> _errors = [];
-  String? _languageStatus;
+  PrintFormat? _languageStatus;
 
   // Timeout policy for all operations
   static final _timeoutPolicy =
@@ -203,9 +204,9 @@ class PrinterReadiness {
   bool get wasErrorsRead => _errorsCompleter?.isCompleted ?? false;
 
   /// Get language status (lazy)
-  Future<String?> get languageStatus async {
+  Future<PrintFormat?> get languageStatus async {
     if (_languageStatusCompleter == null && (_options?.checkLanguage ?? true)) {
-      _languageStatusCompleter = Completer<String?>();
+      _languageStatusCompleter = Completer<PrintFormat?>();
       _readLanguageStatus()
           .then((_) => _languageStatusCompleter!.complete(_languageStatus))
           .catchError((error) {
@@ -307,8 +308,8 @@ class PrinterReadiness {
     _lastHostError = null;
   }
 
-  void setCachedLanguage(String status) {
-    _languageStatusCompleter ??= Completer<String?>();
+  void setCachedLanguage(PrintFormat? status) {
+    _languageStatusCompleter ??= Completer<PrintFormat?>();
     _languageStatusCompleter!.complete(status);
     _languageStatus = status;
     _lastLanguageError = null;
@@ -529,7 +530,7 @@ class PrinterReadiness {
       'hostStatus': wasHostRead ? (_hostStatus ?? '<null>') : '<unchecked>',
       'errors': wasErrorsRead ? List.from(_errors) : '<unchecked>',
       'languageStatus':
-          wasLanguageRead ? (_languageStatus ?? '<null>') : '<unchecked>',
+          wasLanguageRead ? (_languageStatus?.name ?? '<null>') : '<unchecked>',
       'lastErrors': {
         'connection': _lastConnectionError,
         'media': _lastMediaError,
@@ -618,7 +619,7 @@ class PrinterReadiness {
   }
 
   /// Reset language status and re-read
-  Future<String?> resetLanguageStatus() async {
+  Future<PrintFormat?> resetLanguageStatus() async {
     _languageStatusCompleter = null;
     _lastLanguageError = null;
     return await languageStatus;

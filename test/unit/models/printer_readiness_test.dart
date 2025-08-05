@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/communication_policy.dart';
+import 'package:zebrautil/models/print_enums.dart';
 import 'package:zebrautil/models/printer_readiness.dart';
 import 'package:zebrautil/models/result.dart';
 import 'package:zebrautil/zebra_printer.dart';
@@ -68,7 +69,7 @@ void main() {
       readiness.setCachedHead('OK', true);
       readiness.setCachedPause('Not Paused', false);
       readiness.setCachedHost('Online', []);
-      readiness.setCachedLanguage('zpl');
+      readiness.setCachedLanguage(PrintFormat.zpl);
 
       // Test individual components instead of isReady which triggers printer calls
       expect(readiness.wasConnectionRead, isTrue);
@@ -131,7 +132,7 @@ void main() {
       expect(readiness.headStatus, isA<Future<String?>>());
       expect(readiness.pauseStatus, isA<Future<String?>>());
       expect(readiness.hostStatus, isA<Future<String?>>());
-      expect(readiness.languageStatus, isA<Future<String?>>());
+      expect(readiness.languageStatus, isA<Future<PrintFormat?>>());
     });
 
     test('setCached methods mark properties as read', () {
@@ -151,7 +152,7 @@ void main() {
       readiness.setCachedHead('OK', true);
       readiness.setCachedPause('Not Paused', false);
       readiness.setCachedHost('Online', []);
-      readiness.setCachedLanguage('zpl');
+      readiness.setCachedLanguage(PrintFormat.zpl);
 
       // Now marked as read
       expect(readiness.wasConnectionRead, isTrue);
@@ -172,7 +173,7 @@ void main() {
       expect(cached['isPaused'], isFalse);
       expect(cached['hostStatus'], equals('Online'));
       expect(cached['errors'], isEmpty);
-      expect(cached['languageStatus'], equals('zpl'));
+      expect(cached['languageStatus'], equals(PrintFormat.zpl.name));
     });
   });
 }

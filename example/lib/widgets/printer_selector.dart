@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 
@@ -22,11 +23,23 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   bool _isDiscovering = false;
   bool _isConnecting = false;
   String _status = 'No printer selected';
+  StreamSubscription<List<ZebraDevice>>? _discoverySubscription;
 
   @override
   void initState() {
     super.initState();
     _checkConnection();
+  }
+
+  @override
+  void dispose() {
+    // Cancel any active discovery subscription
+    _discoverySubscription?.cancel();
+    // Stop discovery if still running
+    if (_isDiscovering) {
+      Zebra.stopDiscovery();
+    }
+    super.dispose();
   }
 
   Future<void> _checkConnection() async {
@@ -45,6 +58,9 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   Future<void> _startDiscovery() async {
     if (_isDiscovering) return;
 
+    // Cancel any existing subscription
+    await _discoverySubscription?.cancel();
+
     setState(() {
       _isDiscovering = true;
       _devices.clear();
@@ -60,32 +76,62 @@ class _PrinterSelectorState extends State<PrinterSelector> {
       );
       
       if (result.success && result.data != null) {
-        await for (final devices in result.data!) {
-          if (!mounted) break;
-          
-          setState(() {
-            _devices.clear();
-            _devices.addAll(devices);
-          });
-          
-          _log('Found ${devices.length} printer(s)', 'info');
-        }
+        // Subscribe to the discovery stream for real-time updates
+        _discoverySubscription = result.data!.listen(
+          (devices) {
+            if (!mounted) return;
+            
+            // Real-time update: Update UI immediately when printers are found
+            setState(() {
+              _devices.clear();
+              _devices.addAll(devices);
+            });
+            
+            if (devices.isNotEmpty) {
+              _log('Found ${devices.length} printer(s)', 'info');
+            }
+          },
+          onError: (error) {
+            if (!mounted) return;
+            _log('Discovery error: $error', 'error');
+            setState(() {
+              _isDiscovering = false;
+            });
+          },
+          onDone: () {
+            if (!mounted) return;
+            _log('Discovery completed', 'info');
+            setState(() {
+              _isDiscovering = false;
+            });
+          },
+        );
       } else {
         _log('Discovery failed: ${result.error?.message}', 'error');
-      }
-    } catch (e) {
-      _log('Discovery error: $e', 'error');
-    } finally {
-      if (mounted) {
         setState(() {
           _isDiscovering = false;
         });
       }
+    } catch (e) {
+      _log('Discovery error: $e', 'error');
+      setState(() {
+        _isDiscovering = false;
+      });
     }
   }
 
   Future<void> _connect(ZebraDevice device) async {
     if (_isConnecting) return;
+
+    // Stop discovery when user selects a printer
+    if (_isDiscovering) {
+      await _discoverySubscription?.cancel();
+      _discoverySubscription = null;
+      await Zebra.stopDiscovery();
+      setState(() {
+        _isDiscovering = false;
+      });
+    }
 
     setState(() {
       _isConnecting = true;

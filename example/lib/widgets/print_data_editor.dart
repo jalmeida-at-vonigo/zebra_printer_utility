@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// Print data format
-enum PrintFormat { zpl, cpcl }
+import 'package:zebrautil/models/print_enums.dart';
 
 /// Preset print data templates
 class PrintPreset {

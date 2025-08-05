@@ -25,10 +25,6 @@ void main() {
       expect(ZebraSGDCommands.parseResponse('baz'), equals('baz'));
       expect(ZebraSGDCommands.parseResponse(''), isNull);
     });
-    test('isLanguageMatch works for zpl and cpcl', () {
-      expect(ZebraSGDCommands.isLanguageMatch('zpl', 'zpl'), isTrue);
-      expect(ZebraSGDCommands.isLanguageMatch('line_print', 'cpcl'), isTrue);
-      expect(ZebraSGDCommands.isLanguageMatch('foo', 'zpl'), isFalse);
-    });
+    
   });
 }

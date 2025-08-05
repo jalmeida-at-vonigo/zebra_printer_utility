@@ -1,8 +1,7 @@
 import Flutter
 import UIKit
-#if canImport(Network)
-import Network
-#endif
+import ExternalAccessory
+
 
 class ZebraPrinterInstance: NSObject {
     private let channel: FlutterMethodChannel
@@ -17,15 +16,6 @@ class ZebraPrinterInstance: NSObject {
     private var isScanning = false
     private var discoveredPrinters: [[String: Any]] = []
     private var eventSink: FlutterEventSink?
-    
-    // Network discovery
-#if canImport(Network)
-    private var networkBrowser: Any?
-    private var networkResults: [Any] = []
-#else
-    private var networkBrowser: Any?
-    private var networkResults: [Any] = []
-#endif
     
     // MFi Bluetooth discovery
     private var discoveredMfiPrinters: [[String: Any]] = []
@@ -182,12 +172,8 @@ class ZebraPrinterInstance: NSObject {
         isScanning = true
         discoveredPrinters.removeAll()
         discoveredMfiPrinters.removeAll()
-        networkResults.removeAll()
         
-        LogUtil.info("Starting printer discovery (Network and MFi Bluetooth)")
-        
-        // Start network discovery immediately (no permission required)
-        startNetworkDiscovery()
+        LogUtil.info("Starting printer discovery (MFi Bluetooth only)")
         
         // Start MFi Bluetooth discovery
         startMfiBluetoothDiscovery()
@@ -195,85 +181,8 @@ class ZebraPrinterInstance: NSObject {
         result(true)
     }
     
-    private func startNetworkDiscovery() {
-        #if canImport(Network)
-        if #available(iOS 13.0, *) {
-            // Create network browser for printer services
-            let parameters = NWParameters()
-            parameters.includePeerToPeer = true
-            
-            let browser = NWBrowser(for: .bonjour(type: "_printer._tcp", domain: nil), using: parameters)
-            browser.stateUpdateHandler = { [weak self] state in
-                switch state {
-                case .ready:
-                    LogUtil.info("Network browser ready")
-                case .failed(let error):
-                    LogUtil.error("Network browser failed: \(error)")
-                default:
-                    break
-                }
-            }
-            
-            browser.browseResultsChangedHandler = { [weak self] results, changes in
-                if #available(iOS 13.0, *) {
-                    self?.handleNetworkResults(results)
-                }
-            }
-            
-            networkBrowser = browser
-            browser.start(queue: DispatchQueue.global())
-        } else {
-            LogUtil.warn("Network discovery not available on iOS < 13.0")
-        }
-        #else
-        LogUtil.warn("Network framework not available")
-        #endif
-    }
-
-#if canImport(Network)
-    @available(iOS 13.0, *)
-    private func handleNetworkResults(_ results: Set<NWBrowser.Result>) {
-        networkResults = Array(results)
-        for result in results {
-            if case let .service(name: name, type: type, domain: domain, interface: interface) = result.endpoint {
-                // For network discovery, use the service name as address or extract from endpoint
-                let address = name.contains(":") ? name : "\(name).local"
-                let printerInfo: [String: Any] = [
-                    "Address": address,
-                    "Name": name,
-                    "Status": "Found",
-                    "IsWifi": true,
-                    "type": type,
-                    "domain": domain ?? ""
-                ]
-                DispatchQueue.main.async {
-                    self.channel.invokeMethod("printerFound", arguments: printerInfo)
-                }
-            }
-        }
-    }
-    
-    private func handleNetworkResults(_ results: Any) {
-        // No-op for iOS < 13
-    }
-#else
-    private func handleNetworkResults(_ results: Any) {
-        // No-op when Network framework is not available
-    }
-#endif
-    
     private func stopScan(operationId: String?, result: @escaping FlutterResult) {
         isScanning = false
-        
-        // Stop network discovery
-        #if canImport(Network)
-        if #available(iOS 13.0, *) {
-            if let browser = networkBrowser as? NWBrowser {
-                browser.cancel()
-            }
-            networkBrowser = nil
-        }
-        #endif
         
         // Send completion event
         DispatchQueue.main.async {
@@ -284,17 +193,43 @@ class ZebraPrinterInstance: NSObject {
     }
     
     private func startMfiBluetoothDiscovery() {
-        // Use ZSDK to discover MFi Bluetooth printers
-        ZSDKWrapper.startMfiBluetoothDiscovery { [weak self] printers in
-            DispatchQueue.main.async {
-                if let printers = printers {
-                    for printer in printers {
-                        self?.channel.invokeMethod("printerFound", arguments: printer)
+        // Discover MFi Bluetooth printers using External Accessory framework
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            do {
+                let accessoryManager = EAAccessoryManager.shared()
+                let connectedAccessories = accessoryManager.connectedAccessories
+                
+                for accessory in connectedAccessories {
+                    // Check if scanning is still active
+                    guard self.isScanning else { break }
+                    
+                    // Check if this is a Zebra printer
+                    if accessory.protocolStrings.contains("com.zebra.rawport") {
+                        if let serialNumber = accessory.serialNumber, !serialNumber.isEmpty {
+                            let printerInfo: [String: Any] = [
+                                "Address": serialNumber,
+                                "Name": accessory.name ?? "Zebra Printer",
+                                "model": accessory.modelNumber ?? "",
+                                "manufacturer": accessory.manufacturer ?? "",
+                                "firmwareRevision": accessory.firmwareRevision ?? "",
+                                "hardwareRevision": accessory.hardwareRevision ?? "",
+                                "IsWifi": false,
+                                "isBluetooth": true
+                            ]
+                            
+                            // Send each printer as it's found (streaming)
+                            DispatchQueue.main.async {
+                                guard self.isScanning else { return }
+                                self.channel.invokeMethod("printerFound", arguments: printerInfo)
+                            }
+                        }
                     }
                 }
+            } catch {
+                LogUtil.error("MFi Bluetooth discovery error: \(error)")
             }
-        } error: { [weak self] error in
-            LogUtil.error("MFi Bluetooth discovery error: \(error)")
         }
     }
     
@@ -307,30 +242,20 @@ class ZebraPrinterInstance: NSObject {
             // Disconnect existing connection first
             self.disconnectInternal()
             
-            // Determine if it's network based on address format
-            // Network addresses contain "." (IP address), Bluetooth addresses contain ":" but no "."
-            let isNetworkDevice = address.contains(".")
+            // Parse address using simple logic (complex parsing is in Dart)
+            let (parsedAddress, port) = self.parseAddress(address)
+            let isNetworkDevice = parsedAddress.contains(".")
             
-            LogUtil.info("Connecting to printer: \(address), isNetwork: \(isNetworkDevice)")
+            LogUtil.info("Connecting to printer: \(parsedAddress):\(port), isNetwork: \(isNetworkDevice)")
             
-            if isNetworkDevice {
-                // Network connection
-                let connection = ZSDKWrapper.connect(toPrinter: address, isBluetoothConnection: false)
-                if connection != nil {
-                    self.connection = connection
-                    self.sendConnectionSuccess(operationId: operationId, result: result)
-                } else {
-                    self.sendConnectionError(operationId: operationId, result: result)
-                }
+            let connection = ZSDKWrapper.connect(toPrinter: parsedAddress, 
+                                               port: port, 
+                                               isBluetoothConnection: !isNetworkDevice)
+            if connection != nil {
+                self.connection = connection
+                self.sendConnectionSuccess(operationId: operationId, result: result)
             } else {
-                // MFi Bluetooth connection
-                let connection = ZSDKWrapper.connect(toPrinter: address, isBluetoothConnection: true)
-                if connection != nil {
-                    self.connection = connection
-                    self.sendConnectionSuccess(operationId: operationId, result: result)
-                } else {
-                    self.sendConnectionError(operationId: operationId, result: result)
-                }
+                self.sendConnectionError(operationId: operationId, result: result)
             }
         }
     }
@@ -589,9 +514,7 @@ class ZebraPrinterInstance: NSObject {
                 return
             }
             
-            let response = ZSDKWrapper.sendAndReadResponse(data, 
-                                                          toConnection: connection, 
-                                                          withTimeout: timeout)
+            let response = self.performSendAndRead(data: data, connection: connection, timeout: timeout)
             
             DispatchQueue.main.async {
                 if let response = response {
@@ -603,7 +526,54 @@ class ZebraPrinterInstance: NSObject {
         }
     }
     
+    /// Perform send and read operation with timeout
+    /// This orchestration logic moved from ZSDKWrapper to keep it Apple-specific
+    private func performSendAndRead(data: String, connection: Any, timeout: Int) -> String? {
+        guard let dataBytes = data.data(using: .utf8) else {
+            LogUtil.error("Failed to encode data as UTF8")
+            return nil
+        }
+        
+        // Send the data using ZSDK connection
+        let sendSuccess = ZSDKWrapper.sendData(dataBytes, toConnection: connection)
+        if !sendSuccess {
+            LogUtil.error("Failed to send data to printer")
+            return nil
+        }
+        
+        // Set connection timeout (Apple-specific connection handling)
+        if let zsdkConnection = connection as? NSObject,
+           zsdkConnection.responds(to: Selector(("setMaxTimeoutForRead:"))) {
+            let timeoutValue = timeout > 0 ? timeout : 5000
+            zsdkConnection.perform(Selector(("setMaxTimeoutForRead:")), with: timeoutValue)
+        }
+        
+        // Read response using ZSDK connection
+        // Note: This calls the simple ZSDK read method - the orchestration is here
+        return ZSDKWrapper.readResponse(fromConnection: connection)
+    }
+    
     // MARK: - Helper Methods
+    
+    /// Parse address with optional port (simple version for iOS)
+    /// For complex parsing, use Dart utilities in the business logic layer
+    private func parseAddress(_ address: String) -> (address: String, port: Int) {
+        let defaultPort = 9100
+        
+        if address.isEmpty {
+            return (address, defaultPort)
+        }
+        
+        let parts = address.split(separator: ":")
+        if parts.count == 2,
+           let portString = parts[1].trimmingCharacters(in: .whitespaces),
+           let port = Int(portString) {
+            let ip = String(parts[0]).trimmingCharacters(in: .whitespaces)
+            return (ip, port)
+        }
+        
+        return (address.trimmingCharacters(in: .whitespaces), defaultPort)
+    }
     
     private func sendConnectionSuccess(operationId: String?, result: @escaping FlutterResult) {
         DispatchQueue.main.async {
@@ -719,8 +689,4 @@ class ZebraPrinterInstance: NSObject {
     }
 }
 
-// MARK: - MFi Bluetooth Discovery
 
-extension ZebraPrinterInstance {
-    // MFi Bluetooth discovery is handled by ZSDKWrapper
-}

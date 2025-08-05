@@ -46,18 +46,4 @@ class ZebraSGDCommands {
 
     return trimmed.isEmpty ? null : trimmed;
   }
-
-  /// Check if printer language matches expected
-  static bool isLanguageMatch(String currentLanguage, String expectedLanguage) {
-    final current = currentLanguage.toLowerCase();
-    final expected = expectedLanguage.toLowerCase();
-
-    if (expected == 'zpl') {
-      return current.contains('zpl');
-    } else if (expected == 'cpcl' || expected == 'line_print') {
-      return current.contains('line_print') || current.contains('cpcl');
-    }
-
-    return false;
-  }
 }
