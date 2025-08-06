@@ -158,7 +158,7 @@ void main() {
           PrintEvent(
             type: PrintEventType.stepChanged,
             timestamp: DateTime.now(),
-            stepInfo: PrintStepInfo(
+            stepInfo: const PrintStepInfo(
               step: PrintStep.initializing,
               message: 'Starting print',
               attempt: 1,

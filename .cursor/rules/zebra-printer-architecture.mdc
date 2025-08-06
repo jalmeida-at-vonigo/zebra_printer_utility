@@ -605,7 +605,8 @@ await printer.sendCommand(clearCommand);
 ---
 
 **See also:**
-- [Command System Architecture](mdc:.cursor/rules/command-files.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 - [Event System](mdc:.cursor/rules/event-system.mdc)
 - [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)

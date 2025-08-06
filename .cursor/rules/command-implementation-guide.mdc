@@ -1,0 +1,635 @@
+---
+globs: lib/internal/commands/**/*.dart,test/unit/internal/commands/**/*.dart
+alwaysApply: false
+---
+
+# Command Implementation Guide
+
+_Last updated: 2025-08-06_
+
+This guide provides comprehensive standards and best practices for implementing commands in the Zebra Printer Utility.
+
+## 1. File Organization Rules
+
+### One Command Per File
+- **Each file must contain exactly ONE command class**
+- **File name must match the class name in snake_case format**
+- **Location**: All command classes must reside in `lib/internal/commands/`
+
+### File Naming Examples
+- `SendZplClearBufferCommand` class → `send_zpl_clear_buffer_command.dart`
+- `GetMediaStatusCommand` class → `get_media_status_command.dart`
+- `SendCpclClearErrorsCommand` class → `send_cpcl_clear_errors_command.dart`
+
+## 2. Naming Standards
+
+### Format-Specific Commands
+If a command is specific to a printer format (ZPL or CPCL), the format **MUST** be included in the class and file name:
+- **ZPL**: `SendZplClearBufferCommand` in `send_zpl_clear_buffer_command.dart`
+- **CPCL**: `SendCpclClearErrorsCommand` in `send_cpcl_clear_errors_command.dart`
+
+### Generic Commands
+Commands that work across all formats **MUST NOT** include a format in the name:
+- **Correct**: `SendUnpauseCommand`, `GetPrinterStatusCommand`
+- **Wrong**: `SendZplUnpauseCommand` (if it works for all formats)
+
+## 3. Return Types and Model Classes
+
+### Return Type Guidelines
+Commands should return appropriate types based on their purpose:
+
+1. **String**: Use for commands that return unstructured text or simple values
+2. **Model Classes**: Use for commands that return structured data, enums, or complex objects
+3. **void**: Use for commands that perform actions without meaningful return values
+4. **Primitive Types**: Use strongly-typed primitives (bool, int, double) when appropriate
+
+### Primitive Type Criteria
+Use primitive types instead of strings when:
+- **Boolean values**: When the response represents true/false states (e.g., isConnected, isPaused)
+- **Numeric values**: When the response is a number (e.g., temperature, label count, error codes)
+- **Type safety matters**: When you want compile-time type checking
+- **Calculations needed**: When the value will be used in mathematical operations
+
+### Model Class Requirements
+When a command returns structured data:
+- **Define a model class** in `lib/models/` for the return type
+- **Use enums** for finite sets of values (e.g., `MediaStatus`, `HeadStatus`)
+- **Use primitive types** for boolean and numeric properties
+- **Parse responses** into model instances within the command
+- **Document the model** with clear property descriptions
+
+### Parsing Utilities (Optional)
+The `lib/internal/parser_util.dart` provides helpful parsing methods:
+- **toBool()**: Converts various representations ('true', '1', 'on', etc.) to boolean
+- **toInt()**: Safely parses integers with fallback support
+- **toDouble()**: Safely parses doubles with fallback support
+- **extractNumber()**: Extracts numeric values from strings (e.g., "203 dpi" → 203)
+
+While not required, these utilities can simplify parsing printer responses into typed values.
+
+### Examples
+
+#### String Return (Unstructured Text)
+```dart
+class GetSettingCommand extends BaseCommand<String> {
+  final String setting;
+  
+  GetSettingCommand(ZebraPrinter printer, this.setting) : super(printer);
+  
+  @override
+  Future<Result<String>> execute() async {
+    // Returns raw setting value as string
+    final response = await printer.getSetting(setting);
+    return Result.success(response);
+  }
+}
+```
+
+#### Model Class Return (Structured Data)
+```dart
+// In lib/models/media_status.dart
+enum MediaStatus {
+  ready,
+  outOfPaper,
+  paperLow,
+  unknown;
+  
+  static MediaStatus fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'ready':
+        return MediaStatus.ready;
+      case 'out':
+        return MediaStatus.outOfPaper;
+      case 'low':
+        return MediaStatus.paperLow;
+      default:
+        return MediaStatus.unknown;
+    }
+  }
+}
+
+// In command file
+class GetMediaStatusCommand extends BaseCommand<MediaStatus> {
+  GetMediaStatusCommand(ZebraPrinter printer) : super(printer);
+  
+  @override
+  Future<Result<MediaStatus>> execute() async {
+    try {
+      final response = await printer.getSetting('media.status');
+      final status = MediaStatus.fromString(response);
+      return Result.success(status);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<MediaStatus>(
+        e,
+        command: 'media.status',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+#### Complex Model Return
+```dart
+// In lib/models/printer_status_info.dart
+class PrinterStatusInfo {
+  final bool isReadyToPrint;
+  final int labelsRemaining;
+  final PrinterStatus status;
+  final String? errorMessage;
+  
+  PrinterStatusInfo({
+    required this.isReadyToPrint,
+    required this.labelsRemaining,
+    required this.status,
+    this.errorMessage,
+  });
+}
+
+// In command file
+class GetDetailedPrinterStatusCommand extends BaseCommand<PrinterStatusInfo> {
+  @override
+  Future<Result<PrinterStatusInfo>> execute() async {
+    // Parse multiple status values into a structured model
+    // ...
+  }
+}
+```
+
+#### Primitive Type Return (Boolean)
+```dart
+import '../parser_util.dart';
+
+class GetPrinterPausedCommand extends BaseCommand<bool> {
+  GetPrinterPausedCommand(ZebraPrinter printer) : super(printer);
+  
+  @override
+  String get operationName => 'Get Printer Paused Status';
+  
+  @override
+  Future<Result<bool>> execute() async {
+    try {
+      final response = await printer.getSetting('device.pause');
+      // Use ParserUtil for robust boolean parsing
+      final isPaused = ParserUtil.toBool(response) ?? false;
+      return Result.success(isPaused);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<bool>(
+        e,
+        command: 'device.pause',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+#### Primitive Type Return (Integer)
+```dart
+import '../parser_util.dart';
+
+class GetLabelsRemainingCommand extends BaseCommand<int> {
+  GetLabelsRemainingCommand(ZebraPrinter printer) : super(printer);
+  
+  @override
+  String get operationName => 'Get Labels Remaining';
+  
+  @override
+  Future<Result<int>> execute() async {
+    try {
+      final response = await printer.getSetting('odometer.label_count');
+      // Use ParserUtil for safe integer parsing with fallback
+      final count = ParserUtil.toInt(response, fallback: 0) ?? 0;
+      return Result.success(count);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<int>(
+        e,
+        command: 'odometer.label_count',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+#### Model with Mixed Types
+```dart
+import '../parser_util.dart';
+
+// In lib/models/temperature_info.dart
+class TemperatureInfo {
+  final double currentTemp;
+  final double maxTemp;
+  final bool isOverheated;
+  final String unit;
+  
+  TemperatureInfo({
+    required this.currentTemp,
+    required this.maxTemp,
+    required this.isOverheated,
+    required this.unit,
+  });
+}
+
+// In command file
+class GetTemperatureInfoCommand extends BaseCommand<TemperatureInfo> {
+  @override
+  Future<Result<TemperatureInfo>> execute() async {
+    try {
+      // Get multiple temperature-related settings
+      final current = await printer.getSetting('sensor.temp.current');
+      final max = await printer.getSetting('sensor.temp.max');
+      final status = await printer.getSetting('sensor.temp.status');
+      
+      // Parse with appropriate types using ParserUtil
+      final info = TemperatureInfo(
+        currentTemp: ParserUtil.toDouble(current, fallback: 0.0) ?? 0.0,
+        maxTemp: ParserUtil.toDouble(max, fallback: 100.0) ?? 100.0,
+        isOverheated: status.toLowerCase().contains('overheat'),
+        unit: 'celsius', // or parse from settings
+      );
+      
+      return Result.success(info);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<TemperatureInfo>(
+        e,
+        command: 'temperature info',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+## 4. Command String Definition
+
+### Key Rules
+- **All command strings must be defined as constants within the command class**
+- **NEVER import or use ZebraSGDCommands for command strings**
+- **Each command class should define its own command string**
+- **Use clear comments explaining what the command does**
+
+### Examples
+```dart
+// Simple command with inline string
+class SendZplClearBufferCommand extends SendCommandCommand {
+  SendZplClearBufferCommand(ZebraPrinter printer) : super(printer, '\x18'); // CAN character
+}
+
+// Complex command with constant
+class SendZplClearErrorsCommand extends SendCommandCommand {
+  // ZPL command to clear all printer errors
+  static const String _COMMAND = '~JA';
+  
+  SendZplClearErrorsCommand(ZebraPrinter printer) : super(printer, _COMMAND);
+}
+```
+
+## 5. Command Class Structure
+
+### Basic Template (void return)
+```dart
+import '../../zebra_printer.dart';
+import 'send_command_command.dart';
+
+/// Command to [specific operation description] ([language]-specific if applicable)
+class [CommandClassName] extends SendCommandCommand {
+  /// Constructor
+  [CommandClassName](ZebraPrinter printer) : super(printer, [COMMAND_STRING]);
+  
+  @override
+  String get operationName => '[Human-readable operation description]';
+}
+```
+
+### Advanced Template (with return type)
+```dart
+import '../../zebra_printer.dart';
+import '../../models/[model_name].dart'; // If using model class
+import '../zebra_error_bridge.dart';
+import 'base_command.dart';
+
+/// Command to [specific operation description]
+class [CommandClassName] extends BaseCommand<[ReturnType]> {
+  /// Constructor
+  [CommandClassName](ZebraPrinter printer) : super(printer);
+  
+  @override
+  String get operationName => '[Human-readable operation description]';
+  
+  @override
+  Future<Result<[ReturnType]>> execute() async {
+    try {
+      // Custom command execution logic
+      final response = await printer.someOperation();
+      
+      // Parse to model if needed
+      final result = [ModelClass].fromResponse(response);
+      
+      return Result.success(result);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<[ReturnType]>(
+        e,
+        command: 'command description',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+## 6. Base Class Selection
+
+### Available Base Classes
+1. **SendCommandCommand**: For commands that send a string to the printer and return void
+2. **BaseCommand<T>**: For commands with custom logic or non-void return types
+3. **GetSettingCommand**: For commands that retrieve printer settings as strings
+
+### When to Use Each
+- **SendCommandCommand**: Most control commands (clear, unpause, mode changes)
+- **BaseCommand<T>**: Status queries, complex operations, multi-step commands, model returns
+- **GetSettingCommand**: SGD setting retrieval that returns raw string values
+
+## 7. CommandFactory Integration
+
+### Adding to CommandFactory
+Every new command must be added to [CommandFactory](mdc:lib/internal/commands/command_factory.dart):
+
+```dart
+// In CommandFactory class
+static SendZplClearBufferCommand createSendZplClearBufferCommand(ZebraPrinter printer) {
+  return SendZplClearBufferCommand(printer);
+}
+
+// For commands with return types
+static GetMediaStatusCommand createGetMediaStatusCommand(ZebraPrinter printer) {
+  return GetMediaStatusCommand(printer);
+}
+```
+
+### Factory Method Naming
+- Start with `create`
+- Follow with the command class name (first letter lowercase)
+- Example: `SendUnpauseCommand` → `createSendUnpauseCommand`
+
+### Import Requirements
+CommandFactory must import all command classes:
+```dart
+import 'send_zpl_clear_buffer_command.dart';
+import 'send_cpcl_clear_buffer_command.dart';
+import 'get_media_status_command.dart';
+// ... other command imports
+```
+
+## 8. Error Handling
+
+### Use ZebraErrorBridge
+When overriding the `execute()` method, always use ZebraErrorBridge for error handling:
+
+```dart
+@override
+Future<Result<void>> execute() async {
+  try {
+    await printer.sendCommand(commandString);
+    return Result.success(null);
+  } catch (e) {
+    return ZebraErrorBridge.fromCommandError<void>(
+      e,
+      command: commandString,
+      stackTrace: StackTrace.current,
+    );
+  }
+}
+```
+
+## 9. Documentation Requirements
+
+### Class Documentation
+- Start with `/// Command to [action]`
+- Include format specification if applicable: `([format]-specific)`
+- Be clear and concise
+
+### Operation Name
+- Must be human-readable
+- Should describe what the command does
+- Used for logging and debugging
+
+### Model Documentation
+When creating model classes:
+```dart
+/// Represents the current media status of the printer
+enum MediaStatus {
+  /// Printer has media and is ready
+  ready,
+  
+  /// Printer is out of media
+  outOfPaper,
+  
+  /// Media level is low
+  paperLow,
+  
+  /// Status cannot be determined
+  unknown;
+}
+```
+
+## 10. Testing
+
+### Unit Test Requirements
+- Create a corresponding test file in `test/unit/internal/commands/`
+- Test file naming: `[command_file_name]_test.dart`
+- Test both success and failure scenarios
+- Verify operation name is correct
+- Test command string if complex
+- Test model parsing if applicable
+
+### Test Example with Model
+```dart
+test('GetMediaStatusCommand parses status correctly', () async {
+  final printer = MockZebraPrinter();
+  final command = GetMediaStatusCommand(printer);
+  
+  expect(command.operationName, 'Get Media Status');
+  
+  when(() => printer.getSetting('media.status')).thenAnswer((_) async => 'ready');
+  
+  final result = await command.execute();
+  expect(result.success, true);
+  expect(result.data, MediaStatus.ready);
+  verify(() => printer.getSetting('media.status')).called(1);
+});
+```
+
+## 11. Common Implementation Patterns
+
+### Status Commands with Enums
+```dart
+class GetHeadStatusCommand extends BaseCommand<HeadStatus> {
+  GetHeadStatusCommand(ZebraPrinter printer) : super(printer);
+  
+  @override
+  String get operationName => 'Get Head Status';
+  
+  @override
+  Future<Result<HeadStatus>> execute() async {
+    try {
+      final response = await printer.getSetting('head.status');
+      final status = HeadStatus.fromString(response);
+      return Result.success(status);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<HeadStatus>(
+        e,
+        command: 'head.status',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+### Complex Status with Models
+```dart
+import '../parser_util.dart';
+
+class GetPrinterStatusCommand extends BaseCommand<PrinterStatusInfo> {
+  GetPrinterStatusCommand(ZebraPrinter printer) : super(printer);
+  
+  @override
+  String get operationName => 'Get Printer Status';
+  
+  @override
+  Future<Result<PrinterStatusInfo>> execute() async {
+    try {
+      // Get multiple status values
+      final isReady = await printer.getSetting('printer.ready');
+      final labelsRemaining = await printer.getSetting('odometer.label_count');
+      final status = await printer.getSetting('printer.status');
+      
+      // Parse into model using ParserUtil for type safety
+      final info = PrinterStatusInfo(
+        isReadyToPrint: ParserUtil.toBool(isReady) ?? false,
+        labelsRemaining: ParserUtil.toInt(labelsRemaining, fallback: 0) ?? 0,
+        status: PrinterStatus.fromString(status),
+      );
+      
+      return Result.success(info);
+    } catch (e) {
+      return ZebraErrorBridge.fromCommandError<PrinterStatusInfo>(
+        e,
+        command: 'printer status',
+        stackTrace: StackTrace.current,
+      );
+    }
+  }
+}
+```
+
+### Control Commands
+```dart
+class SendUnpauseCommand extends SendCommandCommand {
+  SendUnpauseCommand(ZebraPrinter printer) : super(printer, '~PS');
+  
+  @override
+  String get operationName => 'Send Unpause Command';
+}
+```
+
+## 12. Forbidden Patterns
+
+### ❌ Multiple Commands in One File
+```dart
+// WRONG - Multiple commands in send_clear_commands.dart
+class SendZplClearBufferCommand extends SendCommandCommand { ... }
+class SendCpclClearBufferCommand extends SendCommandCommand { ... }
+```
+
+### ❌ Using ZebraSGDCommands for Command Strings
+```dart
+// WRONG - Importing command strings from ZebraSGDCommands
+import '../../zebra_sgd_commands.dart';
+SendZplClearBufferCommand(ZebraPrinter printer) 
+  : super(printer, ZebraSGDCommands.zplClearBuffer());
+```
+
+### ❌ Returning Raw Strings for Structured Data
+```dart
+// WRONG - Returning string for enum-like values
+class GetMediaStatusCommand extends BaseCommand<String> {
+  Future<Result<String>> execute() async {
+    return Result.success('ready'); // Should use MediaStatus enum
+  }
+}
+```
+
+### ❌ Missing CommandFactory Entry
+```dart
+// WRONG - Creating command without factory method
+// Command exists but no factory method in CommandFactory
+```
+
+## 13. Implementation Checklist
+
+- [ ] One command per file
+- [ ] File name matches class name (snake_case)
+- [ ] File located in `lib/internal/commands/`
+- [ ] Format included in name if format-specific
+- [ ] Command string defined in class (not imported)
+- [ ] Extends appropriate base class
+- [ ] Return type chosen appropriately (void, String, or Model)
+- [ ] Model class created if returning structured data
+- [ ] Has descriptive `operationName`
+- [ ] Uses ZebraErrorBridge for error handling
+- [ ] Added to CommandFactory with create method
+- [ ] CommandFactory imports the new command file
+- [ ] Unit tests created
+- [ ] Model parsing tested if applicable
+- [ ] Documentation comments added
+
+## 14. Quick Reference
+
+### Command Types and Their Base Classes
+| Command Type | Base Class | Return Type | Example |
+|--------------|------------|-------------|---------|
+| Send control string | SendCommandCommand | void | SendUnpauseCommand |
+| Get boolean status | BaseCommand<bool> | bool | GetPrinterPausedCommand |
+| Get numeric value | BaseCommand<int/double> | int/double | GetLabelsRemainingCommand |
+| Get status (enum) | BaseCommand<T> | Enum | GetMediaStatusCommand |
+| Get status (complex) | BaseCommand<T> | Model | GetPrinterStatusCommand |
+| Get setting (raw) | GetSettingCommand | String | GetLanguageCommand |
+| Complex operation | BaseCommand<T> | Model/Enum | CheckConnectionCommand |
+
+### Return Type Decision Tree
+1. **Does the command return data?**
+   - No → Use `void`
+   - Yes → Continue to 2
+
+2. **Is the data a simple true/false state?**
+   - Yes → Use `bool`
+   - No → Continue to 3
+
+3. **Is the data a numeric value?**
+   - Yes (integer) → Use `int`
+   - Yes (decimal) → Use `double`
+   - No → Continue to 4
+
+4. **Is the data structured or has finite values?**
+   - No (free text) → Use `String`
+   - Yes → Continue to 5
+
+5. **Is it a simple enumeration?**
+   - Yes → Create and use an `enum`
+   - No → Create and use a model class
+
+### Naming Patterns
+| Operation | Generic Name | ZPL Name | CPCL Name |
+|-----------|--------------|-----------|-----------|
+| Clear buffer | SendClearBufferCommand | SendZplClearBufferCommand | SendCpclClearBufferCommand |
+| Clear errors | SendClearErrorsCommand | SendZplClearErrorsCommand | SendCpclClearErrorsCommand |
+| Set mode | - | SendSetZplModeCommand | SendSetCpclModeCommand |
+
+---
+
+**See also:**
+- [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)
+- [ZebraErrorBridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
+- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)

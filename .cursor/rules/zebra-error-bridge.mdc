@@ -261,4 +261,5 @@ catch (e) {
 **See also:**
 - [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
 - [Edge Case Error Handling](mdc:.cursor/rules/edge-case-error-handling.mdc)
-- [Command Files](mdc:.cursor/rules/command-files.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)

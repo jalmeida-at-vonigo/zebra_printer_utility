@@ -1,0 +1,410 @@
+---
+globs: *.dart
+alwaysApply: false
+---
+
+# Command Usage Guide
+
+_Last updated: 2024-12-20_
+
+This guide consolidates all rules and standards for using commands throughout the Zebra Printer Utility codebase.
+
+## 1. MANDATORY: Use CommandFactory for ALL Command Creation
+
+### 🚨 CRITICAL RULE
+Commands must **NEVER** be instantiated directly outside of:
+- The CommandFactory itself
+- Test files (`test/**/*.dart`)
+- Command classes (for inheritance)
+
+### ✅ CORRECT Usage
+```dart
+// Always use CommandFactory
+import 'internal/commands/command_factory.dart';
+
+final command = CommandFactory.createSendUnpauseCommand(printer);
+final result = await command.execute();
+
+// Or inline
+final result = await CommandFactory.createGetMediaStatusCommand(printer).execute();
+```
+
+### ❌ FORBIDDEN Patterns
+```dart
+// NEVER do any of these in production code
+final cmd = SendUnpauseCommand(printer);           // Direct instantiation
+final cmd = new GetMediaStatusCommand(printer);    // Using 'new' keyword
+final cmd = SendZplClearBufferCommand(printer);    // Any direct command creation
+
+// NEVER import individual command files
+import 'internal/commands/send_unpause_command.dart'; // Direct command import
+```
+
+## 2. Command Pattern Enforcement
+
+### All Printer Operations Must Use Commands
+- **NEVER** call printer commands directly with raw strings
+- **NEVER** use `_printer!.sendCommand()` with raw strings for control operations
+- **NEVER** send control characters directly (like `\x03`, `\x18`, `~JA`, `! U1` commands)
+
+### Examples of Violations
+```dart
+// ❌ WRONG - Direct command strings
+_printer!.sendCommand('\x18');              // Direct control character
+_printer!.sendCommand('~JA');                // Direct command string
+_printer!.sendCommand('! U1 setvar "alerts.clear" "ALL"'); // Direct SGD command
+
+// ✅ CORRECT - Use CommandFactory
+await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+await CommandFactory.createSendClearAlertsCommand(printer).execute();
+```
+
+## 3. Integration with CommunicationPolicy
+
+### Recommended Pattern
+Always use CommandFactory with CommunicationPolicy for robust execution:
+
+```dart
+final result = await _communicationPolicy.execute(
+  () => CommandFactory.createSendUnpauseCommand(printer).execute(),
+);
+
+// Or use executeCommand directly
+final command = CommandFactory.createGetPrinterStatusCommand(printer);
+final result = await _communicationPolicy.executeCommand(command);
+```
+
+### Benefits
+- Automatic connection assurance
+- Built-in retry logic
+- Consistent error handling
+- Operation logging
+
+## 4. Format-Specific Command Usage
+
+### Runtime Format Selection
+When the format is determined at runtime, use conditionals:
+
+```dart
+// ✅ CORRECT - Select command based on format
+if (format == PrintFormat.zpl) {
+  await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+} else if (format == PrintFormat.cpcl) {
+  await CommandFactory.createSendCpclClearBufferCommand(printer).execute();
+}
+
+// Or with helper method
+final command = format == PrintFormat.zpl
+    ? CommandFactory.createSendZplClearBufferCommand(printer)
+    : CommandFactory.createSendCpclClearBufferCommand(printer);
+await command.execute();
+```
+
+### Common Mistakes
+```dart
+// ❌ WRONG - Using wrong format command
+// Printing CPCL data but using ZPL command
+await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+
+// ❌ WRONG - Using generic command for format-specific operation
+await CommandFactory.createSendClearBufferCommand(printer).execute(); // Ambiguous
+```
+
+## 5. Available Commands Reference
+
+### Status Commands
+```dart
+// Basic status
+CommandFactory.createGetPrinterStatusCommand(printer)
+CommandFactory.createGetDetailedPrinterStatusCommand(printer)
+
+// Connection
+CommandFactory.createCheckConnectionCommand(printer)
+
+// Specific status
+CommandFactory.createGetMediaStatusCommand(printer)
+CommandFactory.createGetHeadStatusCommand(printer)
+CommandFactory.createGetPauseStatusCommand(printer)
+CommandFactory.createGetHostStatusCommand(printer)
+CommandFactory.createGetLanguageCommand(printer)
+```
+
+### Control Commands
+```dart
+// General control
+CommandFactory.createSendUnpauseCommand(printer)
+CommandFactory.createSendCalibrationCommand(printer)
+
+// Clear operations (generic)
+CommandFactory.createSendClearErrorsCommand(printer)
+CommandFactory.createSendClearBufferCommand(printer)
+CommandFactory.createSendClearAlertsCommand(printer)
+
+// Flush operations (generic)
+CommandFactory.createSendFlushBufferCommand(printer)
+```
+
+### Format-Specific Commands
+```dart
+// ZPL Commands
+CommandFactory.createSendZplClearErrorsCommand(printer)
+CommandFactory.createSendZplClearBufferCommand(printer)
+CommandFactory.createSendZplFlushBufferCommand(printer)
+CommandFactory.createSendSetZplModeCommand(printer)
+
+// CPCL Commands
+CommandFactory.createSendCpclClearErrorsCommand(printer)
+CommandFactory.createSendCpclClearBufferCommand(printer)
+CommandFactory.createSendCpclFlushBufferCommand(printer)
+CommandFactory.createSendSetCpclModeCommand(printer)
+```
+
+### Generic Commands
+```dart
+// Get any setting
+CommandFactory.createGetSettingCommand(printer, 'device.languages')
+CommandFactory.createGetSettingCommand(printer, 'media.status')
+
+// Send any command string (use sparingly)
+CommandFactory.createSendCommandCommand(printer, 'custom command')
+```
+
+## 6. Error Handling
+
+### Basic Error Handling
+```dart
+try {
+  final command = CommandFactory.createGetMediaStatusCommand(printer);
+  final result = await command.execute();
+  
+  if (result.success) {
+    // Handle success
+    print('Media status: ${result.data}');
+  } else {
+    // Handle error
+    print('Error: ${result.error?.message}');
+  }
+} catch (e) {
+  // Handle unexpected errors
+  print('Unexpected error: $e');
+}
+```
+
+### With CommunicationPolicy
+```dart
+final result = await _communicationPolicy.executeCommand(
+  CommandFactory.createGetPrinterStatusCommand(printer)
+);
+
+if (!result.success) {
+  // Check for specific error types
+  final error = result.error?.message?.toLowerCase() ?? '';
+  if (error.contains('connection') || error.contains('timeout')) {
+    // Handle connection issues
+  } else if (error.contains('paper out')) {
+    // Handle media issues
+  } else {
+    // Handle general errors
+  }
+}
+```
+
+## 7. Import Rules
+
+### Production Code
+```dart
+// ✅ CORRECT - Only import CommandFactory
+import 'internal/commands/command_factory.dart';
+import 'internal/communication_policy.dart';
+
+// ❌ WRONG - Never import individual commands
+import 'internal/commands/send_unpause_command.dart';
+import 'internal/commands/get_media_status_command.dart';
+```
+
+### Test Files
+```dart
+// ✅ Test files can import individual commands
+import 'package:zebrautil/internal/commands/send_unpause_command.dart';
+
+// Direct instantiation allowed in tests
+final command = SendUnpauseCommand(mockPrinter);
+```
+
+## 8. ZebraSGDCommands - UTILITY ONLY
+
+### What ZebraSGDCommands IS For
+- Data format detection (`isZPLData`, `isCPCLData`)
+- Response parsing (`parseResponse`)
+- Language matching (`isLanguageMatch`)
+- Format detection (`detectDataLanguage`)
+
+### What ZebraSGDCommands is NOT For
+- **NEVER** use for command strings
+- **NEVER** use for SGD commands
+- **NEVER** use for printer control
+
+### Examples
+```dart
+// ✅ CORRECT - Using for utilities
+if (ZebraSGDCommands.isZPLData(data)) {
+  // Handle ZPL format
+}
+
+final format = ZebraSGDCommands.detectDataLanguage(data);
+final value = ZebraSGDCommands.parseResponse(response);
+
+// ❌ WRONG - Using for commands
+final command = ZebraSGDCommands.zplClearErrors(); // DON'T DO THIS
+_printer!.sendCommand(ZebraSGDCommands.unpausePrinter()); // DON'T DO THIS
+```
+
+## 9. Common Usage Patterns
+
+### Connection Management
+```dart
+// Always check connection before operations
+if (await Zebra.isConnected()) {
+  final result = await CommandFactory.createSendUnpauseCommand(printer).execute();
+} else {
+  // Handle disconnected state
+}
+```
+
+### Batch Operations
+```dart
+// Execute multiple commands
+final commands = [
+  CommandFactory.createGetPrinterStatusCommand(printer),
+  CommandFactory.createGetMediaStatusCommand(printer),
+  CommandFactory.createGetLanguageCommand(printer),
+];
+
+for (final command in commands) {
+  final result = await _communicationPolicy.executeCommand(command);
+  if (!result.success) {
+    print('${command.operationName} failed: ${result.error?.message}');
+  }
+}
+```
+
+### Conditional Command Selection
+```dart
+// Select command based on conditions
+Command<void> getErrorClearCommand(PrintFormat format) {
+  switch (format) {
+    case PrintFormat.zpl:
+      return CommandFactory.createSendZplClearErrorsCommand(printer);
+    case PrintFormat.cpcl:
+      return CommandFactory.createSendCpclClearErrorsCommand(printer);
+    default:
+      return CommandFactory.createSendClearErrorsCommand(printer);
+  }
+}
+
+final command = getErrorClearCommand(currentFormat);
+await command.execute();
+```
+
+## 10. Migration Checklist
+
+When updating existing code:
+
+- [ ] Replace all direct `printer.sendCommand()` calls with CommandFactory
+- [ ] Remove all direct command instantiation
+- [ ] Update imports to use only `command_factory.dart`
+- [ ] Add CommunicationPolicy wrapper where appropriate
+- [ ] Use format-specific commands where applicable
+- [ ] Remove any ZebraSGDCommands usage for command strings
+
+## 11. Code Review Checklist
+
+### Must Check
+- [ ] No direct command imports outside of commands folder and tests
+- [ ] All command creation uses `CommandFactory.create*` methods
+- [ ] No `new CommandName()` or `CommandName()` calls in production code
+- [ ] No raw command strings sent directly to printer
+- [ ] Format-specific commands used appropriately
+- [ ] ZebraSGDCommands used only for utilities, not commands
+
+### Red Flags
+```dart
+// Any of these should fail code review
+import '.../commands/send_unpause_command.dart';  // Direct import
+final cmd = SendUnpauseCommand(printer);          // Direct instantiation
+printer.sendCommand('\x18');                       // Raw command string
+ZebraSGDCommands.zplClearBuffer();               // Command from utility class
+```
+
+## 12. Testing Guidelines
+
+### Unit Tests
+```dart
+// Commands can be instantiated directly in tests
+test('command executes correctly', () async {
+  final printer = MockZebraPrinter();
+  final command = SendUnpauseCommand(printer); // OK in tests
+  
+  when(() => printer.sendCommand('~PS')).thenAnswer((_) async => {});
+  
+  final result = await command.execute();
+  expect(result.success, true);
+});
+```
+
+### Integration Tests
+```dart
+// Use CommandFactory in integration tests
+test('unpause operation works', () async {
+  final command = CommandFactory.createSendUnpauseCommand(printer);
+  final result = await command.execute();
+  
+  expect(result.success, true);
+});
+```
+
+## 13. Performance Considerations
+
+### Command Reuse
+```dart
+// Commands are lightweight - create new instances
+// DON'T try to reuse command instances
+for (int i = 0; i < 10; i++) {
+  // ✅ Create new command each time
+  await CommandFactory.createSendUnpauseCommand(printer).execute();
+}
+
+// ❌ Don't reuse commands
+final command = CommandFactory.createSendUnpauseCommand(printer);
+for (int i = 0; i < 10; i++) {
+  await command.execute(); // May have unexpected behavior
+}
+```
+
+### Parallel Execution
+```dart
+// Commands can be executed in parallel if printer supports it
+final results = await Future.wait([
+  CommandFactory.createGetMediaStatusCommand(printer).execute(),
+  CommandFactory.createGetHeadStatusCommand(printer).execute(),
+  CommandFactory.createGetLanguageCommand(printer).execute(),
+]);
+```
+
+## 14. Summary of Key Rules
+
+1. **ALWAYS** use CommandFactory - never instantiate commands directly
+2. **NEVER** send raw command strings to the printer
+3. **ALWAYS** use format-specific commands when applicable
+4. **NEVER** import individual command files in production code
+5. **ALWAYS** use CommunicationPolicy for robust execution
+6. **NEVER** use ZebraSGDCommands for command strings
+7. **ALWAYS** handle command execution errors
+8. **NEVER** bypass the command pattern for "simple" operations
+
+---
+
+**See also:**
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [CommunicationPolicy](mdc:lib/internal/communication_policy.dart)
+- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
