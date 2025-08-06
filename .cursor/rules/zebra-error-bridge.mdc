@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+globs: lib/**/*.dart,test/**/*.dart
 ---
 
 # ZEBRA ERROR BRIDGE PATTERN

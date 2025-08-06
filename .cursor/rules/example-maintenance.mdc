@@ -1,7 +1,7 @@
 ---
-applyTo: ["example/**/*.dart"]
+globs: example/**/*.dart
+alwaysApply: false
 ---
-
 # Example App Maintenance Rule
 
 ## Purpose

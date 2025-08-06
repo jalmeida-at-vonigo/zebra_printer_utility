@@ -1,5 +1,5 @@
 ---
-applyTo: ["ios/**/*.{swift,m,h}"]
+globs: ios/**/*.swift,ios/**/*.m,ios/**/*.h
 ---
 
 # iOS ZSDK Integration and Update Guide

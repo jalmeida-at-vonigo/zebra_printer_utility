@@ -1,5 +1,5 @@
 ---
-applyTo: ["**/*.dart"]
+globs: **/*.dart
 ---
 
 # Dart/Flutter Code Standards

@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/**/*.dart"]
+globs: lib/**/*.dart
 ---
 
 # Zebra Printer Architecture Overview

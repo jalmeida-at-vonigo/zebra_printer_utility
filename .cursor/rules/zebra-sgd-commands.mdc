@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/zebra_sgd_commands.dart"]
+globs: lib/zebra_sgd_commands.dart
 ---
 
 # ZEBRA SGD COMMANDS - UTILITY ONLY

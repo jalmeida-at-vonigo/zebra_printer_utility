@@ -1,3 +1,7 @@
+---
+globs: **/*.md
+---
+
 # Documentation & Cursor Rule Organization and Completion Requirements
 
 ## 1. Documentation Hierarchy & Navigability

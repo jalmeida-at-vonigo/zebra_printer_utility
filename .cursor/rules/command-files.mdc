@@ -1,7 +1,7 @@
 ---
-applyTo: ["lib/internal/commands/**/*.dart", "test/unit/internal/commands/**/*.dart"]
+globs: lib/internal/commands/**/*.dart,test/unit/internal/commands/**/*.dart
+alwaysApply: false
 ---
-
 # Command System Architecture
 
 _Last updated: 2024-06-13_

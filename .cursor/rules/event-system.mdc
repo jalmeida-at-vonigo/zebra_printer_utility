@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/**/*.dart", "example/**/*.dart"]
+globs: lib/**/*.dart,example/**/*.dart
 ---
 
 # Event System for Print Workflows

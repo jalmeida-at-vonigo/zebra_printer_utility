@@ -1,7 +1,7 @@
 ---
-applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+globs: *.dart
+alwaysApply: false
 ---
-
 # CommandFactory and CommunicationPolicy Integration
 
 ## Overview

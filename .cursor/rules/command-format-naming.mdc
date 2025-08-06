@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/internal/commands/**/*.dart", "test/unit/internal/commands/**/*.dart"]
+globs: lib/internal/commands/**/*.dart,test/unit/internal/commands/**/*.dart
 ---
 
 # Command Format and Naming Standards

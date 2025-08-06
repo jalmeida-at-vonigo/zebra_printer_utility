@@ -1,5 +1,5 @@
 ---
-applyTo: ["lib/**/*.dart", "test/**/*.dart"]
+globs: **/*.dart
 ---
 
 # EDGE CASE ERROR HANDLING ARCHITECTURE

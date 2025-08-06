@@ -1,3 +1,7 @@
+---
+globs: lib/**/*.dart
+alwaysApply: false
+---
 # Manager Architecture with CommunicationPolicy
 
 ## Overview
