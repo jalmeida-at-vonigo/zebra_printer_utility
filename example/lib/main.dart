@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:zebrautil/zebrautil.dart';
 
 import 'screens/basic_print_screen.dart';
 import 'screens/smart_print_screen.dart';
@@ -6,7 +7,12 @@ import 'screens/discovery_screen.dart';
 import 'screens/direct_print_screen.dart';
 import 'widgets/responsive_layout.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize the global Zebra instance
+  await Zebra.ensureGlobalInitialized();
+  
   runApp(const MyApp());
 }
 

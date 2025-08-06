@@ -1,16 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/commands/send_clear_alerts_command.dart';
 import 'package:zebrautil/zebra_printer.dart';
 
-class _FakePrinter extends ZebraPrinter {
-  _FakePrinter() : super('test');
-}
+class MockZebraPrinter extends Mock implements ZebraPrinter {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('SendClearAlertsCommand has correct command and operation name', () {
-    final cmd = SendClearAlertsCommand(_FakePrinter());
-    expect(cmd.command, '! U1 setvar "alerts.clear" "ALL"\r\n');
-    expect(cmd.operationName, 'Send Clear Alerts Command');
+  final printer = MockZebraPrinter();
+  final command = SendClearAlertsCommand(printer);
+
+  test('SendClearAlertsCommand has correct operation name', () {
+    expect(command.operationName, equals('Send Clear Alerts Command'));
+  });
+
+  test('SendClearAlertsCommand has correct command string', () {
+    expect(command.command, equals('! U1 setvar "alerts.clear" "ALL"\r\n'));
   });
 } 

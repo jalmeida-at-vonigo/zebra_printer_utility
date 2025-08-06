@@ -22,7 +22,9 @@ import 'zebrautil.dart';
 ///
 /// Use [canCancel] to check if there's an active operation that can be cancelled.
 class SmartPrintManager {
-  SmartPrintManager(this._printerManager);
+  SmartPrintManager({required ZebraPrinterManager manager})
+      : _printerManager = manager;
+  
   // Private fields
   final ZebraPrinterManager _printerManager;
   final Logger _logger = Logger.withPrefix('SmartPrintManager');
@@ -569,12 +571,6 @@ class SmartPrintManager {
 
     try {
       final printer = _printerManager.printer;
-      if (printer == null) {
-        return Result.errorCode(
-          ErrorCodes.statusCheckFailed,
-          formatArgs: ['No printer instance available'],
-        );
-      }
 
       // Get shared communication policy from printer manager
       final communicationPolicy = _printerManager.communicationPolicy;

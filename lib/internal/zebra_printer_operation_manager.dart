@@ -6,10 +6,10 @@ import '../../zebra_printer_manager.dart';
 import 'native_operation.dart';
 import 'policies/policies.dart' as policies;
 
-/// Result-based OperationManager with logging capabilities
-class OperationManager {
+/// Result-based ZebraPrinterOperationManager with logging capabilities
+class ZebraPrinterOperationManager {
   /// Constructor
-  OperationManager({
+  ZebraPrinterOperationManager({
     required this.channel,
     this.onLog,
     this.onOperationLog,

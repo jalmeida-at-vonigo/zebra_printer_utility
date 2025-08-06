@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/commands/command_factory.dart';
 import 'package:zebrautil/internal/commands/send_clear_alerts_command.dart';
 import 'package:zebrautil/internal/commands/send_cpcl_clear_buffer_command.dart';
@@ -11,13 +12,11 @@ import 'package:zebrautil/internal/commands/send_zpl_clear_errors_command.dart';
 import 'package:zebrautil/internal/commands/send_zpl_flush_buffer_command.dart';
 import 'package:zebrautil/zebra_printer.dart';
 
-class _FakePrinter extends ZebraPrinter {
-  _FakePrinter() : super('test');
-}
+class MockZebraPrinter extends Mock implements ZebraPrinter {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final printer = _FakePrinter();
+  final printer = MockZebraPrinter();
 
   test('CommandFactory creates ZPL/CPCL and generic commands', () {
     expect(CommandFactory.createSendZplClearBufferCommand(printer), isA<SendZplClearBufferCommand>());

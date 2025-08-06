@@ -2,21 +2,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:zebrautil/internal/operation_callback_handler.dart';
-import 'package:zebrautil/internal/operation_manager.dart';
+import 'package:zebrautil/internal/zebra_printer_operation_callback_handler.dart';
+import 'package:zebrautil/internal/zebra_printer_operation_manager.dart';
 
-@GenerateMocks([OperationManager])
-import 'operation_callback_handler_test.mocks.dart';
+import 'zebra_printer_operation_callback_handler_test.mocks.dart';
 
+@GenerateMocks([ZebraPrinterOperationManager])
 void main() {
-  group('OperationCallbackHandler', () {
-    late MockOperationManager mockManager;
-    late OperationCallbackHandler handler;
+  group('ZebraPrinterOperationCallbackHandler', () {
+    late MockZebraPrinterOperationManager mockManager;
+    late ZebraPrinterOperationCallbackHandler handler;
     late List<String> calls;
 
     setUp(() {
-      mockManager = MockOperationManager();
-      handler = OperationCallbackHandler(manager: mockManager);
+      mockManager = MockZebraPrinterOperationManager();
+      handler = ZebraPrinterOperationCallbackHandler(manager: mockManager);
       calls = [];
 
       // Set up stubs to track calls

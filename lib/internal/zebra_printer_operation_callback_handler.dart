@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
-import 'operation_manager.dart';
+import 'zebra_printer_operation_manager.dart';
 
 /// Handles method calls from native side and routes them to appropriate operations
-class OperationCallbackHandler {
+class ZebraPrinterOperationCallbackHandler {
   /// Constructor
-  OperationCallbackHandler({required this.manager});
+  ZebraPrinterOperationCallbackHandler({required this.manager});
 
-  final OperationManager manager;
+  final ZebraPrinterOperationManager manager;
 
   /// Callbacks for events that don't belong to specific operations
   final Map<String, Function(MethodCall)> eventHandlers = {};

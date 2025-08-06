@@ -34,7 +34,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     _discoverySubscription?.cancel();
     // Stop discovery if still running
     if (_isDiscovering) {
-      Zebra.stopDiscovery();
+      Zebra.global.stopDiscovery();
     }
     super.dispose();
   }
@@ -73,65 +73,59 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       details: 'Timeout: ${_discoveryTimeout}s, WiFi: $_includeWifi, Bluetooth: $_includeBluetooth');
 
     try {
-      final result = await Zebra.discoverPrintersStream(
+      // Start streaming discovery
+      final deviceStream = Zebra.global.discoverPrintersStream(
         timeout: Duration(seconds: _discoveryTimeout),
         includeWifi: _includeWifi,
         includeBluetooth: _includeBluetooth,
       );
 
-      if (result.success && result.data != null) {
-        // Subscribe to the discovery stream for real-time updates
-        _discoverySubscription = result.data!.listen(
-          (devices) {
-            if (!mounted) return;
-            
-            // Real-time update: Update UI immediately when printers are found
-            final previousDeviceCount = _devices.length;
-            setState(() {
-              _devices.clear();
-              _devices.addAll(devices);
-            });
-            
-            // Log only new discoveries to avoid spam
-            if (devices.length > previousDeviceCount) {
-              _addLog('Found ${devices.length} printer(s)', 'info');
-              
-              // Log details about new devices only
-              final newDevices = devices.skip(previousDeviceCount);
-              for (final device in newDevices) {
-                _addLog(
-                  'Printer discovered',
-                  'success',
-                  details: 'Name: ${device.name}\n'
-                      'Address: ${device.address}\n'
-                      'Type: ${device.isWifi ? "WiFi" : "Bluetooth"}\n'
-                      'Model: ${device.model ?? "Unknown"}',
-                );
-              }
+      // Subscribe to the discovery stream for real-time updates
+      _discoverySubscription = deviceStream.listen(
+        (devices) {
+          if (!mounted) return;
+
+          // Real-time update: Update UI immediately when printers are found
+          final previousDeviceCount = _devices.length;
+          setState(() {
+            _devices.clear();
+            _devices.addAll(devices);
+          });
+
+          // Log only new discoveries to avoid spam
+          if (devices.length > previousDeviceCount) {
+            _addLog('Found ${devices.length} printer(s)', 'info');
+
+            // Log details about new devices only
+            final newDevices = devices.skip(previousDeviceCount);
+            for (final device in newDevices) {
+              _addLog(
+                'Printer discovered',
+                'success',
+                details: 'Name: ${device.name}\n'
+                    'Address: ${device.address}\n'
+                    'Type: ${device.isWifi ? "WiFi" : "Bluetooth"}\n'
+                    'Model: ${device.model ?? "Unknown"}',
+              );
             }
-          },
-          onError: (error) {
-            if (!mounted) return;
-            _addLog('Discovery error', 'error', details: '$error');
-            setState(() {
-              _isDiscovering = false;
-            });
-          },
-          onDone: () {
-            if (!mounted) return;
-            _addLog('Discovery completed', 'success',
-                details: 'Total printers found: ${_devices.length}');
-            setState(() {
-              _isDiscovering = false;
-            });
-          },
-        );
-      } else {
-        _addLog('Discovery failed', 'error', details: result.error?.message);
-        setState(() {
-          _isDiscovering = false;
-        });
-      }
+          }
+        },
+        onError: (error) {
+          if (!mounted) return;
+          _addLog('Discovery error', 'error', details: '$error');
+          setState(() {
+            _isDiscovering = false;
+          });
+        },
+        onDone: () {
+          if (!mounted) return;
+          _addLog('Discovery completed', 'success',
+              details: 'Total printers found: ${_devices.length}');
+          setState(() {
+            _isDiscovering = false;
+          });
+        },
+      );
     } catch (e, stack) {
       _addLog('Discovery error', 'error', details: '$e\n$stack');
       setState(() {
@@ -151,7 +145,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       _discoverySubscription = null;
 
       // Then stop the discovery service
-      final result = await Zebra.stopDiscovery();
+      final result = await Zebra.global.stopDiscovery();
       
       setState(() {
         _isDiscovering = false;
@@ -179,7 +173,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     _addLog('Connecting to ${device.name}...', 'info');
 
     try {
-      final result = await Zebra.connect(device.address);
+      final result = await Zebra.global.connect(device.address);
       
       if (result.success) {
         _addLog('Connected successfully', 'success', 

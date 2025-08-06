@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-
 import 'internal/commands/command_factory.dart';
 import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
@@ -43,7 +41,11 @@ class CancellationToken {
 /// It does NOT contain workflow logic - that belongs in SmartPrintManager
 /// and other workflow managers.
 class ZebraPrinterManager {
-  ZebraPrinter? _printer;
+  ZebraPrinterManager({
+    required ZebraPrinter printer,
+  }) : _printer = printer;
+
+  final ZebraPrinter _printer;
   ZebraController? _controller;
   ZebraPrinterDiscovery? _discovery;
   ZebraPrinterReadinessManager? _readinessManager;
@@ -54,7 +56,7 @@ class ZebraPrinterManager {
   final Logger _logger = Logger.withPrefix('ZebraPrinterManager');
 
   /// Public getter for the underlying ZebraPrinter instance
-  ZebraPrinter? get printer => _printer;
+  ZebraPrinter get printer => _printer;
   
   /// Public getter for the communication policy
   CommunicationPolicy? get communicationPolicy => _communicationPolicy;
@@ -80,7 +82,9 @@ class ZebraPrinterManager {
   }
 
   /// Discovery service for printer scanning and discovery
-  ZebraPrinterDiscovery get discovery => _discovery ??= ZebraPrinterDiscovery();
+  ZebraPrinterDiscovery get discovery => _discovery ??= ZebraPrinterDiscovery(
+        printer: _printer,
+      );
 
   /// List of discovered printers
   List<ZebraDevice> get discoveredPrinters => _controller?.printers ?? [];
@@ -105,24 +109,9 @@ class ZebraPrinterManager {
       // Listen to controller changes for connection updates
       _controller!.addListener(_onControllerChanged);
 
-      _logger.info('Creating printer instance');
-      _printer = await _getPrinterInstance(
-        controller: _controller,
-        onDiscoveryError: (code, message) {
-          _logger.error('Discovery error: $code - $message');
-          _statusStreamController?.add('Discovery error: $message');
-        },
-        onPermissionDenied: () {
-          _logger.warning(
-              'Bluetooth permission denied, continuing with network discovery only');
-          _statusStreamController
-              ?.add('Bluetooth permission denied, using network discovery');
-        },
-      );
-
       // Initialize communication policy with status updates
       _communicationPolicy = CommunicationPolicy(
-        _printer!,
+        _printer,
         onStatusUpdate: (status) {
           _statusStreamController?.add(status);
         },
@@ -130,7 +119,7 @@ class ZebraPrinterManager {
 
       // Initialize readiness manager with shared communication policy
       _readinessManager = ZebraPrinterReadinessManager(
-        printer: _printer!,
+        printer: _printer,
         communicationPolicy: _communicationPolicy!,
       );
       
@@ -177,7 +166,7 @@ class ZebraPrinterManager {
     return await _communicationPolicy!.execute(
       () async {
         _statusStreamController?.add('Connecting to $address...');
-        final result = await _printer!.connectToPrinter(address!);
+        final result = await _printer.connectToPrinter(address!);
 
         if (result.success) {
           _logger.info('Manager: Successfully connected to printer: $address');
@@ -226,7 +215,7 @@ class ZebraPrinterManager {
     if (connectedPrinter != null) {
       try {
         _statusStreamController?.add('Disconnecting...');
-        final result = await _printer!.disconnect();
+        final result = await _printer.disconnect();
         _logger.info('Manager: Printer disconnected successfully');
         _statusStreamController?.add('Disconnected');
         return result;
@@ -403,7 +392,7 @@ class ZebraPrinterManager {
       }
 
       final printResult = await _communicationPolicy!.execute(
-        () => _printer!.print(data: preparedData, format: detectedFormat),
+        () => _printer.print(data: preparedData, format: detectedFormat),
         'Send Print Data',
         options: CommunicationPolicyOptions(
           maxAttempts: 3,
@@ -453,7 +442,7 @@ class ZebraPrinterManager {
         _logger.info('Manager: Sending CPCL flush command');
         try {
           final flushCommand =
-              CommandFactory.createSendCpclFlushBufferCommand(_printer!);
+              CommandFactory.createSendCpclFlushBufferCommand(_printer);
           final flushResult = await _communicationPolicy!.execute(
             () => flushCommand.execute(),
             flushCommand.operationName,
@@ -534,14 +523,8 @@ class ZebraPrinterManager {
     await _ensureInitialized();
 
     try {
-      if (_printer == null) {
-        return Result.errorCode(
-          ErrorCodes.notConnected,
-        );
-      }
-
       final statusCommand =
-          CommandFactory.createGetPrinterStatusCommand(_printer!);
+          CommandFactory.createGetPrinterStatusCommand(_printer);
       final result = await _communicationPolicy!.execute(
         () => statusCommand.execute(),
         statusCommand.operationName,
@@ -576,14 +559,10 @@ class ZebraPrinterManager {
     await _ensureInitialized();
 
     try {
-      if (_printer == null) {
-        return Result.errorCode(
-          ErrorCodes.notConnected,
-        );
-      }
+
 
       final statusCommand =
-          CommandFactory.createGetDetailedPrinterStatusCommand(_printer!);
+          CommandFactory.createGetDetailedPrinterStatusCommand(_printer);
       final result = await _communicationPolicy!.execute(
         () => statusCommand.execute(),
         statusCommand.operationName,
@@ -619,50 +598,29 @@ class ZebraPrinterManager {
   /// Primitive: Check if a printer is currently connected
   Future<bool> isConnected() async {
     await _ensureInitialized();
-    final result = await _printer!.isPrinterConnected();
+    final result = await _printer.isPrinterConnected();
     return result.success ? (result.data ?? false) : false;
   }
 
   /// Primitive: Rotate print orientation
   void rotate() {
-    _printer?.rotate();
+    _printer.rotate();
   }
 
   // ===== INTERNAL HELPER METHODS =====
 
   /// Ensure the manager is initialized
   Future<void> _ensureInitialized() async {
-    if (_printer == null) {
+    if (_controller == null) {
       await initialize();
     }
-  }
-
-  /// Create a new printer instance
-  static Future<ZebraPrinter> _getPrinterInstance({
-    ZebraController? controller,
-    Function(String code, String? message)? onDiscoveryError,
-    Function()? onPermissionDenied,
-  }) async {
-    const platform = MethodChannel('zebrautil');
-
-    // Get instance ID from platform - iOS returns a String UUID
-    final String instanceId =
-        await platform.invokeMethod<String>('getInstance') ?? 'default';
-
-    // Return new printer instance
-    return ZebraPrinter(
-      instanceId,
-      controller: controller,
-      onDiscoveryError: onDiscoveryError,
-      onPermissionDenied: onPermissionDenied,
-    );
   }
 
 
 
   /// Dispose of resources
   void dispose() {
-    _printer?.dispose();
+    _printer.dispose();
     _discovery?.dispose();
     _readinessManager = null;
     _controller?.removeListener(_onControllerChanged);

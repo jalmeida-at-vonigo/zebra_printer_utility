@@ -496,7 +496,7 @@ deviceStream.listen((devices) {
 ```dart
 // Correct: UI or static API creates workflow manager
 final manager = ZebraPrinterManager();
-final smart = SmartPrintManager(manager);
+final smart = SmartPrintManager(manager: manager);
 final events = await smart.smartPrint(...);
 ```
 
@@ -610,6 +610,10 @@ await printer.sendCommand(clearCommand);
 - [Event System](mdc:.cursor/rules/event-system.mdc)
 - [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
 - [Platform-Specific Rules](mdc:.cursor/rules/ios/)
+
+- [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
+- [Platform-Specific Rules](mdc:.cursor/rules/ios/)
+
 
 - [Native Layer Responsibility Standards](mdc:.cursor/rules/native-layer-responsibility.mdc)
 - [Platform-Specific Rules](mdc:.cursor/rules/ios/)

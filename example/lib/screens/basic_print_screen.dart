@@ -78,7 +78,7 @@ class _BasicPrintScreenState extends State<BasicPrintScreen> {
       _addLog('Sending data to printer...', 'info', 
         details: 'Format: ${_format.name}, Size: ${_dataController.text.length} bytes');
       
-      final result = await Zebra.print(
+      final result = await Zebra.global.print(
         _dataController.text,
         options: printOptions,
       );

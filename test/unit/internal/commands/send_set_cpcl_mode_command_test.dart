@@ -1,16 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/commands/send_set_cpcl_mode_command.dart';
 import 'package:zebrautil/zebra_printer.dart';
 
-class _FakePrinter extends ZebraPrinter {
-  _FakePrinter() : super('test');
-}
+class MockZebraPrinter extends Mock implements ZebraPrinter {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('SendSetCpclModeCommand has correct command and operation name', () {
-    final cmd = SendSetCpclModeCommand(_FakePrinter());
-    expect(cmd.command, '! U1 setvar "device.languages" "line_print"\r\n');
-    expect(cmd.operationName, 'Send Set CPCL Mode Command');
+  final printer = MockZebraPrinter();
+  final command = SendSetCpclModeCommand(printer);
+
+  test('SendSetCpclModeCommand has correct operation name', () {
+    expect(command.operationName, equals('Send Set CPCL Mode Command'));
+  });
+
+  test('SendSetCpclModeCommand has correct command string', () {
+    expect(command.command,
+        equals('! U1 setvar "device.languages" "line_print"\r\n'));
   });
 } 

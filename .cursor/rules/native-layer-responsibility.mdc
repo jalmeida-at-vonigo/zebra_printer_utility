@@ -1,12 +1,36 @@
----
-alwaysApply: true
-applyTo: ["ios/**/*.{swift,m,h}", "android/**/*.{java,kt}"]
----
 
 # Native Layer Responsibility Standards
 
 ## Purpose
 The native layer (iOS and Android) should be a **thin wrapper** around the platform-specific SDKs (ZSDK for Zebra). All platform-independent business logic must reside in the Dart layer.
+
+## ZSDK Prioritization Rule
+- **ZSDK First**: Always prioritize existing ZSDK APIs and replace any Dart logic that is already supported by ZSDK.
+- If a feature or operation is supported by ZSDK, implement it using ZSDK calls in the native wrapper.
+- Only fall back to pure Dart implementations if the functionality is not supported by ZSDK.
+
+## Layer Clarification
+- **ZSDKWrapper.m**: Must be a thin layer providing direct pass-through to ZSDK methods. No business logic, parsing, or decisions.
+- **ZebraPrinterInstance.swift**: Acts as a binding between the Dart MethodChannel and ZSDKWrapper.m. Handles channel communication and basic error enrichment, but no complex logic.
+- **ZebraPrinter.dart**: Must be the Dart-side wrapper for all channel native calls. All MethodChannel invocations should go through ZebraPrinter instances, not separate channel instances.
+- **Dart Layer**: All business logic, including enhancements to ZSDK features, data processing, retries, and workflows.
+
+## ZebraPrinter.dart Typed Method Requirements
+- **Private Channel Access**: The `channel` property in ZebraPrinter must be private (`_channel`), never exposed publicly.
+- **Typed Method API**: All native functionality must be exposed as typed methods on ZebraPrinter with proper return types (e.g., `Result<T>`).
+- **No Direct Channel Invocations**: Business logic classes must use ZebraPrinter typed methods, never invoke `channel.invokeMethod()` directly.
+- **Method Examples**: 
+  - `discoverNetworkPrinters()` → `Result<List<Map<String, dynamic>>>`
+  - `connectToPrinter(String address)` → `Result<void>`
+  - `getPrinterStatus()` → `Result<Map<String, dynamic>>`
+  - `print(String data)` → `Result<PrintOperationTracker>`
+
+## Channel Architecture Rule
+- **Single Channel Entry Point**: All native method calls must go through `ZebraPrinter.channel`, not separate MethodChannel instances.
+- **Private Channel Access**: The `channel` property in ZebraPrinter should be private (`_channel`), not exposed publicly.
+- **Typed Method API**: All native functionality should be exposed as typed methods on ZebraPrinter (e.g., `discoverNetworkPrinters()`, `connectToPrinter()`, etc.), not direct channel invocations.
+- **No Direct Channel Access**: Business logic classes (like ZebraPrinterDiscovery) should use ZebraPrinter typed methods for native communication, never access the channel directly.
+- **Proper Layering**: ZebraPrinter → ZebraPrinterInstance → ZSDKWrapper → ZSDK
 
 ## Native Layer MUST Only:
 1. **SDK Calls**: Direct calls to platform SDKs (ZSDK) without modification
@@ -23,66 +47,25 @@ The native layer (iOS and Android) should be a **thin wrapper** around the platf
 6. **Command Parsing**: No parsing or modifying command strings
 7. **Language Detection**: No business logic for language/format detection
 
+## Grounding on Link-OS SDK
+- All iOS implementations MUST be grounded on the Link-OS SDK documentation and demos.
+- Do not invent APIs, object structures, or methods; base everything on what's documented in the SDK headers, HTML docs, and demo code.
+- If a feature isn't supported in the SDK, document the limitation and fall back to Dart, but never add unsupported native code.
+
+## Strengthened No-TODO Rule
+- **Zero Tolerance for Incomplete Work**: NEVER leave TODOs, FUTURE IMPL, notes about future enhancements, or any language implying incomplete work (e.g., "to be implemented later", "enhance in future", "stub for now").
+- If something cannot be fully implemented immediately, it must be removed or the task escalated—do not commit partial code.
+- This includes clever phrasings that mean TODO without using the word.
+
 ## Examples of Violations to Fix:
-
-### ❌ WRONG - Business Logic in Native:
-```objc
-// ZSDKWrapper.m
-if (status.isReadyToPrint) {
-    statusDescription = @"Ready to print";
-} else if (messages && messages.count > 0) {
-    statusDescription = [messages componentsJoinedByString:@"; "];
-}
-```
-
-### ✅ CORRECT - Raw Data from Native:
-```objc
-// ZSDKWrapper.m
-return @{
-    @"isReadyToPrint": @(status.isReadyToPrint),
-    @"isHeadOpen": @(status.isHeadOpen),
-    // ... just raw status flags
-};
-```
-
-### ❌ WRONG - Delays in Native:
-```swift
-// ZebraPrinterInstance.swift
-if data.hasPrefix("!") || data.contains("! 0") {
-    Thread.sleep(forTimeInterval: 1.0)
-}
-```
-
-### ✅ CORRECT - Delays in Dart:
-```dart
-// zebra_printer_manager.dart
-if (detectedFormat == PrintFormat.cpcl) {
-    await Future.delayed(const Duration(seconds: 1));
-}
-```
-
-## Dart Layer Responsibilities:
-All business logic belongs in the Dart layer, specifically:
-
-1. **Discovery Formatting**: [zebra_printer.dart](mdc:lib/zebra_printer.dart) - printerFound handler
-2. **Status Analysis**: [get_detailed_printer_status_command.dart](mdc:lib/internal/commands/get_detailed_printer_status_command.dart)
-3. **Status Descriptions**: [get_printer_status_command.dart](mdc:lib/internal/commands/get_printer_status_command.dart)
-4. **CPCL Delays**: [zebra_printer_manager.dart](mdc:lib/zebra_printer_manager.dart) - waitForPrintCompletion
-5. **Command Logic**: [command_factory.dart](mdc:lib/internal/commands/command_factory.dart)
-6. **Retry Logic**: [communication_policy.dart](mdc:lib/internal/communication_policy.dart)
-
-## Key Files to Monitor:
-- **iOS**: [ZSDKWrapper.m](mdc:ios/Classes/ZSDKWrapper.m), [ZebraPrinterInstance.swift](mdc:ios/Classes/ZebraPrinterInstance.swift)
-- **Android**: Similar wrapper files when implemented
-- **Dart**: All files in [lib/](mdc:lib/) contain business logic
-
-## Enforcement:
-When reviewing changes to native code, ensure:
-1. Methods are simple pass-throughs to SDK calls
-2. No conditional logic beyond null checks
-3. No string manipulation or formatting
+1. Direct channel access in business logic
+2. Public channel property exposure
+3. Untyped channel invocations
 4. No delays or timing logic
 5. Return raw SDK data without interpretation
 
-4. No delays or timing logic
-5. Return raw SDK data without interpretation
+## Examples of Correct Implementation:
+1. **✅ CORRECT**: `final result = await printer.discoverNetworkPrinters(timeout: timeout);`
+2. **❌ WRONG**: `final result = await printer.channel.invokeMethod('startNetworkDiscovery', args);`
+3. **✅ CORRECT**: `final status = await printer.getPrinterStatus();`
+4. **❌ WRONG**: `final status = await printer.channel.invokeMethod('getPrinterStatus');`

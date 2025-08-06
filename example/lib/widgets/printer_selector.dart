@@ -37,13 +37,13 @@ class _PrinterSelectorState extends State<PrinterSelector> {
     _discoverySubscription?.cancel();
     // Stop discovery if still running
     if (_isDiscovering) {
-      Zebra.stopDiscovery();
+      Zebra.global.stopDiscovery();
     }
     super.dispose();
   }
 
   Future<void> _checkConnection() async {
-    final result = await Zebra.isConnected();
+    final result = await Zebra.global.isConnected();
     if (mounted && result.success && result.data == true) {
       setState(() {
         _status = 'Connected';
@@ -69,49 +69,43 @@ class _PrinterSelectorState extends State<PrinterSelector> {
     _log('Starting printer discovery...', 'info');
 
     try {
-      final result = await Zebra.discoverPrintersStream(
-        timeout: const Duration(seconds: 15),
+      // Start streaming discovery
+      final deviceStream = Zebra.global.discoverPrintersStream(
+        timeout: const Duration(seconds: 10),
         includeWifi: true,
         includeBluetooth: true,
       );
       
-      if (result.success && result.data != null) {
-        // Subscribe to the discovery stream for real-time updates
-        _discoverySubscription = result.data!.listen(
-          (devices) {
-            if (!mounted) return;
-            
-            // Real-time update: Update UI immediately when printers are found
-            setState(() {
-              _devices.clear();
-              _devices.addAll(devices);
-            });
-            
-            if (devices.isNotEmpty) {
-              _log('Found ${devices.length} printer(s)', 'info');
-            }
-          },
-          onError: (error) {
-            if (!mounted) return;
-            _log('Discovery error: $error', 'error');
-            setState(() {
-              _isDiscovering = false;
-            });
-          },
-          onDone: () {
-            if (!mounted) return;
-            _log('Discovery completed', 'info');
-            setState(() {
-              _isDiscovering = false;
-            });
-          },
-        );
-      } else {
-        _log('Discovery failed: ${result.error?.message}', 'error');
-        setState(() {
-          _isDiscovering = false;
-        });
-      }
+      // Subscribe to the discovery stream for real-time updates
+      _discoverySubscription = deviceStream.listen(
+        (devices) {
+          if (!mounted) return;
+
+          // Real-time update: Update UI immediately when printers are found
+          setState(() {
+            _devices.clear();
+            _devices.addAll(devices);
+          });
+
+          if (devices.isNotEmpty) {
+            _log('Found ${devices.length} printer(s)', 'info');
+          }
+        },
+        onError: (error) {
+          if (!mounted) return;
+          _log('Discovery error: $error', 'error');
+          setState(() {
+            _isDiscovering = false;
+          });
+        },
+        onDone: () {
+          if (!mounted) return;
+          _log('Discovery completed', 'info');
+          setState(() {
+            _isDiscovering = false;
+          });
+        },
+      );
     } catch (e) {
       _log('Discovery error: $e', 'error');
       setState(() {
@@ -127,7 +121,7 @@ class _PrinterSelectorState extends State<PrinterSelector> {
     if (_isDiscovering) {
       await _discoverySubscription?.cancel();
       _discoverySubscription = null;
-      await Zebra.stopDiscovery();
+      await Zebra.global.stopDiscovery();
       setState(() {
         _isDiscovering = false;
       });
@@ -143,11 +137,11 @@ class _PrinterSelectorState extends State<PrinterSelector> {
     try {
       // Disconnect from current printer if connected
       if (_selectedDevice != null) {
-        await Zebra.disconnect();
+        await Zebra.global.disconnect();
       }
 
       // Connect to new printer
-      final result = await Zebra.connect(device.address);
+      final result = await Zebra.global.connect(device.address);
       
       if (mounted) {
         if (result.success) {
@@ -184,7 +178,7 @@ class _PrinterSelectorState extends State<PrinterSelector> {
     _log('Disconnecting...', 'info');
     
     try {
-      final result = await Zebra.disconnect();
+      final result = await Zebra.global.disconnect();
       if (result.success) {
         if (mounted) {
           setState(() {

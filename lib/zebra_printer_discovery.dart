@@ -1,34 +1,31 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-
 import 'internal/logger.dart';
-import 'internal/network_discovery.dart';
 import 'internal/policies/policies.dart' as policies;
 import 'zebrautil.dart';
 
 /// Service for discovering Zebra printers
 /// Provides centralized discovery functionality for both Bluetooth and Network printers
 ///
+/// **Error Handling Strategy:**
+/// - Discovery methods return Result&lt;T&gt; for operation-level errors
+/// - Real-time errors are emitted via the status stream
+/// - Native discovery errors are handled by ZebraPrinter event handlers
+/// - No constructor-level callbacks - errors are operation-specific
+///
 /// Note: CommunicationPolicy is handled by ZebraPrinterManager. This service
 /// only uses timeout policies for discovery operations.
 class ZebraPrinterDiscovery {
-
-  // Factory constructor
-  factory ZebraPrinterDiscovery() => _instance;
-
-  // Private constructor
-  ZebraPrinterDiscovery._internal();
-  // Static fields
-  static final ZebraPrinterDiscovery _instance =
-      ZebraPrinterDiscovery._internal();
+  ZebraPrinterDiscovery({
+    required ZebraPrinter printer,
+  }) : _printer = printer;
   
   // Timeout policy for all discovery operations
   static final _timeoutPolicy =
       policies.TimeoutPolicy.of(const Duration(seconds: 30));
 
   // Private fields
-  ZebraPrinter? _printer;
+  final ZebraPrinter _printer;
   ZebraController? _controller;
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<String>? _statusStreamController;
@@ -55,11 +52,10 @@ class ZebraPrinterDiscovery {
 
   /// Initialize the discovery service
   Future<void> initialize({
-    ZebraPrinter? printer,
     ZebraController? controller,
     Function(String)? statusCallback,
   }) async {
-    if (_printer != null) return;
+    if (_controller != null) return;
 
     _logger.info('Initializing ZebraPrinterDiscovery service');
     _controller = controller ?? ZebraController();
@@ -69,32 +65,8 @@ class ZebraPrinterDiscovery {
     // Listen to controller changes
     _controller!.addListener(_onControllerChanged);
 
-    if (printer != null) {
-      _logger.info('Using provided printer instance');
-      _printer = printer;
-    } else {
-      _logger.info('Creating new printer instance for discovery');
-      _printer = await _getPrinterInstance(
-        controller: _controller,
-        onDiscoveryError: (code, message) {
-          _logger.error('Discovery error: $code - $message');
-          _statusStreamController?.add('Discovery error: $message');
-        },
-        onPermissionDenied: () {
-          _logger.warning(
-              'Bluetooth permission denied, continuing with network discovery only');
-          _statusStreamController
-              ?.add('Bluetooth permission denied, using network discovery');
-        },
-      );
-    }
-
-    // Initialize communication policy (for future command execution)
-    if (_printer != null) {
-      // CommunicationPolicy is no longer used directly here,
-      // as the policies are now managed by ZebraPrinterManager.
-      // This class now primarily manages the discovery flow.
-    }
+    // Communication policy is now managed by ZebraPrinterManager
+    // This class primarily manages the discovery flow
 
     // Forward status messages if callback provided
     if (statusCallback != null) {
@@ -110,6 +82,11 @@ class ZebraPrinterDiscovery {
   /// Discover available printers (both Bluetooth and Network)
   /// Returns Result with list of discovered devices
   /// Uses enhanced parallel network discovery with iOS HotSpot support
+  /// 
+  /// Discovery errors are handled via:
+  /// - Result.error for method-level failures
+  /// - status stream for real-time error notifications
+  /// - ZebraPrinter event handlers for native discovery errors
   Future<Result<List<ZebraDevice>>> discoverPrinters({
     Duration timeout = const Duration(seconds: 10),
   }) async {
@@ -155,13 +132,13 @@ class ZebraPrinterDiscovery {
 
     // Start discovery
     _isScanning = true;
-    _printer!.startScanning();
+    _printer.startScanning();
     _statusStreamController?.add('Scanning for printers...');
 
     // Set up timeout
     _discoveryTimer?.cancel();
     _discoveryTimer = Timer(timeout, () {
-      _printer!.stopScanning();
+      _printer.stopScanning();
       _isScanning = false;
       _statusStreamController?.add('Discovery timeout reached');
     });
@@ -207,7 +184,7 @@ class ZebraPrinterDiscovery {
         // Stop if criteria met
         if (shouldStop) {
           _discoveryTimer?.cancel();
-          _printer!.stopScanning();
+          _printer.stopScanning();
           _isScanning = false;
         }
       }
@@ -231,7 +208,7 @@ class ZebraPrinterDiscovery {
         // Check if we should stop immediately
         if (stopOnFirstPrinter || (stopAfterCount != null && initialPrinters.length >= stopAfterCount)) {
           _discoveryTimer?.cancel();
-          _printer!.stopScanning();
+          _printer.stopScanning();
           _isScanning = false;
           _controller!.removeListener(onControllerChanged);
           return;
@@ -261,7 +238,7 @@ class ZebraPrinterDiscovery {
     // Clean up
     _controller!.removeListener(onControllerChanged);
     if (_isScanning) {
-      _printer!.stopScanning();
+      _printer.stopScanning();
       _isScanning = false;
     }
   }
@@ -386,7 +363,7 @@ class ZebraPrinterDiscovery {
   Future<void> stopDiscovery() async {
     await _ensureInitialized();
     _discoveryTimer?.cancel();
-    _printer!.stopScanning();
+    _printer.stopScanning();
     _isScanning = false;
     _statusStreamController?.add('Discovery stopped');
   }
@@ -409,9 +386,9 @@ class ZebraPrinterDiscovery {
         if (pairedPrinters.isEmpty) {
           _statusStreamController
               ?.add('Checking for paired Bluetooth printers...');
-          _printer!.startScanning();
+          _printer.startScanning();
           await Future.delayed(const Duration(seconds: 2));
-          _printer!.stopScanning();
+          _printer.stopScanning();
           pairedPrinters =
               _controller!.printers.where((p) => !p.isWifi).toList();
         }
@@ -444,31 +421,12 @@ class ZebraPrinterDiscovery {
 
   /// Ensure the discovery service is initialized
   Future<void> _ensureInitialized() async {
-    if (_printer == null) {
+    if (_controller == null) {
       await initialize();
     }
   }
 
-  /// Create a new printer instance
-  static Future<ZebraPrinter> _getPrinterInstance({
-    ZebraController? controller,
-    Function(String code, String? message)? onDiscoveryError,
-    Function()? onPermissionDenied,
-  }) async {
-    const platform = MethodChannel('zebrautil');
 
-    // Get instance ID from platform - iOS returns a String UUID
-    final String instanceId =
-        await platform.invokeMethod<String>('getInstance') ?? 'default';
-
-    // Return new printer instance
-    return ZebraPrinter(
-      instanceId,
-      controller: controller,
-      onDiscoveryError: onDiscoveryError,
-      onPermissionDenied: onPermissionDenied,
-    );
-  }
 
   /// Discover Bluetooth printers with streaming callback
   Future<void> _discoverBluetoothPrintersStream(
@@ -480,7 +438,7 @@ class ZebraPrinterDiscovery {
 
     try {
       _isScanning = true;
-      _printer!.startScanning();
+      _printer.startScanning();
 
       // Listen for new printers and call callback immediately
       void onControllerChanged() {
@@ -497,7 +455,7 @@ class ZebraPrinterDiscovery {
       // Set up timer to stop discovery after timeout
       final timer = Timer(timeout ~/ 2, () {
         if (_isScanning) {
-          _printer!.stopScanning();
+          _printer.stopScanning();
           _isScanning = false;
         }
         _controller!.removeListener(onControllerChanged);
@@ -519,10 +477,31 @@ class ZebraPrinterDiscovery {
     void Function(ZebraDevice) onPrinterFound,
   ) async {
     try {
-      await NetworkDiscovery.discoverNetworkPrintersStream(
+      // Use the typed ZebraPrinter method for network discovery
+      final result = await _printer.discoverNetworkPrinters(
         timeout: timeout,
-        onPrinterFound: onPrinterFound,
+        customSubnets: [], // Could be made configurable
       );
+
+      if (result.success && result.data != null) {
+        // Process results (deduplication in Dart)
+        final Set<String> uniqueAddresses = {};
+
+        for (var map in result.data!) {
+          final address = map['address'] as String?;
+          if (address != null && uniqueAddresses.add(address)) {
+            final device = ZebraDevice(
+              address: address,
+              name: map['dnsName'] ?? address,
+              isWifi: true,
+              status: 'Found',
+              port: map['port'] as int? ?? 9100,
+              isBluetooth: false,
+            );
+            onPrinterFound(device);
+          }
+        }
+      }
     } catch (e) {
       _logger.warning('Network discovery stream failed: $e');
     }
@@ -585,8 +564,7 @@ class ZebraPrinterDiscovery {
   void dispose() {
     _discoveryTimer?.cancel();
     _discoveryTimer = null;
-    _printer?.dispose();
-    _printer = null;
+    // _printer is managed externally and should not be disposed here
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
     _controller = null;

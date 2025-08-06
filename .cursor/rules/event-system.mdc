@@ -354,7 +354,7 @@ void dispose() {
 ```dart
 test('SmartPrintManager should emit step change events', () async {
   // Arrange
-  final manager = SmartPrintManager(printerManager);
+  final manager = SmartPrintManager(manager: printerManager);
   final events = <PrintEvent>[];
   
   // Act
@@ -372,7 +372,7 @@ test('SmartPrintManager should emit step change events', () async {
 ```dart
 testWidgets('UI should update based on print events', (tester) async {
   // Arrange
-  final manager = SmartPrintManager(printerManager);
+  final manager = SmartPrintManager(manager: printerManager);
   
   // Act
   await tester.pumpWidget(PrintUI(manager: manager));

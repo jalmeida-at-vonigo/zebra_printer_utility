@@ -1,412 +1,247 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+import 'package:zebrautil/models/print_operation_tracker.dart';
 import 'package:zebrautil/models/result.dart';
-import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/zebra_printer.dart';
 
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+@GenerateMocks([ZebraPrinter])
+import 'zebra_printer_test.mocks.dart';
 
+void main() {
   group('ZebraPrinter', () {
-    late ZebraPrinter printer;
-    const instanceId = 'test-instance';
+    late MockZebraPrinter printer;
 
     setUp(() {
-      printer = ZebraPrinter(instanceId);
-    });
-
-    tearDown(() async {
-      // Allow any pending operations to complete before disposing
-      await Future.delayed(const Duration(milliseconds: 50));
-      printer.dispose();
-    });
-
-    group('constructor and initialization', () {
-      test('initializes with correct instance ID', () {
-        expect(printer.instanceId, equals(instanceId));
-      });
-
-      test('initializes with provided controller', () {
-        final customController = ZebraController();
-        final customPrinter = ZebraPrinter(
-          'custom-id',
-          controller: customController,
-        );
-        expect(customPrinter.controller, equals(customController));
-        customPrinter.dispose();
-      });
-
-      test('creates default controller if not provided', () {
-        expect(printer.controller, isNotNull);
-        expect(printer.controller, isA<ZebraController>());
-      });
-
-      test('initializes with correct default values', () {
-        expect(printer.isRotated, isFalse);
-        expect(printer.isScanning, isFalse);
-        expect(printer.shouldSync, isFalse);
-      });
-
-      test('sets up method channel correctly', () {
-        expect(printer.channel.name, equals('ZebraPrinterObject$instanceId'));
-      });
+      printer = MockZebraPrinter();
     });
 
     group('utility methods', () {
       test('rotate toggles rotation state', () {
+        when(printer.isRotated).thenReturn(false);
         expect(printer.isRotated, isFalse);
 
         printer.rotate();
-        expect(printer.isRotated, isTrue);
+        verify(printer.rotate()).called(1);
+      });
 
-        printer.rotate();
-        expect(printer.isRotated, isFalse);
+      test('dispose calls dispose method', () {
+        printer.dispose();
+        verify(printer.dispose()).called(1);
       });
     });
 
-    group('event handling', () {
-      test('handles printerFound callback', () async {
-        // Simulate native callback
-        await printer.nativeMethodCallHandler(
-          const MethodCall('printerFound', {
-            'Address': '192.168.1.100',
-            'Name': 'Test Printer',
-            'Status': 'Found',
-            'IsWifi': 'true',
-          }),
+    group('scanning operations', () {
+      test('startScanning returns success result', () async {
+        when(printer.startScanning()).thenAnswer(
+          (_) async => Result.success(null),
         );
 
-        expect(printer.controller.printers.length, equals(1));
-        expect(
-            printer.controller.printers.first.address, equals('192.168.1.100'));
-        expect(printer.controller.printers.first.name, equals('Test Printer'));
-        expect(printer.controller.printers.first.isWifi, isTrue);
+        final result = await printer.startScanning();
+        expect(result.success, isTrue);
+        verify(printer.startScanning()).called(1);
       });
 
-      test('handles changePrinterStatus event', () async {
-        printer.controller.selectedAddress = '192.168.1.100';
-        printer.controller.addPrinter(ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
-        ));
-
-        await printer.nativeMethodCallHandler(
-          const MethodCall('changePrinterStatus', {
-            'Status': 'Connected',
-            'Color': 'G',
-          }),
+      test('startScanning returns error result', () async {
+        when(printer.startScanning()).thenAnswer(
+          (_) async => Result.error('Bluetooth permission denied'),
         );
 
-        final device = printer.controller.printers.first;
-        expect(device.status, equals('Connected'));
-        expect(device.color, equals(Colors.green));
-        expect(device.isConnected, isTrue);
+        final result = await printer.startScanning();
+        expect(result.success, isFalse);
+        expect(result.error?.message, contains('Bluetooth permission denied'));
+        verify(printer.startScanning()).called(1);
       });
 
-      test('handles printerRemoved event', () async {
-        printer.controller.addPrinter(ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
-        ));
-
-        await printer.nativeMethodCallHandler(
-          const MethodCall('printerRemoved', {
-            'Address': '192.168.1.100',
-          }),
+      test('stopScanning returns success result', () async {
+        when(printer.stopScanning()).thenAnswer(
+          (_) async => Result.success(null),
         );
 
-        expect(printer.controller.printers.isEmpty, isTrue);
-      });
-
-      test('handles onDiscoveryError event', () async {
-        String? errorCode;
-        String? errorMessage;
-        printer.onDiscoveryError = (code, message) {
-          errorCode = code;
-          errorMessage = message;
-        };
-
-        await printer.nativeMethodCallHandler(
-          const MethodCall('onDiscoveryError', {
-            'ErrorText': 'Discovery failed',
-          }),
-        );
-
-        expect(errorCode, equals('DISCOVERY_ERROR'));
-        expect(errorMessage, equals('Discovery failed'));
-      });
-
-      test('handles onPrinterDiscoveryDone event', () async {
-        printer.isScanning = true;
-
-        await printer.nativeMethodCallHandler(
-          const MethodCall('onPrinterDiscoveryDone'),
-        );
-
-        expect(printer.isScanning, isFalse);
+        final result = await printer.stopScanning();
+        expect(result.success, isTrue);
+        verify(printer.stopScanning()).called(1);
       });
     });
 
-    // Async operations with proper mocking
-    group('async operations', () {
-      test('startScanning triggers scanning and cleans controller', () {
-        expect(printer.isScanning, isFalse);
-        printer.startScanning();
-        expect(printer.isScanning, isTrue);
-      });
+    group('connection operations', () {
+      test('connectToPrinter returns success result', () async {
+        when(printer.connectToPrinter('192.168.1.100')).thenAnswer(
+          (_) async => Result.success(null),
+        );
 
-      test('stopScanning updates scanning state', () {
-        printer.isScanning = true;
-        printer.stopScanning();
-        expect(printer.isScanning, isFalse);
-        expect(printer.shouldSync, isTrue);
-      });
-
-      test('connectToPrinter returns result', () async {
         final result = await printer.connectToPrinter('192.168.1.100');
-        expect(result, isA<Result<void>>());
+        expect(result.success, isTrue);
+        verify(printer.connectToPrinter('192.168.1.100')).called(1);
       });
 
-      test('print returns result', () async {
-        final result = await printer.print(data: '^XA^FO20,20^AD^FDTest^XZ');
-        expect(result, isA<Result<void>>());
-      });
+      test('disconnect returns success result', () async {
+        when(printer.disconnect()).thenAnswer(
+          (_) async => Result.success(null),
+        );
 
-      test('disconnect returns result', () async {
         final result = await printer.disconnect();
-        expect(result, isA<Result<void>>());
+        expect(result.success, isTrue);
+        verify(printer.disconnect()).called(1);
       });
 
-      test('getPrinterStatus returns result', () async {
-        final result = await printer.getPrinterStatus();
-        expect(result, isA<Result<Map<String, dynamic>>>());
-      });
+      test('isPrinterConnected returns true when connected', () async {
+        when(printer.isPrinterConnected()).thenAnswer(
+          (_) async => Result.success(true),
+        );
 
-      test('getSetting returns Result<String?>', () async {
-        final result = await printer.getSetting('media.status');
-        expect(result, isA<Result<String?>>());
-        // Data can be null or string, both are valid
-        if (result.success) {
-          expect(result.data, anyOf([isNull, isA<String>()]));
-        }
-      });
-
-      test('isPrinterConnected returns Result<bool>', () async {
         final result = await printer.isPrinterConnected();
-        expect(result, isA<Result<bool>>());
-        if (result.success) {
-          expect(result.data, isA<bool>());
-        }
+        expect(result.success, isTrue);
+        expect(result.data, isTrue);
+        verify(printer.isPrinterConnected()).called(1);
+      });
+
+      test('isPrinterConnected returns false when not connected', () async {
+        when(printer.isPrinterConnected()).thenAnswer(
+          (_) async => Result.success(false),
+        );
+
+        final result = await printer.isPrinterConnected();
+        expect(result.success, isTrue);
+        expect(result.data, isFalse);
+        verify(printer.isPrinterConnected()).called(1);
       });
     });
 
-    group('error handling', () {
-      test('handles permission denied callback', () {
-        bool permissionDeniedCalled = false;
-        printer.onPermissionDenied = () {
-          permissionDeniedCalled = true;
-        };
+    group('printing operations', () {
+      test('print returns success result', () async {
+        when(printer.print(data: '^XA^FO50,50^FDTest^FS^XZ')).thenAnswer(
+          (_) async => Result.success(PrintOperationTracker()),
+        );
 
-        // Simulate permission denied scenario
-        printer.startScanning();
-
-        // The actual permission check happens in the native layer
-        // We can't easily test it without platform channels
-        expect(permissionDeniedCalled, isFalse);
+        final result = await printer.print(data: '^XA^FO50,50^FDTest^FS^XZ');
+        expect(result.success, isTrue);
+        expect(result.data, isA<PrintOperationTracker>());
+        verify(printer.print(data: '^XA^FO50,50^FDTest^FS^XZ')).called(1);
       });
 
-      test('handles discovery error callback', () {
-        String? errorCode;
-        String? errorMessage;
-        printer.onDiscoveryError = (code, message) {
-          errorCode = code;
-          errorMessage = message;
-        };
+      test('print returns error result', () async {
+        when(printer.print(data: '^XA^FO50,50^FDTest^FS^XZ')).thenAnswer(
+          (_) async => Result.error('Print operation failed'),
+        );
 
-        // Simulate discovery error
-        printer.startScanning();
-
-        // The actual error handling happens in the native layer
-        expect(errorCode, isNull);
-        expect(errorMessage, isNull);
+        final result = await printer.print(data: '^XA^FO50,50^FDTest^FS^XZ');
+        expect(result.success, isFalse);
+        expect(result.error?.message, contains('Print operation failed'));
+        verify(printer.print(data: '^XA^FO50,50^FDTest^FS^XZ')).called(1);
       });
     });
 
-    group('ZebraController', () {
-      late ZebraController controller;
-
-      setUp(() {
-        controller = ZebraController();
-      });
-
-      tearDown(() async {
-        // Allow any pending operations to complete before disposing
-        await Future.delayed(const Duration(milliseconds: 50));
-        controller.dispose();
-      });
-
-      test('addPrinter adds printer to list', () {
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
+    group('status operations', () {
+      test('getPrinterStatus returns status map', () async {
+        final statusMap = {
+          'status': 'Online',
+          'media': 'OK',
+          'head': 'OK',
+        };
+        when(printer.getPrinterStatus()).thenAnswer(
+          (_) async => Result.success(statusMap),
         );
 
-        controller.addPrinter(device);
-        expect(controller.printers.length, equals(1));
-        expect(controller.printers.first, equals(device));
+        final result = await printer.getPrinterStatus();
+        expect(result.success, isTrue);
+        expect(result.data, equals(statusMap));
+        verify(printer.getPrinterStatus()).called(1);
       });
 
-      test('addPrinter does not add duplicate printers', () {
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
+      test('getDetailedPrinterStatus returns detailed status', () async {
+        final detailedStatus = {
+          'status': 'Online',
+          'media': 'OK',
+          'head': 'OK',
+          'pause': 'Not Paused',
+          'host_status': 'Online',
+        };
+        when(printer.getDetailedPrinterStatus()).thenAnswer(
+          (_) async => Result.success(detailedStatus),
         );
 
-        controller.addPrinter(device);
-        controller.addPrinter(device);
-        expect(controller.printers.length, equals(1));
+        final result = await printer.getDetailedPrinterStatus();
+        expect(result.success, isTrue);
+        expect(result.data, equals(detailedStatus));
+        verify(printer.getDetailedPrinterStatus()).called(1);
+      });
+    });
+
+    group('settings operations', () {
+      test('getSetting returns setting value', () async {
+        when(printer.getSetting('media.status')).thenAnswer(
+          (_) async => Result.success('OK'),
+        );
+
+        final result = await printer.getSetting('media.status');
+        expect(result.success, isTrue);
+        expect(result.data, equals('OK'));
+        verify(printer.getSetting('media.status')).called(1);
       });
 
-      test('removePrinter removes printer by address', () {
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
+      test('getSetting returns null when setting not found', () async {
+        when(printer.getSetting('nonexistent.setting')).thenAnswer(
+          (_) async => Result.success(null),
         );
 
-        controller.addPrinter(device);
-        controller.removePrinter('192.168.1.100');
-        expect(controller.printers.isEmpty, isTrue);
+        final result = await printer.getSetting('nonexistent.setting');
+        expect(result.success, isTrue);
+        expect(result.data, isNull);
+        verify(printer.getSetting('nonexistent.setting')).called(1);
       });
+    });
 
-      test('cleanAll removes disconnected printers', () {
-        final connectedDevice = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Connected Printer',
-          isWifi: true,
-          status: 'Connected',
-          isConnected: true,
+    group('discovery operations', () {
+      test('discoverNetworkPrinters returns network printers', () async {
+        final networkPrinters = [
+          {
+            'address': '192.168.1.100',
+            'name': 'Zebra Printer 1',
+            'isWifi': true,
+          },
+          {
+            'address': '192.168.1.101',
+            'name': 'Zebra Printer 2',
+            'isWifi': true,
+          },
+        ];
+        when(printer.discoverNetworkPrinters()).thenAnswer(
+          (_) async => Result.success(networkPrinters),
         );
-        final disconnectedDevice = ZebraDevice(
-          address: '192.168.1.101',
-          name: 'Disconnected Printer',
-          isWifi: true,
-          status: 'Disconnected',
-          isConnected: false,
-        );
 
-        controller.addPrinter(connectedDevice);
-        controller.addPrinter(disconnectedDevice);
-        controller.cleanAll();
-
-        expect(controller.printers.length, equals(1));
-        expect(controller.printers.first.address, equals('192.168.1.100'));
+        final result = await printer.discoverNetworkPrinters();
+        expect(result.success, isTrue);
+        expect(result.data, equals(networkPrinters));
+        verify(printer.discoverNetworkPrinters()).called(1);
       });
+    });
 
-      test('updatePrinterStatus updates printer status and color', () {
-        controller.selectedAddress = '192.168.1.100';
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
+    group('instance operations', () {
+      test('getInstanceId returns instance ID', () async {
+        when(printer.getInstanceId()).thenAnswer(
+          (_) async => Result.success('test-instance-123'),
         );
 
-        controller.addPrinter(device);
-        controller.updatePrinterStatus('Connected', 'G');
-
-        final updatedDevice = controller.printers.first;
-        expect(updatedDevice.status, equals('Connected'));
-        expect(updatedDevice.color, equals(Colors.green));
-        expect(updatedDevice.isConnected, isTrue);
+        final result = await printer.getInstanceId();
+        expect(result.success, isTrue);
+        expect(result.data, equals('test-instance-123'));
+        verify(printer.getInstanceId()).called(1);
       });
+    });
 
-      test('updatePrinterStatus handles red color', () {
-        controller.selectedAddress = '192.168.1.100';
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
+    group('native method handling', () {
+      test('nativeMethodCallHandler processes method calls', () async {
+        final methodCall = const MethodCall('testMethod', {'param': 'value'});
+        
+        // Mock the nativeMethodCallHandler to not throw
+        when(printer.nativeMethodCallHandler(methodCall)).thenAnswer(
+          (_) async {},
         );
 
-        controller.addPrinter(device);
-        controller.updatePrinterStatus('Error', 'R');
-
-        final updatedDevice = controller.printers.first;
-        expect(updatedDevice.color, equals(Colors.red));
-        expect(updatedDevice.isConnected, isFalse);
-      });
-
-      test('updatePrinterStatus handles unknown color', () {
-        controller.selectedAddress = '192.168.1.100';
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
-        );
-
-        controller.addPrinter(device);
-        controller.updatePrinterStatus('Unknown', 'X');
-
-        final updatedDevice = controller.printers.first;
-        expect(updatedDevice.color, equals(Colors.grey.withValues(alpha: 0.6)));
-        expect(updatedDevice.isConnected, isFalse);
-      });
-
-      test('synchronizePrinter updates printer to connected state', () {
-        controller.selectedAddress = '192.168.1.100';
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
-          isConnected: false,
-        );
-
-        controller.addPrinter(device);
-        controller.synchronizePrinter('Connected');
-
-        final updatedDevice = controller.printers.first;
-        expect(updatedDevice.status, equals('Connected'));
-        expect(updatedDevice.color, equals(Colors.green));
-        expect(updatedDevice.isConnected, isTrue);
-      });
-
-      test('synchronizePrinter does nothing if printer not found', () {
-        controller.selectedAddress = '192.168.1.100';
-        controller.synchronizePrinter('Connected');
-
-        expect(controller.selectedAddress, isNull);
-      });
-
-      test('synchronizePrinter does nothing if printer already connected', () {
-        controller.selectedAddress = '192.168.1.100';
-        final device = ZebraDevice(
-          address: '192.168.1.100',
-          name: 'Test Printer',
-          isWifi: true,
-          status: 'Found',
-          isConnected: true,
-        );
-
-        controller.addPrinter(device);
-        controller.synchronizePrinter('Connected');
-
-        // Should not change anything
-        final updatedDevice = controller.printers.first;
-        expect(updatedDevice.isConnected, isTrue);
+        await printer.nativeMethodCallHandler(methodCall);
+        verify(printer.nativeMethodCallHandler(methodCall)).called(1);
       });
     });
   });

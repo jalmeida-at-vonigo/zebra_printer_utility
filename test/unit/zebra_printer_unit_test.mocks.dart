@@ -3,14 +3,15 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i6;
+import 'dart:async' as _i5;
 
-import 'package:flutter/services.dart' as _i2;
+import 'package:flutter/services.dart' as _i8;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:zebrautil/internal/operation_manager.dart' as _i4;
-import 'package:zebrautil/models/operation_log_entry.dart' as _i5;
+import 'package:mockito/src/dummies.dart' as _i4;
+import 'package:zebrautil/models/print_enums.dart' as _i7;
+import 'package:zebrautil/models/print_operation_tracker.dart' as _i6;
 import 'package:zebrautil/models/result.dart' as _i3;
-import 'package:zebrautil/zebra_printer_manager.dart' as _i7;
+import 'package:zebrautil/zebra_printer.dart' as _i2;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -26,8 +27,9 @@ import 'package:zebrautil/zebra_printer_manager.dart' as _i7;
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
 
-class _FakeMethodChannel_0 extends _i1.SmartFake implements _i2.MethodChannel {
-  _FakeMethodChannel_0(
+class _FakeZebraController_0 extends _i1.SmartFake
+    implements _i2.ZebraController {
+  _FakeZebraController_0(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -36,7 +38,7 @@ class _FakeMethodChannel_0 extends _i1.SmartFake implements _i2.MethodChannel {
         );
 }
 
-class _FakeResult_1<T1> extends _i1.SmartFake implements _i3.Result<T1> {
+class _FakeResult_1<T> extends _i1.SmartFake implements _i3.Result<T> {
   _FakeResult_1(
     Object parent,
     Invocation parentInvocation,
@@ -46,123 +48,294 @@ class _FakeResult_1<T1> extends _i1.SmartFake implements _i3.Result<T1> {
         );
 }
 
-/// A class which mocks [OperationManager].
+/// A class which mocks [ZebraPrinter].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockOperationManager extends _i1.Mock implements _i4.OperationManager {
-  MockOperationManager() {
+class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
+  MockZebraPrinter() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i2.MethodChannel get channel => (super.noSuchMethod(
-        Invocation.getter(#channel),
-        returnValue: _FakeMethodChannel_0(
+  String get instanceId => (super.noSuchMethod(
+        Invocation.getter(#instanceId),
+        returnValue: _i4.dummyValue<String>(
           this,
-          Invocation.getter(#channel),
+          Invocation.getter(#instanceId),
         ),
-      ) as _i2.MethodChannel);
+      ) as String);
 
   @override
-  List<_i5.OperationLogEntry> get operationLog => (super.noSuchMethod(
-        Invocation.getter(#operationLog),
-        returnValue: <_i5.OperationLogEntry>[],
-      ) as List<_i5.OperationLogEntry>);
+  _i2.ZebraController get controller => (super.noSuchMethod(
+        Invocation.getter(#controller),
+        returnValue: _FakeZebraController_0(
+          this,
+          Invocation.getter(#controller),
+        ),
+      ) as _i2.ZebraController);
 
   @override
-  int get activeOperationCount => (super.noSuchMethod(
-        Invocation.getter(#activeOperationCount),
-        returnValue: 0,
-      ) as int);
+  bool get isRotated => (super.noSuchMethod(
+        Invocation.getter(#isRotated),
+        returnValue: false,
+      ) as bool);
 
   @override
-  List<String> get activeOperationIds => (super.noSuchMethod(
-        Invocation.getter(#activeOperationIds),
-        returnValue: <String>[],
-      ) as List<String>);
+  bool get isScanning => (super.noSuchMethod(
+        Invocation.getter(#isScanning),
+        returnValue: false,
+      ) as bool);
 
   @override
-  void clearLog() => super.noSuchMethod(
-        Invocation.method(
-          #clearLog,
-          [],
+  bool get shouldSync => (super.noSuchMethod(
+        Invocation.getter(#shouldSync),
+        returnValue: false,
+      ) as bool);
+
+  @override
+  set isRotated(bool? _isRotated) => super.noSuchMethod(
+        Invocation.setter(
+          #isRotated,
+          _isRotated,
         ),
         returnValueForMissingStub: null,
       );
 
   @override
-  _i6.Future<_i3.Result<T>> execute<T>({
-    required String? method,
-    Map<String, dynamic>? arguments,
-    Duration? timeout = const Duration(seconds: 30),
-    _i7.CancellationToken? cancellationToken,
+  set isScanning(bool? _isScanning) => super.noSuchMethod(
+        Invocation.setter(
+          #isScanning,
+          _isScanning,
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  set shouldSync(bool? _shouldSync) => super.noSuchMethod(
+        Invocation.setter(
+          #shouldSync,
+          _shouldSync,
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  _i5.Future<_i3.Result<void>> startScanning() => (super.noSuchMethod(
+        Invocation.method(
+          #startScanning,
+          [],
+        ),
+        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #startScanning,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<void>>);
+
+  @override
+  _i5.Future<_i3.Result<void>> stopScanning() => (super.noSuchMethod(
+        Invocation.method(
+          #stopScanning,
+          [],
+        ),
+        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #stopScanning,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<void>>);
+
+  @override
+  _i5.Future<_i3.Result<void>> connectToPrinter(String? address) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #connectToPrinter,
+          [address],
+        ),
+        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #connectToPrinter,
+            [address],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<void>>);
+
+  @override
+  _i5.Future<_i3.Result<void>> disconnect() => (super.noSuchMethod(
+        Invocation.method(
+          #disconnect,
+          [],
+        ),
+        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #disconnect,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<void>>);
+
+  @override
+  _i5.Future<_i3.Result<_i6.PrintOperationTracker>> print({
+    required String? data,
+    _i7.PrintFormat? format = _i7.PrintFormat.zpl,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #execute,
+          #print,
           [],
           {
-            #method: method,
-            #arguments: arguments,
-            #timeout: timeout,
-            #cancellationToken: cancellationToken,
+            #data: data,
+            #format: format,
           },
         ),
-        returnValue: _i6.Future<_i3.Result<T>>.value(_FakeResult_1<T>(
+        returnValue: _i5.Future<_i3.Result<_i6.PrintOperationTracker>>.value(
+            _FakeResult_1<_i6.PrintOperationTracker>(
           this,
           Invocation.method(
-            #execute,
+            #print,
             [],
             {
-              #method: method,
-              #arguments: arguments,
-              #timeout: timeout,
-              #cancellationToken: cancellationToken,
+              #data: data,
+              #format: format,
             },
           ),
         )),
-      ) as _i6.Future<_i3.Result<T>>);
+      ) as _i5.Future<_i3.Result<_i6.PrintOperationTracker>>);
 
   @override
-  void completeOperation(
-    String? operationId,
-    dynamic result,
-  ) =>
-      super.noSuchMethod(
+  _i5.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
+      (super.noSuchMethod(
         Invocation.method(
-          #completeOperation,
-          [
-            operationId,
-            result,
-          ],
+          #getPrinterStatus,
+          [],
         ),
-        returnValueForMissingStub: null,
-      );
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #getPrinterStatus,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
 
   @override
-  void failOperation(
-    String? operationId,
-    String? error,
-  ) =>
-      super.noSuchMethod(
+  _i5.Future<_i3.Result<Map<String, dynamic>>> getDetailedPrinterStatus() =>
+      (super.noSuchMethod(
         Invocation.method(
-          #failOperation,
-          [
-            operationId,
-            error,
-          ],
+          #getDetailedPrinterStatus,
+          [],
         ),
-        returnValueForMissingStub: null,
-      );
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #getDetailedPrinterStatus,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
 
   @override
-  void cancelAll() => super.noSuchMethod(
+  _i5.Future<_i3.Result<String?>> getSetting(String? setting) =>
+      (super.noSuchMethod(
         Invocation.method(
-          #cancelAll,
+          #getSetting,
+          [setting],
+        ),
+        returnValue:
+            _i5.Future<_i3.Result<String?>>.value(_FakeResult_1<String?>(
+          this,
+          Invocation.method(
+            #getSetting,
+            [setting],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<String?>>);
+
+  @override
+  void rotate() => super.noSuchMethod(
+        Invocation.method(
+          #rotate,
           [],
         ),
         returnValueForMissingStub: null,
       );
+
+  @override
+  _i5.Future<_i3.Result<bool>> isPrinterConnected() => (super.noSuchMethod(
+        Invocation.method(
+          #isPrinterConnected,
+          [],
+        ),
+        returnValue: _i5.Future<_i3.Result<bool>>.value(_FakeResult_1<bool>(
+          this,
+          Invocation.method(
+            #isPrinterConnected,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<bool>>);
+
+  @override
+  _i5.Future<_i3.Result<List<Map<String, dynamic>>>> discoverNetworkPrinters({
+    Duration? timeout = const Duration(seconds: 10),
+    List<String>? customSubnets = const [],
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverNetworkPrinters,
+          [],
+          {
+            #timeout: timeout,
+            #customSubnets: customSubnets,
+          },
+        ),
+        returnValue: _i5.Future<_i3.Result<List<Map<String, dynamic>>>>.value(
+            _FakeResult_1<List<Map<String, dynamic>>>(
+          this,
+          Invocation.method(
+            #discoverNetworkPrinters,
+            [],
+            {
+              #timeout: timeout,
+              #customSubnets: customSubnets,
+            },
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<List<Map<String, dynamic>>>>);
+
+  @override
+  _i5.Future<_i3.Result<String>> getInstanceId() => (super.noSuchMethod(
+        Invocation.method(
+          #getInstanceId,
+          [],
+        ),
+        returnValue: _i5.Future<_i3.Result<String>>.value(_FakeResult_1<String>(
+          this,
+          Invocation.method(
+            #getInstanceId,
+            [],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<String>>);
+
+  @override
+  _i5.Future<void> nativeMethodCallHandler(_i8.MethodCall? methodCall) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #nativeMethodCallHandler,
+          [methodCall],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
   void dispose() => super.noSuchMethod(

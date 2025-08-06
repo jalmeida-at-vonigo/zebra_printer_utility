@@ -4,31 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'internal/logger.dart';
-import 'internal/operation_callback_handler.dart';
-import 'internal/operation_manager.dart';
 import 'internal/permission_manager.dart';
 import 'internal/zebra_error_bridge.dart';
+import 'internal/zebra_printer_operation_callback_handler.dart';
+import 'internal/zebra_printer_operation_manager.dart';
 import 'models/print_enums.dart';
 import 'models/print_operation_tracker.dart';
 import 'models/result.dart';
 import 'models/zebra_device.dart';
 
-/// Printer language modes
-enum PrinterMode { zpl, cpcl }
-
 class ZebraPrinter {
-  ZebraPrinter(
+  
+  /// Private constructor - use create() factory instead
+  ZebraPrinter._(
     this.instanceId, {
     ZebraController? controller,
-    this.onDiscoveryError,
-    this.onPermissionDenied,
   })  : controller = controller ?? ZebraController(),
         _logger = Logger.withPrefix('ZebraPrinter.$instanceId') {
-    channel = MethodChannel('ZebraPrinterObject$instanceId');
-    channel.setMethodCallHandler(nativeMethodCallHandler);
+    _channel = MethodChannel('ZebraPrinterObject$instanceId');
+    _channel.setMethodCallHandler(nativeMethodCallHandler);
     
-    _operationManager = OperationManager(channel: channel);
-    _callbackHandler = OperationCallbackHandler(manager: _operationManager);
+    _operationManager = ZebraPrinterOperationManager(channel: _channel);
+    _callbackHandler =
+        ZebraPrinterOperationCallbackHandler(manager: _operationManager);
     
     // Register event handlers for non-operation callbacks
     _callbackHandler.registerEventHandler('printerFound', (call) {
@@ -93,23 +91,36 @@ class ZebraPrinter {
     });
     _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
       final errorText = call.arguments?['ErrorText'] ?? 'Unknown error';
-      if (onDiscoveryError != null) {
-        onDiscoveryError!(ErrorCodes.discoveryError.code, errorText);
-      }
+      _logger.warning('Discovery error: $errorText');
     });
     _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
       isScanning = false;
     });
   }
 
+  /// Factory method to create a ZebraPrinter instance
+  static Future<ZebraPrinter> create({
+    ZebraController? controller,
+  }) async {
+    // Get instance ID from platform
+    const platform = MethodChannel('zebrautil');
+    final String instanceId =
+        await platform.invokeMethod<String>('getInstance') ?? 'default';
+
+    return ZebraPrinter._(
+      instanceId,
+      controller: controller,
+    );
+  }
+
+ 
   final String instanceId;
   final ZebraController controller;
-  void Function(String code, String message)? onDiscoveryError;
-  void Function()? onPermissionDenied;
 
-  late final MethodChannel channel;
-  late final OperationManager _operationManager;
-  late final OperationCallbackHandler _callbackHandler;
+
+  late final MethodChannel _channel;
+  late final ZebraPrinterOperationManager _operationManager;
+  late final ZebraPrinterOperationCallbackHandler _callbackHandler;
   final Logger _logger;
 
   bool isRotated = false;
@@ -397,6 +408,66 @@ class ZebraPrinter {
         }
       },
       operationType: OperationType.connection,
+    );
+  }
+
+  // Primitive: Discover network printers
+  Future<Result<List<Map<String, dynamic>>>> discoverNetworkPrinters({
+    Duration timeout = const Duration(seconds: 10),
+    List<String> customSubnets = const [],
+  }) async {
+    _logger.info('Starting network discovery');
+
+    return await ZebraErrorBridge.executeAndHandle<List<Map<String, dynamic>>>(
+      operation: () async {
+        final result = await _operationManager.execute<List<dynamic>>(
+          method: 'startNetworkDiscovery',
+          arguments: {
+            'timeout': timeout.inMilliseconds,
+            'customSubnets': customSubnets,
+          },
+          timeout: timeout,
+        );
+
+        if (result.success && result.data != null) {
+          final List<Map<String, dynamic>> printers = [];
+          for (var raw in result.data!) {
+            if (raw is Map<String, dynamic>) {
+              printers.add(raw);
+            }
+          }
+          _logger.info(
+              'Network discovery completed with ${printers.length} printers');
+          return printers;
+        } else {
+          throw Exception(result.error?.message ?? 'Network discovery failed');
+        }
+      },
+      operationType: OperationType.discovery,
+    );
+  }
+
+  // Primitive: Get instance ID
+  Future<Result<String>> getInstanceId() async {
+    _logger.info('Getting instance ID');
+
+    return await ZebraErrorBridge.executeAndHandle<String>(
+      operation: () async {
+        final result = await _operationManager.execute<String>(
+          method: 'getInstance',
+          arguments: {},
+          timeout: const Duration(seconds: 5),
+        );
+
+        if (result.success && result.data != null) {
+          _logger.info('Instance ID retrieved successfully');
+          return result.data!;
+        } else {
+          throw Exception(
+              result.error?.message ?? 'Instance ID retrieval failed');
+        }
+      },
+      operationType: OperationType.general,
     );
   }
 

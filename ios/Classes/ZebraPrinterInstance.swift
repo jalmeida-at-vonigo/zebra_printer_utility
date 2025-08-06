@@ -141,6 +141,9 @@ class ZebraPrinterInstance: NSObject {
         case "getDetailedPrinterStatus":
             getDetailedPrinterStatus(operationId: operationId, result: result)
             
+        case "startNetworkDiscovery":
+            startNetworkDiscovery(args: args, operationId: operationId, result: result)
+            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -685,6 +688,49 @@ class ZebraPrinterInstance: NSObject {
                     result(errorStatus)
                 }
             }
+        }
+    }
+}
+
+private func startNetworkDiscovery(args: [String: Any]?, operationId: String?, result: @escaping FlutterResult) {
+    let timeout = args?["timeout"] as? Int ?? 5000
+    let customSubnets = args?["customSubnets"] as? [String] ?? []
+    
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        guard let self = self else { return }
+        
+        var allPrinters: [[String: Any]] = []
+        
+        // Local broadcast
+        var error: NSError?
+        let localPrinters = ZSDKWrapper.discoverLocalPrinters(withTimeout: timeout, error: &error)
+        if let dicts = ZSDKWrapper.convertDiscoveredPrinters(toDict: localPrinters) as? [[String: Any]] {
+            allPrinters.append(contentsOf: dicts)
+        }
+        
+        // HotSpot subnet (172.20.10.1-254)
+        let hotspotPrinters = ZSDKWrapper.discoverSubnetPrinters(withRange: "172.20.10.*", timeout: timeout, error: &error)
+        if let dicts = ZSDKWrapper.convertDiscoveredPrinters(toDict: hotspotPrinters) as? [[String: Any]] {
+            allPrinters.append(contentsOf: dicts)
+        }
+        
+        // Custom subnets
+        for subnet in customSubnets {
+            let customPrinters = ZSDKWrapper.discoverSubnetPrinters(withRange: "\(subnet).*", timeout: timeout, error: &error)
+            if let dicts = ZSDKWrapper.convertDiscoveredPrinters(toDict: customPrinters) as? [[String: Any]] {
+                allPrinters.append(contentsOf: dicts)
+            }
+        }
+        
+        // Stream results to Dart
+        DispatchQueue.main.async {
+            for printer in allPrinters {
+                self.channel.invokeMethod("printerFound", arguments: printer)
+            }
+            if let operationId = operationId {
+                self.channel.invokeMethod("onDiscoveryComplete", arguments: ["operationId": operationId])
+            }
+            result(true)
         }
     }
 }

@@ -4,6 +4,8 @@
 #import "ZebraPrinterFactory.h"
 #import "TcpPrinterConnection.h"
 #import "MfiBtPrinterConnection.h"
+#import "NetworkDiscoverer.h"
+#import "DiscoveredPrinterNetwork.h"
 
 #import "SGD.h"
 #import "PrinterStatus.h"
@@ -13,7 +15,37 @@
 
 #pragma mark - Discovery
 
++ (NSArray *)discoverLocalPrintersWithTimeout:(NSInteger)timeout error:(NSError **)error {
+    return [NetworkDiscoverer localBroadcastWithTimeout:timeout error:error];
+}
 
++ (NSArray *)discoverSubnetPrintersWithRange:(NSString *)subnetRange timeout:(NSInteger)timeout error:(NSError **)error {
+    return [NetworkDiscoverer subnetSearchWithRange:subnetRange andWaitForResponsesTimeout:timeout error:error];
+}
+
++ (NSArray *)discoverDirectedBroadcastWithIp:(NSString *)ipAddress timeout:(NSInteger)timeout error:(NSError **)error {
+    return [NetworkDiscoverer directedBroadcastWithIpAddress:ipAddress andWaitForResponsesTimeout:timeout error:error];
+}
+
++ (NSArray *)discoverMulticastWithHops:(NSInteger)hops timeout:(NSInteger)timeout error:(NSError **)error {
+    return [NetworkDiscoverer multicastWithHops:hops andWaitForResponsesTimeout:timeout error:error];
+}
+
+// Helper to convert discovered printers to dictionary array for marshalling
++ (NSArray *)convertDiscoveredPrintersToDict:(NSArray *)printers {
+    NSMutableArray *result = [NSMutableArray array];
+    for (id printer in printers) {
+        if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
+            DiscoveredPrinterNetwork *netPrinter = (DiscoveredPrinterNetwork *)printer;
+            NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+            [dict setObject:netPrinter.address forKey:@"address"];
+            [dict setObject:@(netPrinter.port) forKey:@"port"];
+            if (netPrinter.dnsName) [dict setObject:netPrinter.dnsName forKey:@"dnsName"];
+            [result addObject:dict];
+        }
+    }
+    return result;
+}
 
 #pragma mark - Connection
 

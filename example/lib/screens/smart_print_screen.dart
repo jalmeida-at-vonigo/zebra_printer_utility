@@ -75,10 +75,10 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
       _addLog('Starting smart print workflow...', 'info');
       
       // Create SmartPrintManager instance for cancellation support
-      _smartPrintManager = SmartPrintManager(Zebra.manager);
+      _smartPrintManager = Zebra.global.smartManager;
       
       // Smart print with event stream
-      final eventStream = Zebra.smartPrint(
+      final eventStream = Zebra.global.smartPrint(
         _dataController.text,
         device: _selectedPrinter!,
         maxAttempts: 3,
