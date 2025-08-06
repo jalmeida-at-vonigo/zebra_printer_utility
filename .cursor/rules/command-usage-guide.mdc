@@ -5,7 +5,7 @@ alwaysApply: false
 
 # Command Usage Guide
 
-_Last updated: 2024-12-20_
+_Last updated: 2025-08-06_
 
 This guide consolidates all rules and standards for using commands throughout the Zebra Printer Utility codebase.
 
@@ -231,22 +231,29 @@ import 'package:zebrautil/internal/commands/send_unpause_command.dart';
 final command = SendUnpauseCommand(mockPrinter);
 ```
 
-## 8. ZebraSGDCommands - UTILITY ONLY
+## 8. 🚨 CRITICAL: ZebraSGDCommands - UTILITY ONLY
+
+**⚠️ IMPORTANT**: The [ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) class is for **UTILITY METHODS ONLY**. 
+See [ZebraSGDCommands Rule](mdc:.cursor/rules/zebra-sgd-commands.mdc) for complete details.
 
 ### What ZebraSGDCommands IS For
-- Data format detection (`isZPLData`, `isCPCLData`)
-- Response parsing (`parseResponse`)
-- Language matching (`isLanguageMatch`)
-- Format detection (`detectDataLanguage`)
+- ✅ Data format detection (`isZPLData`, `isCPCLData`)
+- ✅ Response parsing (`parseResponse`)
+- ✅ Format detection (`detectDataLanguage`)
+- ✅ Parsing printer responses
 
 ### What ZebraSGDCommands is NOT For
-- **NEVER** use for command strings
-- **NEVER** use for SGD commands
-- **NEVER** use for printer control
+- ❌ **NEVER** use for command strings
+- ❌ **NEVER** use for SGD commands  
+- ❌ **NEVER** use for printer control
+- ❌ **NEVER** call methods that don't exist in the current implementation
+
+### Why This Matters
+The `ZebraSGDCommands` class has been refactored to contain ONLY utility methods. All command generation has been moved to the [CommandFactory](mdc:lib/internal/commands/command_factory.dart) and individual command classes. Using non-existent methods will cause runtime errors.
 
 ### Examples
 ```dart
-// ✅ CORRECT - Using for utilities
+// ✅ CORRECT - Using for utilities only
 if (ZebraSGDCommands.isZPLData(data)) {
   // Handle ZPL format
 }
@@ -254,9 +261,21 @@ if (ZebraSGDCommands.isZPLData(data)) {
 final format = ZebraSGDCommands.detectDataLanguage(data);
 final value = ZebraSGDCommands.parseResponse(response);
 
-// ❌ WRONG - Using for commands
-final command = ZebraSGDCommands.zplClearErrors(); // DON'T DO THIS
-_printer!.sendCommand(ZebraSGDCommands.unpausePrinter()); // DON'T DO THIS
+// ❌ WRONG - These methods NO LONGER EXIST
+final command = ZebraSGDCommands.zplClearErrors(); // RUNTIME ERROR
+_printer!.sendCommand(ZebraSGDCommands.unpausePrinter()); // RUNTIME ERROR
+ZebraSGDCommands.getCommand('device.languages'); // RUNTIME ERROR
+ZebraSGDCommands.setZPLMode(); // RUNTIME ERROR
+```
+
+### Use CommandFactory Instead
+For all command operations, use the CommandFactory:
+```dart
+// ✅ CORRECT - Use CommandFactory for commands
+await CommandFactory.createSendZplClearErrorsCommand(printer).execute();
+await CommandFactory.createSendUnpauseCommand(printer).execute();
+await CommandFactory.createGetSettingCommand(printer, 'device.languages').execute();
+await CommandFactory.createSendSetZplModeCommand(printer).execute();
 ```
 
 ## 9. Common Usage Patterns
@@ -398,13 +417,16 @@ final results = await Future.wait([
 3. **ALWAYS** use format-specific commands when applicable
 4. **NEVER** import individual command files in production code
 5. **ALWAYS** use CommunicationPolicy for robust execution
-6. **NEVER** use ZebraSGDCommands for command strings
+6. **NEVER** use ZebraSGDCommands for command strings - it's for utilities ONLY
 7. **ALWAYS** handle command execution errors
 8. **NEVER** bypass the command pattern for "simple" operations
+9. **NEVER** call methods that don't exist in ZebraSGDCommands
+10. **ALWAYS** check the actual implementation before using any class
 
 ---
 
 **See also:**
 - [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
 - [CommunicationPolicy](mdc:lib/internal/communication_policy.dart)
+- [ZebraSGDCommands Rule](mdc:.cursor/rules/zebra-sgd-commands.mdc)
 - [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)

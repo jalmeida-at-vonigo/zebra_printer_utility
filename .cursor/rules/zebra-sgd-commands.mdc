@@ -2,102 +2,196 @@
 globs: lib/zebra_sgd_commands.dart
 ---
 
-# ZEBRA SGD COMMANDS - UTILITY ONLY
+# ZebraSGDCommands - Utility Methods Only
+
+_Last updated: 2025-08-06_
+
+## 🚨 CRITICAL: This Class is for UTILITIES ONLY
+
+The [ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) class has been **refactored** to contain ONLY utility methods for data detection and parsing. **ALL command generation methods have been removed** and moved to the command pattern architecture.
+
+**See also:**
+- [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc) - Section 8 for usage patterns
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc) - For creating new commands
+- [CommandFactory](mdc:lib/internal/commands/command_factory.dart) - For all command generation
 
 ## Purpose
-[ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) should **ONLY** contain utility methods for:
-- Data format detection
-- Response parsing
-- Language matching
-- **NEVER command strings**
 
-## Allowed Methods (Utility Only)
-* `isZPLData(String data)` - Detect if data is ZPL format
-* `isCPCLData(String data)` - Detect if data is CPCL format  
-* `detectDataLanguage(String data)` - Determine print format from data
-* `parseResponse(String response)` - Parse SGD response to extract value
-* `isLanguageMatch(String current, String expected)` - Check language compatibility
+[ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) provides utility methods for:
+- ✅ **Data format detection** - Identifying ZPL vs CPCL data
+- ✅ **Response parsing** - Extracting values from SGD responses
+- ✅ **Format detection** - Determining printer language from data
+- ❌ **NOT for command strings** - Use CommandFactory instead
 
-## Forbidden Methods (Command Strings)
-* `getCommand(String setting)` - ❌ Use CommandFactory instead
-* `setCommand(String setting, String value)` - ❌ Use CommandFactory instead
-* `doCommand(String action, String value)` - ❌ Use CommandFactory instead
-* `setZPLMode()` - ❌ Use CommandFactory instead
-* `setCPCLMode()` - ❌ Use CommandFactory instead
-* `resetPrinter()` - ❌ Use CommandFactory instead
-* `unpausePrinter()` - ❌ Use CommandFactory instead
-* `resumePrinter()` - ❌ Use CommandFactory instead
-* `clearAlerts()` - ❌ Use CommandFactory instead
-* `cpclClearBuffer()` - ❌ Use CommandFactory instead
-* `cpclFlushBuffer()` - ❌ Use CommandFactory instead
-* `cpclClearErrors()` - ❌ Use CommandFactory instead
-* `zplResume()` - ❌ Use CommandFactory instead
-* `zplClearErrors()` - ❌ Use CommandFactory instead
-* `zplClearBuffer()` - ❌ Use CommandFactory instead
-* `zplFlushBuffer()` - ❌ Use CommandFactory instead
+## Current Implementation
+
+The class now contains ONLY these methods:
+
+```dart
+class ZebraSGDCommands {
+  /// Check if data is ZPL format
+  static bool isZPLData(String data);
+  
+  /// Check if data is CPCL format
+  static bool isCPCLData(String data);
+  
+  /// Determine printer language from data
+  static PrintFormat? detectDataLanguage(String data);
+  
+  /// Parse SGD response to extract value
+  static String? parseResponse(String response);
+}
+```
+
+**Note:** The `isLanguageMatch` method mentioned in some documentation has also been removed. Use direct comparison or the format detection methods instead.
+
+## Methods That NO LONGER EXIST
+
+The following methods have been **REMOVED** and will cause **runtime errors** if called:
+
+### Command Generation (REMOVED)
+- ❌ `getCommand(String setting)` → Use `CommandFactory.createGetSettingCommand()`
+- ❌ `setCommand(String setting, String value)` → Use appropriate CommandFactory method
+- ❌ `doCommand(String action, String value)` → Use appropriate CommandFactory method
+
+### Mode Commands (REMOVED)
+- ❌ `setZPLMode()` → Use `CommandFactory.createSendSetZplModeCommand()`
+- ❌ `setCPCLMode()` → Use `CommandFactory.createSendSetCpclModeCommand()`
+
+### Control Commands (REMOVED)
+- ❌ `resetPrinter()` → Use appropriate CommandFactory method
+- ❌ `unpausePrinter()` → Use `CommandFactory.createSendUnpauseCommand()`
+- ❌ `resumePrinter()` → Use `CommandFactory.createSendUnpauseCommand()`
+- ❌ `clearAlerts()` → Use `CommandFactory.createSendClearAlertsCommand()`
+
+### ZPL Commands (REMOVED)
+- ❌ `zplResume()` → Use `CommandFactory.createSendUnpauseCommand()`
+- ❌ `zplClearErrors()` → Use `CommandFactory.createSendZplClearErrorsCommand()`
+- ❌ `zplClearBuffer()` → Use `CommandFactory.createSendZplClearBufferCommand()`
+- ❌ `zplFlushBuffer()` → Use `CommandFactory.createSendZplFlushBufferCommand()`
+
+### CPCL Commands (REMOVED)
+- ❌ `cpclClearBuffer()` → Use `CommandFactory.createSendCpclClearBufferCommand()`
+- ❌ `cpclFlushBuffer()` → Use `CommandFactory.createSendCpclFlushBufferCommand()`
+- ❌ `cpclClearErrors()` → Use `CommandFactory.createSendCpclClearErrorsCommand()`
 
 ## Usage Examples
 
-### ✅ CORRECT - Utility Methods Only
+### ✅ CORRECT - Using Utility Methods
 ```dart
+import 'package:zebrautil/zebra_sgd_commands.dart';
+
 // Data format detection
-if (ZebraSGDCommands.isZPLData(data)) {
+if (ZebraSGDCommands.isZPLData(printData)) {
   // Handle ZPL data
+  await CommandFactory.createSendZplClearBufferCommand(printer).execute();
+} else if (ZebraSGDCommands.isCPCLData(printData)) {
+  // Handle CPCL data
+  await CommandFactory.createSendCpclClearBufferCommand(printer).execute();
 }
 
-// Language detection
-final format = ZebraSGDCommands.detectDataLanguage(data);
+// Format detection
+final format = ZebraSGDCommands.detectDataLanguage(printData);
+if (format == PrintFormat.zpl) {
+  // Use ZPL-specific commands
+}
 
 // Response parsing
-final value = ZebraSGDCommands.parseResponse(response);
-
-// Language matching
-if (ZebraSGDCommands.isLanguageMatch(currentLang, 'zpl')) {
-  // Handle ZPL language
-}
+final sgdResponse = '"device.languages" : "zpl"';
+final value = ZebraSGDCommands.parseResponse(sgdResponse); // Returns: "zpl"
 ```
 
-### ❌ WRONG - Using for Commands
+### ❌ WRONG - These Will Cause Runtime Errors
 ```dart
-// ❌ DON'T DO THIS - Using ZebraSGDCommands for command strings
-final command = ZebraSGDCommands.zplClearErrors();
-_printer!.sendCommand(command);
-
-// ❌ DON'T DO THIS - Using ZebraSGDCommands for SGD commands
-final sgdCommand = ZebraSGDCommands.getCommand('device.languages');
-_printer!.sendCommand(sgdCommand);
-
-// ❌ DON'T DO THIS - Using ZebraSGDCommands for buffer operations
-final bufferCommand = ZebraSGDCommands.cpclClearBuffer();
-_printer!.sendCommand(bufferCommand);
+// ❌ ALL OF THESE WILL FAIL AT RUNTIME
+final command = ZebraSGDCommands.zplClearErrors(); // NoSuchMethodError
+_printer!.sendCommand(ZebraSGDCommands.unpausePrinter()); // NoSuchMethodError
+final sgd = ZebraSGDCommands.getCommand('device.languages'); // NoSuchMethodError
+ZebraSGDCommands.setZPLMode(); // NoSuchMethodError
+ZebraSGDCommands.clearAlerts(); // NoSuchMethodError
 ```
 
-## Migration Requirements
-* **Remove all command string methods from ZebraSGDCommands**
-* **Move command strings to their respective command classes**
-* **Keep only utility methods for data detection and parsing**
-* **Update all imports to use CommandFactory for commands**
-
-## File Structure
-The file should only contain:
+### ✅ CORRECT - Use CommandFactory Instead
 ```dart
-class ZebraSGDCommands {
-  // ✅ UTILITY METHODS ONLY
-  static bool isZPLData(String data) { ... }
-  static bool isCPCLData(String data) { ... }
-  static PrintFormat? detectDataLanguage(String data) { ... }
-  static String? parseResponse(String response) { ... }
-  static bool isLanguageMatch(String current, String expected) { ... }
-  
-  // ❌ NO COMMAND METHODS
-  // static String getCommand(String setting) { ... } - REMOVE
-  // static String zplClearErrors() { ... } - REMOVE
-  // static String cpclClearBuffer() { ... } - REMOVE
+import 'package:zebrautil/internal/commands/command_factory.dart';
+
+// Clear errors based on format
+if (format == PrintFormat.zpl) {
+  await CommandFactory.createSendZplClearErrorsCommand(printer).execute();
+} else {
+  await CommandFactory.createSendCpclClearErrorsCommand(printer).execute();
 }
 
+// Unpause printer
+await CommandFactory.createSendUnpauseCommand(printer).execute();
+
+// Get printer setting
+final command = CommandFactory.createGetSettingCommand(printer, 'device.languages');
+final result = await command.execute();
+
+// Set printer mode
+await CommandFactory.createSendSetZplModeCommand(printer).execute();
+
+// Clear alerts
+await CommandFactory.createSendClearAlertsCommand(printer).execute();
 ```
 
-  // static String getCommand(String setting) { ... } - REMOVE
-  // static String zplClearErrors() { ... } - REMOVE
-  // static String cpclClearBuffer() { ... } - REMOVE
-}
+## Migration Guide
+
+If you have code that uses the old ZebraSGDCommands methods:
+
+1. **Remove** any calls to command generation methods
+2. **Replace** with appropriate CommandFactory methods
+3. **Keep** only the utility method calls for data detection and parsing
+
+### Before (OLD - Will Fail)
+```dart
+// Command generation
+final cmd = ZebraSGDCommands.zplClearErrors();
+await printer.sendCommand(cmd);
+
+// Mode setting
+await printer.sendCommand(ZebraSGDCommands.setZPLMode());
+
+// SGD commands
+final setting = ZebraSGDCommands.getCommand('device.languages');
+await printer.sendCommand(setting);
+```
+
+### After (NEW - Correct)
+```dart
+// Command generation
+await CommandFactory.createSendZplClearErrorsCommand(printer).execute();
+
+// Mode setting
+await CommandFactory.createSendSetZplModeCommand(printer).execute();
+
+// SGD commands
+await CommandFactory.createGetSettingCommand(printer, 'device.languages').execute();
+```
+
+## Integration with Parser Utilities
+
+For more advanced parsing needs, consider using [ParserUtil](mdc:lib/internal/parser_util.dart) in conjunction with ZebraSGDCommands:
+
+```dart
+// Parse SGD response and convert to appropriate type
+final response = await printer.getSetting('device.pause');
+final value = ZebraSGDCommands.parseResponse(response); // "true" or "false"
+final isPaused = ParserUtil.toBool(value) ?? false; // Convert to bool
+```
+
+## Summary
+
+- ✅ **DO** use ZebraSGDCommands for data format detection
+- ✅ **DO** use ZebraSGDCommands for parsing SGD responses
+- ❌ **DON'T** call any command generation methods (they don't exist)
+- ❌ **DON'T** expect methods that were removed to work
+- ✅ **DO** use CommandFactory for all command generation needs
+
+---
+
+**Related Documentation:**
+- [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)

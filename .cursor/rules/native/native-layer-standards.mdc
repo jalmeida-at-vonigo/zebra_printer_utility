@@ -1,0 +1,287 @@
+---
+alwaysApply: false
+description: Native layer standards for consistent communication between Dart and platform-specific code
+globs: lib/**/*.dart,ios/**/*.swift,ios/**/*.m,ios/**/*.h,android/**/*.java,android/**/*.kt
+---
+
+# Native Layer Standards
+
+_Last updated: 2024-12-20_
+
+## Overview
+
+This document defines the standards for implementing native layer communication in the Zebra Printer Utility. It ensures consistency, type safety, and maintainability across iOS and Android platforms.
+
+## Architecture Principles
+
+### 1. Native Model Types
+- **Purpose**: Strong typing for data passed between Dart and native layers
+- **Location**: 
+  - iOS: `ios/Classes/nativeModel/`
+  - Android: `android/src/main/java/com/zebrautil/nativeModel/`
+  - Dart: `lib/internal/native_models/`
+- **Requirement**: ALL complex data structures must have corresponding model types
+
+### 2. Dictionary/Map Communication
+- **Native to Dart**: Always return dictionaries/maps, not custom objects
+- **Dart to Native**: Always send dictionaries/maps, not Dart objects
+- **Conversion**: Use model classes for type-safe conversion
+
+### 3. Synchronization Requirements
+- **Field Names**: Must match exactly between native and Dart models
+- **Optional Fields**: Handle consistently across all platforms
+- **Type Conversions**: Document and test all type conversions
+
+## Native Model Implementation
+
+### iOS (Swift)
+```swift
+// ios/Classes/nativeModel/PrinterInfo.swift
+@objc public class PrinterInfo: NSObject {
+    @objc public let address: String
+    @objc public let name: String
+    // ... other properties
+    
+    @objc public func toDictionary() -> [String: Any] {
+        // Convert to dictionary for channel communication
+    }
+    
+    @objc public static func fromDictionary(_ dict: [String: Any]) -> PrinterInfo? {
+        // Create from dictionary received from channel
+    }
+}
+```
+
+### Android (Kotlin)
+```kotlin
+// android/src/main/java/com/zebrautil/nativeModel/PrinterInfo.kt
+data class PrinterInfo(
+    val address: String,
+    val name: String,
+    // ... other properties
+) {
+    fun toMap(): Map<String, Any?> {
+        // Convert to map for channel communication
+    }
+    
+    companion object {
+        fun fromMap(map: Map<String, Any?>): PrinterInfo? {
+            // Create from map received from channel
+        }
+    }
+}
+```
+
+### Dart
+```dart
+// lib/internal/native_models/printer_info.dart
+class NativePrinterInfo {
+    final String address;
+    final String name;
+    // ... other properties
+    
+    Map<String, dynamic> toNative() {
+        // Convert to map for sending to native
+    }
+    
+    factory NativePrinterInfo.fromNative(Map<String, dynamic> data) {
+        // Create from map received from native
+    }
+    
+    ZebraDevice toZebraDevice() {
+        // Convert to app model
+    }
+}
+```
+
+## Channel Communication Standards
+
+### 1. Method Naming
+- **Pattern**: `verbNoun` (e.g., `discoverPrinters`, `connectPrinter`)
+- **Consistency**: Same method names across all platforms
+- **No Abbreviations**: Use full, descriptive names
+
+### 2. Parameter Standards
+```dart
+// Good - Clear parameter names
+await channel.invokeMethod('discoverSubnet', {
+    'subnet': '192.168.1',
+    'timeout': 5000,
+});
+
+// Bad - Unclear or abbreviated
+await channel.invokeMethod('disc_subnet', {
+    'sn': '192.168.1',
+    't': 5000,
+});
+```
+
+### 3. Return Value Standards
+- **Success**: Always return a value (even if empty map/dictionary)
+- **Errors**: Use platform exceptions with clear error codes
+- **Streaming**: Use event channels or callback methods
+
+### 4. Streaming Results Pattern
+```swift
+// iOS - Stream results as found
+self.channel.invokeMethod("printerFound", arguments: printerInfo.toDictionary())
+
+// Complete with summary
+result(["foundCount": foundCount])
+```
+
+```dart
+// Dart - Handle streamed results
+_channel.setMethodCallHandler((call) async {
+    if (call.method == 'printerFound') {
+        final printerData = NativePrinterInfo.fromNative(call.arguments);
+        _handlePrinterFound(printerData);
+    }
+});
+```
+
+## Type Conversion Matrix
+
+| Dart Type | iOS Type | Android Type | Notes |
+|-----------|----------|--------------|-------|
+| String | NSString | String | Direct mapping |
+| int | NSInteger | Int/Long | Check ranges |
+| bool | Bool | Boolean | Direct mapping |
+| double | Double | Double | Direct mapping |
+| List | NSArray | List/ArrayList | Type-safe conversion |
+| Map | NSDictionary | Map/HashMap | String keys only |
+| null | nil | null | Handle optionals |
+
+## Error Handling
+
+### 1. Error Codes
+- **Format**: `CATEGORY_SPECIFIC_ERROR`
+- **Examples**: `DISCOVERY_TIMEOUT`, `CONNECTION_FAILED`
+- **Consistency**: Same codes across platforms
+
+### 2. Error Information
+```swift
+// iOS
+result(FlutterError(
+    code: "DISCOVERY_ERROR",
+    message: error.localizedDescription,
+    details: ["subnet": subnet, "timeout": timeout]
+))
+```
+
+```dart
+// Dart
+catch (e) {
+    if (e.code == 'DISCOVERY_ERROR') {
+        // Handle specific error
+    }
+}
+```
+
+## Synchronization Between Layers
+
+### 1. Field Mapping
+Document all field mappings between native and Dart:
+
+| Native Field | Dart Field | Type | Optional | Notes |
+|--------------|------------|------|----------|-------|
+| Address | address | String | No | Printer network address |
+| IsWifi | isWifi | bool | No | Network connection type |
+| model | model | String? | Yes | Printer model name |
+
+### 2. Version Control
+- **Add Fields**: Always add to end, make optional
+- **Remove Fields**: Mark deprecated, remove in major version
+- **Rename Fields**: Add new field, deprecate old
+
+### 3. Testing Requirements
+- **Unit Tests**: Test all conversions
+- **Integration Tests**: Test round-trip data
+- **Platform Tests**: Verify on both iOS and Android
+
+## ZebraPrinter Integration
+
+### 1. Channel Operations
+- **ALL channel calls** go through [ZebraPrinter](mdc:lib/zebra_printer.dart)
+- **NO direct channel calls** in other classes
+- **Use _operationManager** for all channel invocations
+
+### 2. Callback Handling
+```dart
+// In ZebraPrinter - Register native callbacks
+_callbackHandler.registerEventHandler('printerFound', (call) {
+    final printerInfo = NativePrinterInfo.fromNative(call.arguments);
+    controller.addPrinter(printerInfo.toZebraDevice());
+});
+```
+
+### 3. Operation Flow
+1. UI/Manager calls ZebraPrinter primitive
+2. ZebraPrinter converts to native format
+3. Native executes operation
+4. Native streams/returns results
+5. ZebraPrinter converts from native format
+6. ZebraPrinter updates controller/returns result
+
+## Best Practices
+
+### 1. Model Design
+- ✅ Immutable models where possible
+- ✅ Factory constructors for creation
+- ✅ Null safety for optional fields
+- ✅ Clear documentation for each field
+
+### 2. Conversion Methods
+- ✅ Validate data during conversion
+- ✅ Provide default values for optional fields
+- ✅ Log conversion errors for debugging
+- ✅ Handle platform differences gracefully
+
+### 3. Performance
+- ✅ Minimize conversions in hot paths
+- ✅ Cache converted values when appropriate
+- ✅ Use lazy initialization for expensive operations
+- ✅ Stream results for large datasets
+
+## Platform-Specific Considerations
+
+### iOS
+- **Objective-C Compatibility**: Use `@objc` annotations
+- **Swift Types**: Prefer Swift native types
+- **Memory Management**: Weak references in callbacks
+
+### Android
+- **Kotlin Support**: Use data classes
+- **Java Compatibility**: Provide Java-friendly APIs
+- **Threading**: Handle main thread requirements
+
+## Migration Guidelines
+
+When updating native models:
+1. **Add new fields** as optional
+2. **Test compatibility** with existing data
+3. **Update documentation** immediately
+4. **Version the changes** in changelog
+5. **Notify team** of breaking changes
+
+## Debugging
+
+### 1. Logging
+```swift
+// iOS
+LogUtil.debug("Converting PrinterInfo: \(dict)")
+
+// Dart
+_logger.debug('Received native printer: ${data}');
+```
+
+### 2. Validation
+- Log all channel method calls
+- Validate data at conversion points
+- Include context in error messages
+
+## Related Documentation
+- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [iOS Platform Standards](mdc:.cursor/rules/ios/)
+- [Android Platform Standards](mdc:.cursor/rules/android/)
+- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
