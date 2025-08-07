@@ -11,6 +11,10 @@ A professional Flutter plugin for robust, cross-platform Zebra printer integrati
 - **Robust Communication**: Centralized connection assurance, timeout handling, and retry logic with policy depth protection
 - **Automatic Format Detection & Language Management**: ZPL/CPCL auto-detection, printer language check/set, and mode switching before printing
 - **Smart Device Discovery**: Intelligent, real-time printer discovery and selection
+  - Multiple concurrent discovery methods (< 2.5s total)
+  - iPad hotspot support (172.20.10.* subnet)
+  - Real-time streaming of discovered printers
+  - Comprehensive cancellation support
 - **Comprehensive Diagnostics**: Status, error, and readiness checks with actionable recommendations
 - **Advanced Error Handling**: Retry logic, error classification, and progress tracking
 - **Buffer & State Management**: Auto-correction, buffer clearing, calibration, and more
@@ -70,10 +74,17 @@ import 'package:zebrautil/zebrautil.dart';
 final manager = ZebraPrinterManager();
 await manager.initialize();
 
-// Discover printers
-final discoveryStream = manager.discovery.discoverPrintersStream();
+// Discover printers with real-time updates
+final discoveryStream = manager.discovery.discoverPrintersStream(
+  timeout: Duration(seconds: 10),
+  includeWifi: true,
+  includeBluetooth: true,
+);
+
+// Printers stream as they're discovered
 discoveryStream.listen((devices) {
   print('Discovered: ${devices.length} printers');
+  // First printer typically appears in < 1 second
 });
 
 // Connect to a printer

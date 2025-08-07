@@ -31,22 +31,6 @@
     return [NetworkDiscoverer multicastWithHops:hops andWaitForResponsesTimeout:timeout error:error];
 }
 
-// Helper to convert discovered printers to dictionary array for marshalling
-+ (NSArray *)convertDiscoveredPrintersToDict:(NSArray *)printers {
-    NSMutableArray *result = [NSMutableArray array];
-    for (id printer in printers) {
-        if ([printer isKindOfClass:[DiscoveredPrinterNetwork class]]) {
-            DiscoveredPrinterNetwork *netPrinter = (DiscoveredPrinterNetwork *)printer;
-            NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-            [dict setObject:netPrinter.address forKey:@"address"];
-            [dict setObject:@(netPrinter.port) forKey:@"port"];
-            if (netPrinter.dnsName) [dict setObject:netPrinter.dnsName forKey:@"dnsName"];
-            [result addObject:dict];
-        }
-    }
-    return result;
-}
-
 #pragma mark - Connection
 
 + (id)connectToPrinter:(NSString *)address port:(NSInteger)port isBluetoothConnection:(BOOL)isBluetooth {
@@ -221,6 +205,44 @@
 + (NSString *)getPrintMode:(id)connection {
     if (!connection) return nil;
     return [SGD GET:@"print.tone" withPrinterConnection:connection error:nil];
+}
+
++ (NSDictionary *)getDetailedPrinterStatus:(id)connection {
+    if (!connection) return nil;
+    
+    @try {
+        NSMutableDictionary *detailedStatus = [NSMutableDictionary dictionary];
+        
+        // Get basic printer status
+        id printerStatus = [self getPrinterStatus:connection];
+        if (printerStatus) {
+            detailedStatus[@"basicStatus"] = printerStatus;
+        }
+        
+        // Get additional status information
+        NSString *alerts = [self getAlerts:connection];
+        if (alerts) {
+            detailedStatus[@"alerts"] = alerts;
+        }
+        
+        NSString *mediaType = [self getMediaType:connection];
+        if (mediaType) {
+            detailedStatus[@"mediaType"] = mediaType;
+        }
+        
+        NSString *printMode = [self getPrintMode:connection];
+        if (printMode) {
+            detailedStatus[@"printMode"] = printMode;
+        }
+        
+        // Add connection status
+        detailedStatus[@"isConnected"] = @([self isConnected:connection]);
+        
+        return detailedStatus;
+    } @catch (NSException *exception) {
+        NSLog(@"Failed to get detailed printer status: %@", exception);
+        return nil;
+    }
 }
 
 @end 

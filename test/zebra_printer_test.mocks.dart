@@ -120,30 +120,139 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i5.Future<_i3.Result<void>> startScanning() => (super.noSuchMethod(
+  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverBTClassic(
+          {int? timeout = 5000}) =>
+      (super.noSuchMethod(
         Invocation.method(
-          #startScanning,
+          #discoverBTClassic,
           [],
+          {#timeout: timeout},
         ),
-        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
           this,
           Invocation.method(
-            #startScanning,
+            #discoverBTClassic,
             [],
+            {#timeout: timeout},
           ),
         )),
-      ) as _i5.Future<_i3.Result<void>>);
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<_i3.Result<void>> stopScanning() => (super.noSuchMethod(
+  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverLocalBroadcast(
+          {int? timeout = 5000}) =>
+      (super.noSuchMethod(
         Invocation.method(
-          #stopScanning,
+          #discoverLocalBroadcast,
+          [],
+          {#timeout: timeout},
+        ),
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #discoverLocalBroadcast,
+            [],
+            {#timeout: timeout},
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverSubnet({
+    String? subnet = '192.168.1',
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverSubnet,
+          [],
+          {
+            #subnet: subnet,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #discoverSubnet,
+            [],
+            {
+              #subnet: subnet,
+              #timeout: timeout,
+            },
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverDirectedBroadcast({
+    String? ipAddress = '192.168.1.255',
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverDirectedBroadcast,
+          [],
+          {
+            #ipAddress: ipAddress,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #discoverDirectedBroadcast,
+            [],
+            {
+              #ipAddress: ipAddress,
+              #timeout: timeout,
+            },
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverMulticast({
+    int? hops = 5,
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverMulticast,
+          [],
+          {
+            #hops: hops,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
+            _FakeResult_1<Map<String, dynamic>>(
+          this,
+          Invocation.method(
+            #discoverMulticast,
+            [],
+            {
+              #hops: hops,
+              #timeout: timeout,
+            },
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
+        Invocation.method(
+          #stopDiscovery,
           [],
         ),
         returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
           this,
           Invocation.method(
-            #stopScanning,
+            #stopDiscovery,
             [],
           ),
         )),

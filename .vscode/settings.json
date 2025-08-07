@@ -2,6 +2,7 @@
     "C_Cpp.errorSquiggles": "disabled",
     "java.configuration.updateBuildConfiguration": "automatic",
     "cSpell.words": [
-        "zebrautil"
+        "zebrautil",
+        "ZSDK"
     ]
 }

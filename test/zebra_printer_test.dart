@@ -32,36 +32,58 @@ void main() {
       });
     });
 
-    group('scanning operations', () {
-      test('startScanning returns success result', () async {
-        when(printer.startScanning()).thenAnswer(
+    group('discovery operations', () {
+      test('discoverBTClassic returns success result', () async {
+        when(printer.discoverBTClassic(timeout: anyNamed('timeout')))
+            .thenAnswer(
+          (_) async => Result.success({'foundCount': 2}),
+        );
+
+        final result = await printer.discoverBTClassic();
+        expect(result.success, isTrue);
+        expect(result.data?['foundCount'], equals(2));
+        verify(printer.discoverBTClassic(timeout: anyNamed('timeout')))
+            .called(1);
+      });
+
+      test('discoverLocalBroadcast returns success result', () async {
+        when(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+            .thenAnswer(
+          (_) async => Result.success({'foundCount': 1}),
+        );
+
+        final result = await printer.discoverLocalBroadcast();
+        expect(result.success, isTrue);
+        expect(result.data?['foundCount'], equals(1));
+        verify(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+            .called(1);
+      });
+
+      test('discoverSubnet returns success result', () async {
+        when(printer.discoverSubnet(
+          subnet: anyNamed('subnet'),
+          timeout: anyNamed('timeout'),
+        )).thenAnswer(
+          (_) async => Result.success({'foundCount': 3}),
+        );
+
+        final result = await printer.discoverSubnet(subnet: '192.168.1');
+        expect(result.success, isTrue);
+        expect(result.data?['foundCount'], equals(3));
+        verify(printer.discoverSubnet(
+          subnet: anyNamed('subnet'),
+          timeout: anyNamed('timeout'),
+        )).called(1);
+      });
+
+      test('stopDiscovery returns success result', () async {
+        when(printer.stopDiscovery()).thenAnswer(
           (_) async => Result.success(null),
         );
 
-        final result = await printer.startScanning();
+        final result = await printer.stopDiscovery();
         expect(result.success, isTrue);
-        verify(printer.startScanning()).called(1);
-      });
-
-      test('startScanning returns error result', () async {
-        when(printer.startScanning()).thenAnswer(
-          (_) async => Result.error('Bluetooth permission denied'),
-        );
-
-        final result = await printer.startScanning();
-        expect(result.success, isFalse);
-        expect(result.error?.message, contains('Bluetooth permission denied'));
-        verify(printer.startScanning()).called(1);
-      });
-
-      test('stopScanning returns success result', () async {
-        when(printer.stopScanning()).thenAnswer(
-          (_) async => Result.success(null),
-        );
-
-        final result = await printer.stopScanning();
-        expect(result.success, isTrue);
-        verify(printer.stopScanning()).called(1);
+        verify(printer.stopDiscovery()).called(1);
       });
     });
 

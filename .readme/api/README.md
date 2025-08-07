@@ -219,22 +219,48 @@ if (result.success) {
 ```
 
 ### Discovery
-```dart
-final service = ZebraPrinterService();
-await service.initialize();
 
-final result = await service.discoverPrinters(
-  timeout: Duration(seconds: 5),
+#### High-Level Discovery API (Recommended)
+```dart
+// Using the global Zebra instance
+await Zebra.ensureGlobalInitialized();
+
+// Stream-based discovery with real-time updates
+final deviceStream = Zebra.global.discovery.discoverPrintersStream(
+  timeout: Duration(seconds: 10),
+  includeWifi: true,
+  includeBluetooth: true,
 );
 
+deviceStream.listen((devices) {
+  print('Found ${devices.length} printers');
+  for (final device in devices) {
+    print('  ${device.name} at ${device.address}');
+  }
+});
+
+// Or one-shot discovery
+final result = await Zebra.global.discovery.discoverPrinters();
 if (result.success) {
   final printers = result.data!;
-  for (final printer in printers) {
-    print('Found: ${printer.name} at ${printer.address}');
-  }
-} else {
-  print('Discovery failed: ${result.error!.message}');
+  print('Found ${printers.length} printers');
 }
+```
+
+#### Low-Level Discovery Primitives (Advanced)
+```dart
+// For fine-grained control over discovery methods
+final printer = await ZebraPrinter.create();
+
+// Individual discovery methods
+final btResult = await printer.discoverBTClassic();
+final localResult = await printer.discoverLocalBroadcast();
+final subnetResult = await printer.discoverSubnet(subnet: '172.20.10'); // iPad hotspot
+final broadcastResult = await printer.discoverDirectedBroadcast();
+final multicastResult = await printer.discoverMulticast(hops: 5);
+
+// Stop all discovery operations
+await printer.stopDiscovery();
 ```
 
 ## Error Handling

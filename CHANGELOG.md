@@ -2,6 +2,115 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.56] - 2024-12-20
+
+### Fixed
+- **Operation Manager Callback Restoration**: Fixed all native operations to use original callback patterns
+  - **Permission**: Now properly uses `onPermissionResult` with `granted` argument
+  - **Discovery**: Uses `onDiscoveryDone` for completion and `onDiscoveryError` for errors
+  - **Connection**: Uses `onConnectComplete` and `onConnectError`
+  - **Disconnect**: Uses `onDisconnectComplete`
+  - **Print**: Uses `onPrintComplete` and `onPrintError`
+  - **Settings**: Uses `onSettingsComplete`, `onSettingsResult`, and `onSettingsError`
+  - **Status**: Uses `onStatusResult` and `onStatusError`
+  - **Connection Status**: Uses `onConnectionStatusResult`
+  - **Locate Value**: Uses `onLocateValueResult`
+  - **Stop Scan**: Uses `onStopScanComplete`
+- **Utility Method Enhancement**: Updated `_operationSuccessResult` and `_operationErrorResult` to support custom callback names
+  - Added `callbackMethod` parameter to specify the exact callback to invoke
+  - Added `resultValue` parameter to explicitly set the return value
+  - Automatically adds `operationId` to arguments if not present
+  - Maintains backward compatibility with existing callback handlers
+
+## [2.0.55] - 2024-12-20
+
+### Changed
+- **Radical Operation Manager Enforcement**: Implemented strict operation manager pattern enforcement
+  - **REQUIRED operationId**: All native method calls now require operationId parameter
+  - **No Fallback Calls**: Removed all fallback `result()` calls when operationId is missing
+  - **Architecture Violation Detection**: Added error logging for missing operationId
+  - **Method Signature Updates**: All method signatures now require non-optional operationId
+  - **Utility Method Renaming**: Renamed `_sendOperationManagerSuccessResult` → `_operationSuccessResult`
+  - **Utility Method Renaming**: Renamed `_sendOperationManagerErrorResult` → `_operationErrorResult`
+  - **Enhanced Error Handling**: Both utility methods now validate operationId presence
+  - **Prevented Hanging**: Eliminated potential for Dart-side hanging due to missing callbacks
+
+### Technical
+- **Architecture Compliance**: Enforces 100% operation manager pattern usage
+- **Error Prevention**: Prevents hanging scenarios where Dart waits for callbacks that never come
+- **Consistent Pattern**: All native operations follow the same completion pattern
+- **Validation**: Runtime validation ensures architectural compliance
+
+## [2.0.54] - 2024-12-20
+
+### Fixed
+- **Complete Operation Manager Refactoring**: Finalized the refactoring of all native operations
+  - Removed deprecated `sendConnectionSuccess` and `sendConnectionError` methods
+  - Removed deprecated `createEnrichedError` method (logic inlined into `_sendOperationManagerErrorResult`)
+  - All operations now exclusively use `_sendOperationManagerSuccessResult` and `_sendOperationManagerErrorResult`
+  - Ensured 100% consistency across all native methods for operation completion and error handling
+  - Cleaned up codebase by removing redundant utility methods
+
+## [2.0.53] - 2024-12-20
+
+### Fixed
+- **Operation Manager Integration**: Refactored all native operations to use proper operation manager utilities
+  - Created `_sendOperationManagerSuccessResult` and `_sendOperationManagerErrorResult` utility methods
+  - All operations now call `completeOperation` and `failOperation` via operation manager instead of direct channel calls
+  - Inlined `createEnrichedError` logic into `_sendOperationManagerErrorResult` for better performance
+  - Updated all discovery, connection, print, settings, and status operations to use the new utility methods
+  - Ensured consistent error handling and operation completion across all native methods
+
+## [2.0.52] - 2024-12-20
+
+### Fixed
+- **Operation Manager Integration**: Fixed discovery methods to properly integrate with ZebraPrinterOperationManager
+  - All discovery methods now extract `operationId` from arguments and use proper completion callbacks
+  - Fixed `stopScan` to properly complete operations via operation manager
+  - Removed dead code (`startNetworkDiscovery` method) and `discoverNetworkPrinters` primitive
+  - Updated cancellation logic to use `Set<DispatchWorkItem>` for proper tracking
+  - Ensured all discovery operations follow the async/await pattern with proper timeout handling
+
+## [2.0.51] - 2024-12-20
+
+### Added
+- **Network Discovery Enhancement**: Implemented multiple concurrent network discovery methods
+  - Added `discoverBTClassic` for MFi Bluetooth discovery on iOS
+  - Added `discoverLocalBroadcast` for local network discovery
+  - Added `discoverSubnet` for subnet-based discovery with iPad hotspot support (172.20.10.*)
+  - Added `discoverDirectedBroadcast` for directed broadcast discovery
+  - Added `discoverMulticast` for multicast discovery
+- **Native Model Architecture**: Introduced type-safe native models
+  - Created `PrinterInfo.swift` for iOS native printer information
+  - Created `NativePrinterInfo.dart` for Dart-side printer information
+  - Improved type safety between native and Dart layers
+- **Discovery Streaming**: Printers now stream immediately as discovered
+  - Native layer streams printers via `printerFound` events
+  - Dart layer handles streaming updates in real-time
+  - Improved user experience with faster printer visibility
+
+### Changed
+- **Full Migration**: Removed deprecated `startScan` and `stopScan` methods
+  - Replaced with individual discovery primitives
+  - All discovery operations now run concurrently
+  - Better control over discovery methods
+- **iOS Implementation**: Enhanced ZebraPrinterInstance.swift
+  - Added cancellation support with DispatchWorkItem
+  - Implemented unified `stopScan` method
+  - Explicit iPad hotspot IP range support (172.20.10.*)
+
+### Fixed
+- **iPad Hotspot Discovery**: Explicitly includes iPad hotspot subnet in discovery
+  - Subnet search includes 172.20.10.*
+  - Directed broadcast includes 172.20.10.255
+  - Resolves issues with printers not found on iPad hotspots
+
+### Technical
+- **Architecture Compliance**: Enforces no direct channel calls outside ZebraPrinter
+- **Concurrent Discovery**: All discovery methods run in parallel for < 2.5s total time
+- **Native Standards**: Created comprehensive native layer standards documentation
+- **Test Updates**: Updated all tests to use new discovery primitives
+
 ## [2.0.50] - 2025-08-06
 
 ### Fixed

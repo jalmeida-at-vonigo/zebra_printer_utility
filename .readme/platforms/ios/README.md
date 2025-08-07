@@ -17,12 +17,18 @@ Documentation for iOS implementation of the Zebra Printer Plugin.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Bluetooth Discovery | ✅ Full | MFi devices only |
-| Network Discovery | ✅ Full | Local network and multicast |
+| Network Discovery | ✅ Enhanced | Multiple concurrent methods, iPad hotspot support |
+| - Local Broadcast | ✅ Full | Standard local network discovery |
+| - Subnet Search | ✅ Full | Includes iPad hotspot (172.20.10.*) |
+| - Directed Broadcast | ✅ Full | For router-blocked environments |
+| - Multicast | ✅ Full | Multi-hop discovery |
 | ZPL Printing | ✅ Full | Complete support |
 | CPCL Printing | ✅ Full | Complete support |
 | Bi-directional Communication | ✅ Full | SGD commands with responses |
 | Background Printing | ✅ Full | With proper configuration |
 | Thread Safety | ✅ Full | All operations thread-safe |
+| Discovery Streaming | ✅ Full | Real-time printer discovery |
+| Discovery Cancellation | ✅ Full | Unified stopScan support |
 
 ## 🔧 Key Components
 

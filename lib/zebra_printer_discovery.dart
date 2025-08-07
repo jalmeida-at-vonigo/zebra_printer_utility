@@ -132,13 +132,13 @@ class ZebraPrinterDiscovery {
 
     // Start discovery
     _isScanning = true;
-    _printer.startScanning();
+    // Discovery will be started by individual methods
     _statusStreamController?.add('Scanning for printers...');
 
     // Set up timeout
     _discoveryTimer?.cancel();
     _discoveryTimer = Timer(timeout, () {
-      _printer.stopScanning();
+      _stopAllDiscovery();
       _isScanning = false;
       _statusStreamController?.add('Discovery timeout reached');
     });
@@ -184,7 +184,7 @@ class ZebraPrinterDiscovery {
         // Stop if criteria met
         if (shouldStop) {
           _discoveryTimer?.cancel();
-          _printer.stopScanning();
+          _stopAllDiscovery();
           _isScanning = false;
         }
       }
@@ -208,7 +208,7 @@ class ZebraPrinterDiscovery {
         // Check if we should stop immediately
         if (stopOnFirstPrinter || (stopAfterCount != null && initialPrinters.length >= stopAfterCount)) {
           _discoveryTimer?.cancel();
-          _printer.stopScanning();
+          _stopAllDiscovery();
           _isScanning = false;
           _controller!.removeListener(onControllerChanged);
           return;
@@ -238,7 +238,7 @@ class ZebraPrinterDiscovery {
     // Clean up
     _controller!.removeListener(onControllerChanged);
     if (_isScanning) {
-      _printer.stopScanning();
+      _stopAllDiscovery();
       _isScanning = false;
     }
   }
@@ -363,7 +363,7 @@ class ZebraPrinterDiscovery {
   Future<void> stopDiscovery() async {
     await _ensureInitialized();
     _discoveryTimer?.cancel();
-    _printer.stopScanning();
+    _printer.stopDiscovery();
     _isScanning = false;
     _statusStreamController?.add('Discovery stopped');
   }
@@ -386,9 +386,9 @@ class ZebraPrinterDiscovery {
         if (pairedPrinters.isEmpty) {
           _statusStreamController
               ?.add('Checking for paired Bluetooth printers...');
-          _printer.startScanning();
+          // Discovery will be started by individual methods
           await Future.delayed(const Duration(seconds: 2));
-          _printer.stopScanning();
+          _stopAllDiscovery();
           pairedPrinters =
               _controller!.printers.where((p) => !p.isWifi).toList();
         }
@@ -433,39 +433,21 @@ class ZebraPrinterDiscovery {
     Duration timeout,
     void Function(ZebraDevice) onPrinterFound,
   ) async {
-    final completer = Completer<void>();
-    final discoveredAddresses = <String>{};
-
     try {
       _isScanning = true;
-      _printer.startScanning();
-
-      // Listen for new printers and call callback immediately
-      void onControllerChanged() {
-        final btPrinters = _controller!.printers.where((p) => !p.isWifi);
-        for (final printer in btPrinters) {
-          if (discoveredAddresses.add(printer.address)) {
-            onPrinterFound(printer);
-          }
-        }
+      
+      // Use BT Classic discovery
+      final result = await _printer.discoverBTClassic(
+        timeout: timeout.inMilliseconds,
+      );
+      
+      if (result.success) {
+        _logger.info(
+            'BT Classic discovery completed: ${result.data?['foundCount'] ?? 0} printers');
+      } else if (result.error != null) {
+        _logger
+            .warning('BT Classic discovery failed: ${result.error?.message}');
       }
-
-      _controller!.addListener(onControllerChanged);
-
-      // Set up timer to stop discovery after timeout
-      final timer = Timer(timeout ~/ 2, () {
-        if (_isScanning) {
-          _printer.stopScanning();
-          _isScanning = false;
-        }
-        _controller!.removeListener(onControllerChanged);
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      });
-
-      await completer.future;
-      timer.cancel();
     } catch (e) {
       _logger.warning('Bluetooth discovery stream failed: $e');
     }
@@ -477,31 +459,68 @@ class ZebraPrinterDiscovery {
     void Function(ZebraDevice) onPrinterFound,
   ) async {
     try {
-      // Use the typed ZebraPrinter method for network discovery
-      final result = await _printer.discoverNetworkPrinters(
-        timeout: timeout,
-        customSubnets: [], // Could be made configurable
+      // Run all network discovery methods concurrently
+      final futures = <Future<void>>[];
+
+      // Local broadcast
+      futures.add(
+        _printer
+            .discoverLocalBroadcast(timeout: timeout.inMilliseconds)
+            .then((result) {
+          if (result.success) {
+            _logger.info(
+                'Local broadcast completed: ${result.data?['foundCount'] ?? 0} printers');
+          }
+        }),
+      );
+      
+      // Subnet search (including iPad hotspot)
+      futures.add(
+        _printer
+            .discoverSubnet(
+          subnet: '192.168.1',
+          timeout: timeout.inMilliseconds,
+        )
+            .then((result) {
+          if (result.success) {
+            _logger.info(
+                'Subnet discovery completed: ${result.data?['foundCount'] ?? 0} printers');
+          }
+        }),
+      );
+      
+      // Directed broadcast
+      futures.add(
+        _printer
+            .discoverDirectedBroadcast(
+          ipAddress: '192.168.1.255',
+          timeout: timeout.inMilliseconds,
+        )
+            .then((result) {
+          if (result.success) {
+            _logger.info(
+                'Directed broadcast completed: ${result.data?['foundCount'] ?? 0} printers');
+          }
+        }),
       );
 
-      if (result.success && result.data != null) {
-        // Process results (deduplication in Dart)
-        final Set<String> uniqueAddresses = {};
-
-        for (var map in result.data!) {
-          final address = map['address'] as String?;
-          if (address != null && uniqueAddresses.add(address)) {
-            final device = ZebraDevice(
-              address: address,
-              name: map['dnsName'] ?? address,
-              isWifi: true,
-              status: 'Found',
-              port: map['port'] as int? ?? 9100,
-              isBluetooth: false,
-            );
-            onPrinterFound(device);
+      // Multicast
+      futures.add(
+        _printer
+            .discoverMulticast(
+          hops: 5,
+          timeout: timeout.inMilliseconds,
+        )
+            .then((result) {
+          if (result.success) {
+            _logger.info(
+                'Multicast completed: ${result.data?['foundCount'] ?? 0} printers');
           }
-        }
-      }
+        }),
+      );
+
+      // Wait for all network discovery methods
+      await Future.wait(futures);
     } catch (e) {
       _logger.warning('Network discovery stream failed: $e');
     }
@@ -558,6 +577,14 @@ class ZebraPrinterDiscovery {
       completer.future,
       Future.delayed(timeout),
     ]);
+  }
+
+  /// Stop all discovery operations
+  void _stopAllDiscovery() {
+    if (_isScanning) {
+      _printer.stopDiscovery();
+      _isScanning = false;
+    }
   }
 
   /// Dispose of resources

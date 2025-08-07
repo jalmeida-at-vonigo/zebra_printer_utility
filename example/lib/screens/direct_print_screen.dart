@@ -53,7 +53,16 @@ class DirectPrinterChannel {
   Future<bool> startDiscovery() async {
     if (_instanceChannel == null) return false;
     try {
-      await _instanceChannel.invokeMethod('startScan');
+      // Start all discovery methods concurrently
+      await Future.wait([
+        _instanceChannel.invokeMethod('discoverBTClassic', {'timeout': 10000}),
+        _instanceChannel
+            .invokeMethod('discoverLocalBroadcast', {'timeout': 10000}),
+        _instanceChannel.invokeMethod(
+            'discoverSubnet', {'subnet': '192.168.1', 'timeout': 10000}),
+        _instanceChannel
+            .invokeMethod('discoverMulticast', {'hops': 5, 'timeout': 10000}),
+      ]);
       return true;
     } catch (e) {
       _logger.error('Discovery error: $e', e);
@@ -111,16 +120,16 @@ class DirectPrinterChannel {
     }
   }
 
-  Future<bool> sendDataWithResponse(String data, {int timeout = 1000}) async {
+  Future<bool> sendFlushCommand(String data) async {
     if (_instanceChannel == null) return false;
     try {
-      await _instanceChannel.invokeMethod('sendDataWithResponse', {
-        'data': data,
-        'timeout': timeout
-      });
-      return true;
+      final result = await _instanceChannel.invokeMethod<bool>(
+        'setSettings',
+        {'SettingCommand': data},
+      );
+      return result == true;
     } catch (e) {
-      _logger.error('Send data error: $e', e);
+      _logger.error('Flush command error: $e', e);
       return false;
     }
   }
@@ -381,7 +390,7 @@ PRINT''';
         // CPCL buffer flush
         if (_format == PrintFormat.cpcl) {
           _addLog('Flushing CPCL buffer...', 'info');
-          await _printerChannel!.sendDataWithResponse('\x0C', timeout: 1000);
+          await _printerChannel!.sendFlushCommand('\x0C');
           await Future.delayed(const Duration(milliseconds: 100));
         }
 
