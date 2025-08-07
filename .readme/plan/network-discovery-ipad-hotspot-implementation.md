@@ -1,7 +1,5 @@
 # Network Discovery iPad Hotspot Implementation
 
-_Last updated: 2024-12-20_
-
 ## Overview
 
 This document outlines the completed implementation of enhanced network discovery for Zebra printers, specifically addressing issues with iPad hotspot networks and improving overall discovery performance.

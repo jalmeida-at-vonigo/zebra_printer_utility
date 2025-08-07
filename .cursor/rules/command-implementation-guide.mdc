@@ -5,8 +5,6 @@ alwaysApply: false
 
 # Command Implementation Guide
 
-_Last updated: 2025-08-06_
-
 This guide provides comprehensive standards and best practices for implementing commands in the Zebra Printer Utility.
 
 ## 1. File Organization Rules
@@ -567,7 +565,84 @@ class GetMediaStatusCommand extends BaseCommand<String> {
 // Command exists but no factory method in CommandFactory
 ```
 
-## 13. Implementation Checklist
+## 13. Common Patterns for New Operations
+
+### Error Handling
+- Always use `ZebraErrorBridge.executeAndHandle` for consistent error handling
+- Native errors should include context information
+- Use appropriate `OperationType` for proper error classification
+
+### Timeouts
+- Add buffer to timeout: `Duration(milliseconds: requestTimeout + 1000)`
+- Native operations should respect the timeout
+
+### Logging
+- Log operation start: `_logger.info('Starting operation...')`
+- Log success: `_logger.info('Operation completed successfully')`
+- Log errors: `_logger.error('Operation failed: $error')`
+
+### Dart Method Implementation Pattern
+```dart
+Future<Result<YourReturnType>> yourNewMethod(YourParameters params) async {
+  _logger.info('Starting yourNewMethod with params: $params');
+  
+  return await ZebraErrorBridge.executeAndHandle<YourReturnType>(
+    operation: () async {
+      final result = await _operationManager.execute<YourReturnType>(
+        method: 'yourNewMethod',
+        arguments: {'param1': params.value1, 'param2': params.value2},
+        timeout: const Duration(seconds: 10),
+      );
+      
+      if (result.success && result.data != null) {
+        _logger.info('yourNewMethod completed successfully');
+        return result.data!;
+      } else {
+        throw Exception(result.error?.message ?? 'Operation failed');
+      }
+    },
+    operationType: OperationType.general,  // or .connection, .print, etc.
+  );
+}
+```
+
+### Streaming Operation Pattern
+```dart
+Future<Result<List<YourDataType>>> yourStreamingMethod({
+  required YourParams params,
+}) async {
+  // Generate unique operation ID
+  final operationId = 'yourOp_${DateTime.now().millisecondsSinceEpoch}';
+  _currentYourOperationId = operationId;
+  _yourResults[operationId] = [];
+
+  try {
+    return await ZebraErrorBridge.executeAndHandle<List<YourDataType>>(
+      operation: () async {
+        final result = await _operationManager.execute<Map<String, dynamic>>(
+          method: 'yourStreamingMethod',
+          arguments: {'param': params.value},
+          timeout: Duration(seconds: params.timeout),
+        );
+
+        if (result.success) {
+          final collectedData = _yourResults[operationId] ?? [];
+          return collectedData;
+        } else {
+          throw Exception(result.error?.message ?? 'Operation failed');
+        }
+      },
+      operationType: OperationType.general,
+    );
+  } finally {
+    // Cleanup
+    _currentYourOperationId = null;
+    _yourResults.remove(operationId);
+  }
+}
+```
+
+## 14. Implementation Checklist
 
 - [ ] One command per file
 - [ ] File name matches class name (snake_case)
@@ -584,8 +659,16 @@ class GetMediaStatusCommand extends BaseCommand<String> {
 - [ ] Unit tests created
 - [ ] Model parsing tested if applicable
 - [ ] Documentation comments added
+- [ ] Native implementation with proper callbacks
+- [ ] Callback handlers in `zebra_printer_operation_callback_handler.dart`
+- [ ] Dart method in `zebra_printer.dart`
+- [ ] Error handling with `ZebraErrorBridge`
+- [ ] Appropriate timeouts
+- [ ] Logging for debugging
+- [ ] Integration tests
+- [ ] Manual testing on real device
 
-## 14. Quick Reference
+## 15. Quick Reference
 
 ### Command Types and Their Base Classes
 | Command Type | Base Class | Return Type | Example |
@@ -631,5 +714,7 @@ class GetMediaStatusCommand extends BaseCommand<String> {
 
 **See also:**
 - [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)
-- [ZebraErrorBridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
-- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Result and Error-Handling Architecture](mdc:.cursor/rules/result-and-error-handling-architecture.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)
+- [Native Layer Standards](mdc:.cursor/rules/native/native-layer-standards.mdc)
+- [Test Standards](mdc:.cursor/rules/test-standards.mdc)

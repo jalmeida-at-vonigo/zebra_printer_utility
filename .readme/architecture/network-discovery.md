@@ -1,7 +1,5 @@
 # Network Discovery Architecture
 
-_Last updated: 2024-12-20_
-
 ## Overview
 
 The Zebra printer plugin implements a comprehensive network discovery system that uses multiple concurrent discovery methods to ensure printers are found across various network configurations, including iPad hotspots.

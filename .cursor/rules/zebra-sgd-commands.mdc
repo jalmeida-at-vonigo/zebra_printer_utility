@@ -4,8 +4,6 @@ globs: lib/zebra_sgd_commands.dart
 
 # ZebraSGDCommands - Utility Methods Only
 
-_Last updated: 2025-08-06_
-
 ## Rule: ZebraSGDCommands Contains ONLY Utility Methods
 
 The [ZebraSGDCommands](mdc:lib/zebra_sgd_commands.dart) class **MUST** contain ONLY utility methods for data detection and parsing. It **MUST NOT** contain any command string generation methods.
@@ -139,8 +137,8 @@ class ZebraSGDCommands {
 ---
 
 **See also:**
-- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)
 - [ParserUtil](mdc:lib/internal/parser_util.dart) - For additional parsing utilities
 - [Command Usage Guide](mdc:.cursor/rules/command-usage-guide.mdc)
 - [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
-- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)

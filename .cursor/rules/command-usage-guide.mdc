@@ -5,8 +5,6 @@ alwaysApply: false
 
 # Command Usage Guide
 
-_Last updated: 2025-08-06_
-
 This guide consolidates all rules and standards for using commands throughout the Zebra Printer Utility codebase.
 
 ## 1. MANDATORY: Use CommandFactory for ALL Command Creation
@@ -422,4 +420,4 @@ final results = await Future.wait([
 - [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
 - [CommunicationPolicy](mdc:lib/internal/communication_policy.dart)
 - [ZebraSGDCommands Rule](mdc:.cursor/rules/zebra-sgd-commands.mdc)
-- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)

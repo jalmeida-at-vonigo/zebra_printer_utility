@@ -6,17 +6,40 @@ globs: lib/**/*.dart,test/**/*.dart
 - [Error Handling Guide](mdc:.readme/guides/error-handling.md)
 - [Development Docs](mdc:.readme/development/README.md)
 - [README.md](mdc:README.md)
-- [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
 
-# RESULT-BASED ARCHITECTURE & ERROR CODE CENTRALIZATION
+# Result and Error-Handling Architecture
 
 ## Overview
-The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. **ALL error and success codes MUST be defined in [result.dart](mdc:lib/models/result.dart) and referenced using the centralized constants.**
+The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. **ALL error and success codes MUST be defined in [result.dart](mdc:lib/models/result.dart) and referenced using the centralized constants.** This document defines ZebraErrorBridge usage, thread safety standards, and edge-case error-handling guidance.
 
 ## Core Principles
 **NO hardcoded error or success strings should exist anywhere in the codebase outside of [result.dart](mdc:lib/models/result.dart).**
 
 **ALL ZSDK operation failures MUST use [ZebraErrorBridge](mdc:lib/internal/zebra_error_bridge.dart) instead of generic Result.error().**
+
+### Zero Exception Tolerance (Library Code)
+- Library functions must not throw. All public API and internal operations return `Result<T>` or stream events.
+- Replace any `throw` with `Result.errorCode(...)` or bridge calls.
+- Use `ZebraErrorBridge` for ZSDK/native errors; use `ErrorCodes` directly for pure Dart validation errors.
+
+✅ CORRECT
+```dart
+Future<Result<String>> doOperation() async {
+  try {
+    final value = await someOp();
+    return Result.success(value);
+  } catch (e, stack) {
+    return ZebraErrorBridge.fromError<String>(e, stackTrace: stack);
+  }
+}
+```
+
+❌ WRONG
+```dart
+Future<String> doOperation() async {
+  throw Exception('Invalid state');
+}
+```
 
 ## Core Components
 
@@ -41,10 +64,86 @@ The plugin uses a comprehensive Result-based architecture for consistent error a
   - **Zebra-specific error codes** for proper ZSDK error mapping
 
 ### ZebraErrorBridge Integration
-- **Purpose**: Bridge pattern for converting ZSDK errors to Result objects
+- **Purpose**: Convert ZSDK/native failures into structured `Result<T>` using centralized `ErrorCodes` with rich context
 - **Location**: [lib/internal/zebra_error_bridge.dart](mdc:lib/internal/zebra_error_bridge.dart)
-- **Usage**: ALL ZSDK operation failures must use this bridge instead of generic Result.error()
-- **Benefits**: Proper error classification, rich context, no false positives
+- **Mandatory Usage**: All failures from ZSDK/native operations MUST go through the bridge (never `Result.error` directly)
+- **Benefits**: Correct error mapping, consistent context, no false positives
+
+#### Usage Patterns
+```dart
+// Command operations
+catch (e) {
+  return ZebraErrorBridge.fromCommandError<String?>(
+    e,
+    command: 'getSetting($setting)',
+    stackTrace: StackTrace.current,
+  );
+}
+
+// Connection operations
+catch (e) {
+  return ZebraErrorBridge.fromConnectionError<bool>(
+    e,
+    deviceAddress: address,
+    stackTrace: StackTrace.current,
+  );
+}
+
+// Print operations
+catch (e) {
+  return ZebraErrorBridge.fromPrintError<void>(
+    e,
+    printData: data,
+    stackTrace: StackTrace.current,
+  );
+}
+
+// Status operations
+catch (e) {
+  return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
+    e,
+    isDetailed: true,
+    stackTrace: StackTrace.current,
+  );
+}
+```
+
+❌ WRONG
+```dart
+catch (e) { return Result.error('ZSDK failed: $e'); }
+```
+
+#### Bridge Methods
+- `fromError<T>()`, `fromConnectionError<T>()`, `fromPrintError<T>()`, `fromStatusError<T>()`, `fromDiscoveryError<T>()`, `fromCommandError<T>()`
+
+#### Error Context Enrichment
+Bridge returns:
+```dart
+return Result.errorCode(
+  errorCode,                         // mapped ErrorCode
+  formatArgs: [arg1, arg2],          // context values (no full messages)
+  errorNumber: nativeCode,           // native error number when available
+  nativeError: originalError,        // preserved native error
+  dartStackTrace: stackTrace,
+);
+```
+
+#### ZSDK Error Mapping
+- Maps known Link-OS errors (e.g., write/read failures, unknown language, malformed discovery address) to internal `ErrorCodes`
+- Provides safe fallbacks for timeouts, connection, permission patterns
+
+#### Implementation Requirements
+- Command classes and any direct channel/native invocations must use the bridge in `catch`
+- Operation manager must wrap timeouts and unexpected failures with bridge methods
+
+#### Migration Patterns
+```dart
+// OLD
+catch (e) { return Result.error('Operation failed: $e'); }
+
+// NEW
+catch (e) { return ZebraErrorBridge.fromError<T>(e, stackTrace: StackTrace.current); }
+```
 
 ### ErrorInfo & SuccessInfo Classes
 - **Purpose**: Detailed information about errors and successes
@@ -216,6 +315,119 @@ if (result.success) {
 }
 ```
 
+## Error Handling Architecture (Edge Cases)
+
+### Responsibility Separation
+
+#### Core Library (`/zebra_printer_utility`)
+- Data validation and format detection
+- Connection management and retry logic
+- Printer status monitoring and detection
+- Auto-recovery for recoverable errors
+- Resource management and cleanup
+- Error classification and categorization
+- Detailed error information and recovery hints (for UI consumption)
+
+#### UI Layer (`/mobile`)
+- User-friendly error presentation
+- Recovery guidance and instructions
+- User decision points for non-recoverable errors
+- Progress visualization and status updates
+- Action buttons and user interactions
+- Error categorization for UI styling
+
+### Error Categories and Handling
+
+#### 1) Connection Failures
+- Library: auto-retry with backoff, timeout handling, connection type detection, state monitoring
+- UI: show retry progress, allow cancel, display connection type, guide settings checks
+
+#### 2) Hardware Issues
+- Library: detect head open, out-of-paper, ribbon, paused; detailed status reporting
+- UI: show messages, provide specific recovery instructions, offer retry options
+
+#### 3) Data Issues
+- Library: validate format, size limits, encoding, empty data
+- UI: present validation errors, allow correction, provide format guidance
+
+#### 4) Network/Bluetooth Issues
+- Library: handle timeouts, pairing issues, connection drops, automatic reconnection
+- UI: show network status, guide settings, troubleshooting steps
+
+#### 5) Print Status Changes
+- Library: real-time status monitoring, auto pause/resume, completion detection, events
+- UI: real-time updates, progress indicators, notifications
+
+### Recovery Strategies
+- Auto-Recovery (Library): connection retries (exponential backoff), timeouts with retry, auto-unpause when possible, transient error retry
+- Manual Recovery (UI): hardware guidance, permissions/settings navigation, data correction suggestions, network troubleshooting
+
+### Status Monitoring (Library)
+```dart
+final statusResult = await _printerManager.getDetailedPrinterStatus();
+if (statusResult.success) {
+  final status = statusResult.data;
+  if (status['headOpen'] == true) return ErrorCodes.headOpen;
+  if (status['outOfPaper'] == true) return ErrorCodes.outOfPaper;
+  if (status['paused'] == true) return ErrorCodes.printerPaused;
+  if (status['ribbonError'] == true) return ErrorCodes.ribbonError;
+}
+```
+
+### Resource Management
+```dart
+void _cleanup() {
+  _timeoutTimer?.cancel();
+  _statusCheckTimer?.cancel();
+  _eventController?.close();
+  _eventController = null;
+}
+```
+
+### Testing Requirements
+- Library: test error scenarios, auto-recovery behavior, cleanup, classification
+- UI: test error presentation, interaction flows, recovery guidance, status updates
+
+## Thread Safety and Non-Blocking
+
+### Stream Controllers
+- Use `StreamController<T>.broadcast()` for shared listeners
+- Always close and null the controller during disposal
+- Check controller is not closed before add
+- Single-owner principle per controller
+
+### Timers
+- Cancel timers in dispose/cleanup and set to null
+- Avoid overlapping timers; cancel before creating
+
+### State Management
+- Use synchronization flags (e.g., `_isRunning`) to prevent concurrent operations
+- Cleanup in `finally` blocks; make operations atomic
+
+### Safe Disposal Pattern
+```dart
+void dispose() {
+  _timer?.cancel();
+  _timer = null;
+  _controller?.close();
+  _controller = null;
+}
+```
+
+### UI Non-Blocking Requirements
+- All heavy I/O and native calls are async; never block UI
+- Use streams to report progress; provide cancellation for long-running ops
+
+```dart
+Stream<PrintEvent> smartPrint(String data) async* {
+  yield PrintEvent(type: PrintEventType.started);
+  final result = await _performPrint(data);
+  yield result.success
+    ? PrintEvent(type: PrintEventType.completed)
+    : PrintEvent(type: PrintEventType.failed, error: result.error);
+}
+```
+
 ## Enforcement Rules
 
 ### ✅ REQUIRED
@@ -304,7 +516,7 @@ test('should return correct error code for connection timeout', () {
 - [error-code-centralization.mdc](mdc:.cursor/rules/error-code-centralization.mdc) - Rule for error code centralization
 
 ## Last Updated
-2024-12-19 - Merged result-based-architecture and error-code-centralization rules for unified enforcement
+2025-08-07
 
 globs:
 alwaysApply: false

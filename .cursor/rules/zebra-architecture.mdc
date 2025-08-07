@@ -1,0 +1,121 @@
+---
+alwaysApply: true
+applyTo: ["lib/**/*.dart"]
+---
+
+# Zebra Printer Architecture
+
+## Contents
+- Overview
+- Layers and Dependency Direction
+- Core Components (with references)
+- Operation Types
+- Communication and Command Flow
+- Readiness Architecture
+- Error Handling and Results
+- Native Layer Responsibilities
+- Best Practices and Enforcement
+
+## Overview
+Layered design with strict dependency direction, centralized communication policies, and a command pattern. Public API is static and self-initializing.
+
+## Layers and Dependency Direction
+- Workflow/Orchestration → State/Primitives → Native Wrapper
+- Allowed: `SmartPrintManager` → `ZebraPrinterManager` → `ZebraPrinter`
+- Forbidden: upward references or circular imports
+
+Mermaid diagram:
+```mermaid
+graph TD
+  UI[UI / Static API (Zebra)] --> SPM[SmartPrintManager]
+  SPM --> ZPM[ZebraPrinterManager]
+  ZPM --> ZP[ZebraPrinter]
+  ZP --> Native[ZSDK (iOS) / Platform]
+```
+
+## Core Components (with references)
+- Zebra (static API): Single entry point; auto-initialization; exposes discovery, connection, print, status
+  - See: `lib/zebra.dart`
+- SmartPrintManager: Orchestrates workflows (retries, events, progress, error handling)
+  - See: `lib/smart_print_manager.dart`
+- ZebraPrinterManager: Manages printer instances, connection state, primitive ops
+  - See: `lib/zebra_printer_manager.dart`
+- ZebraPrinter: Typed bridge to native layer; no workflow logic
+  - See: `lib/zebra_printer.dart` and Native standards
+- CommunicationPolicy: Connection assurance, retries, timeouts
+  - See rule: communication policy (what to retry, when, and how)
+  - File: `lib/internal/communication_policy.dart`
+- Command Pattern: CommandFactory + BaseCommand + specific commands
+  - See rules: command implementation/usage
+  - Files: `lib/internal/commands/`
+- Result Architecture: Central error/success codes and bridge
+  - See rule: result and error-handling architecture
+  - Files: `lib/models/result.dart`, `lib/internal/zebra_error_bridge.dart`
+
+## Operation Types
+- Simple: Single request/response (connect, print, getSetting)
+- Streaming: Multiple events then complete (discovery, evented workflows)
+
+Mermaid diagram:
+```mermaid
+sequenceDiagram
+  participant Caller
+  participant Zebra
+  participant Policy as CommunicationPolicy
+  participant Cmd as Command
+  participant ZP as ZebraPrinter
+  participant Native
+  Caller->>Zebra: method(...)
+  Zebra->>Policy: executeWithAssurance(fn)
+  Policy->>Cmd: create/execute
+  Cmd->>ZP: send/receive
+  ZP->>Native: method channel / ZSDK
+  Native-->>ZP: response/events
+  ZP-->>Cmd: data
+  Cmd-->>Policy: Result<T>
+  Policy-->>Zebra: Result<T>
+  Zebra-->>Caller: Result<T> / Stream<Event>
+```
+
+## Communication and Command Flow
+- CommunicationPolicy wraps all hardware communication with retries and timeouts
+- Commands are created via CommandFactory and executed through the policy
+- Streaming operations forward events before completion
+- Reference rules:
+  - Communication policy (how assurance works)
+  - Command implementation/usage (how to add and execute commands)
+
+## Readiness Architecture
+- PrinterReadiness lazily reads and caches per-property status; single hardware read per property
+- PrinterReadinessManager uses cached values to apply fixes; does not re-read post-fix
+- Options drive which properties are read and which fixes may run
+- Reference rule: readiness architecture in `lib/models/printer_readiness.dart` and `lib/zebra_printer_readiness_manager.dart`
+
+## Error Handling and Results
+- All operations return `Result<T>`; no throws from library code
+- ZebraErrorBridge maps ZSDK/native errors to centralized `ErrorCodes`
+- Reference rule: result and error-handling architecture
+
+## Native Layer Responsibilities
+- Native is a thin bridge; no workflow or business logic
+- iOS uses `ZSDKWrapper` with Swift binder in `ZebraPrinterInstance`
+- Reference rule: native layer standards; iOS integration guide
+
+## Best Practices
+- Use static API for simplicity; managers for workflows
+- Respect dependency direction; keep layers pure
+- Prefer commands for hardware ops; never mix utility parsing with command strings
+- Cache and reuse readiness values; reset only when justified
+
+## Enforcement
+- Violations of dependency direction and layering are not allowed
+- Follow command, communication policy, and result/bridge rules
+- Keep docs and code synchronized; update rules with changes
+
+## See also
+- Command Implementation Guide: what a command is and how to implement it
+- Command Usage Guide: when and how to use commands
+- Result and Error-Handling Architecture: centralized codes and bridge usage
+- Native Layer Standards: thin bridge responsibilities and iOS specifics
+- Event System: stream/event patterns in workflows
+

@@ -144,5 +144,4 @@ CommunicationPolicy.resetPolicyDepth(); // For testing only
 - Monitor policy statistics during integration tests
 
 **See also:**
-- [Zebra Error Bridge](mdc:.cursor/rules/zebra-error-bridge.mdc)
-- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
+- [Result and Error-Handling Architecture](mdc:.cursor/rules/result-and-error-handling-architecture.mdc)

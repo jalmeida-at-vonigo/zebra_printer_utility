@@ -6,11 +6,215 @@ globs: lib/**/*.dart,ios/**/*.swift,ios/**/*.m,ios/**/*.h,android/**/*.java,andr
 
 # Native Layer Standards
 
-_Last updated: 2024-12-20_
-
 ## Overview
 
 This document defines the standards for implementing native layer communication in the Zebra Printer Utility. It ensures consistency, type safety, and maintainability across iOS and Android platforms.
+
+## Core Architecture Principles
+
+### 1. Native Layer Responsibility
+The native layer (iOS and Android) should be a **thin wrapper** around the platform-specific SDKs (ZSDK for Zebra). All platform-independent business logic must reside in the Dart layer.
+
+### 2. ZSDK Prioritization Rule
+- **ZSDK First**: Always prioritize existing ZSDK APIs and replace any Dart logic that is already supported by ZSDK.
+- If a feature or operation is supported by ZSDK, implement it using ZSDK calls in the native wrapper.
+- Only fall back to pure Dart implementations if the functionality is not supported by ZSDK.
+
+### 3. Layer Clarification
+- **ZSDKWrapper.m**: Must be a thin layer providing direct pass-through to ZSDK methods. No business logic, parsing, or decisions.
+- **ZebraPrinterInstance.swift**: Acts as a binding between the Dart MethodChannel and ZSDKWrapper.m. Handles channel communication and basic error enrichment, but no complex logic.
+- **ZebraPrinter.dart**: Must be the Dart-side wrapper for all channel native calls. All MethodChannel invocations should go through ZebraPrinter instances, not separate channel instances.
+- **Dart Layer**: All business logic, including enhancements to ZSDK features, data processing, retries, and workflows.
+
+### 4. ZebraPrinter.dart Typed Method Requirements
+- **Private Channel Access**: The `channel` property in ZebraPrinter must be private (`_channel`), never exposed publicly.
+- **Typed Method API**: All native functionality must be exposed as typed methods on ZebraPrinter with proper return types (e.g., `Result<T>`).
+- **No Direct Channel Invocations**: Business logic classes must use ZebraPrinter typed methods, never invoke `channel.invokeMethod()` directly.
+- **Method Examples**: 
+  - `discoverNetworkPrinters()` → `Result<List<Map<String, dynamic>>>`
+  - `connectToPrinter(String address)` → `Result<void>`
+  - `getPrinterStatus()` → `Result<Map<String, dynamic>>`
+  - `print(String data)` → `Result<PrintOperationTracker>`
+
+### 5. Channel Architecture Rule
+- **Single Channel Entry Point**: All native method calls must go through `ZebraPrinter.channel`, not separate MethodChannel instances.
+- **Private Channel Access**: The `channel` property in ZebraPrinter should be private (`_channel`), not exposed publicly.
+- **Typed Method API**: All native functionality should be exposed as typed methods on ZebraPrinter (e.g., `discoverNetworkPrinters()`, `connectToPrinter()`, etc.), not direct channel invocations.
+- **No Direct Channel Access**: Business logic classes (like ZebraPrinterDiscovery) should use ZebraPrinter typed methods for native communication, never access the channel directly.
+- **Proper Layering**: ZebraPrinter → ZebraPrinterInstance → ZSDKWrapper → ZSDK
+
+## Native Layer MUST Only:
+1. **SDK Calls**: Direct calls to platform SDKs (ZSDK) without modification
+2. **Data Marshalling**: Convert between platform types and Dart types
+3. **Error Enrichment**: Add platform-specific error context for debugging
+4. **Channel Communication**: Handle method channel communication with Dart
+
+## Native Layer MUST NOT:
+1. **Business Logic**: No data analysis, formatting, or decision making
+2. **Delays/Timing**: No sleeps, delays, or timing logic (e.g., CPCL delays)
+3. **Data Formatting**: No formatting for display (e.g., branding, display names)
+4. **Status Analysis**: No interpreting status to generate recommendations
+5. **Retry Logic**: No retry attempts or polling loops
+6. **Command Parsing**: No parsing or modifying command strings
+7. **Language Detection**: No business logic for language/format detection
+
+## Grounding on Link-OS SDK
+- All iOS implementations MUST be grounded on the Link-OS SDK documentation and demos.
+- Do not invent APIs, object structures, or methods; base everything on what's documented in the SDK headers, HTML docs, and demo code.
+- If a feature isn't supported in the SDK, document the limitation and fall back to Dart, but never add unsupported native code.
+
+## Strengthened No-TODO Rule
+- **Zero Tolerance for Incomplete Work**: NEVER leave TODOs, FUTURE IMPL, notes about future enhancements, or any language implying incomplete work (e.g., "to be implemented later", "enhance in future", "stub for now").
+- If something cannot be fully implemented immediately, it must be removed or the task escalated—do not commit partial code.
+- This includes clever phrasings that mean TODO without using the word.
+
+## Adding New Native Operations
+
+### Two Types of Operations
+
+#### 1. Simple Request-Response Operations
+Operations that send a request and receive a single response (e.g., connect, print, getSetting).
+
+#### 2. Streaming Operations
+Operations that receive multiple events before completing (e.g., discovery methods).
+
+### General Implementation Pattern
+
+#### Step 1: Add Native Implementation
+Add your method case in the native layer (platform-specific implementation).
+
+#### Step 2: Add Callback Handler
+In `lib/internal/zebra_printer_operation_callback_handler.dart`, add your callbacks:
+
+```dart
+case 'onYourMethodComplete':
+    manager.completeOperation(operationId, yourResultData);
+    break;
+case 'onYourMethodError':
+    _handleEnrichedError(operationId, call.arguments, 'Your operation failed');
+    break;
+```
+
+#### Step 3: Add Dart Method
+In `lib/zebra_printer.dart`:
+
+```dart
+Future<Result<YourReturnType>> yourNewMethod(YourParameters params) async {
+  return await ZebraErrorBridge.executeAndHandle<YourReturnType>(
+    operation: () async {
+      final result = await _operationManager.execute<YourReturnType>(
+        method: 'yourNewMethod',
+        arguments: {'param1': params.value1, 'param2': params.value2},
+        timeout: const Duration(seconds: 10),
+      );
+      
+      if (result.success && result.data != null) {
+        return result.data!;
+      } else {
+        throw Exception(result.error?.message ?? 'Operation failed');
+      }
+    },
+    operationType: OperationType.general,  // or .connection, .print, etc.
+  );
+}
+```
+
+### Streaming Operations Pattern
+
+#### Step 1: Add Tracking in Dart
+In `lib/zebra_printer.dart`:
+
+```dart
+// Add tracking fields if needed
+final Map<String, List<YourDataType>> _yourResults = {};
+String? _currentYourOperationId;
+
+// Add tracking method
+void _trackYourData(YourDataType data) {
+  if (_currentYourOperationId != null) {
+    _yourResults[_currentYourOperationId!] ??= [];
+    _yourResults[_currentYourOperationId!]!.add(data);
+  }
+}
+```
+
+#### Step 2: Register Event Handler
+In the constructor:
+
+```dart
+_callbackHandler.registerEventHandler('yourStreamEvent', (call) {
+  if (call.arguments is Map<String, dynamic>) {
+    final data = YourDataType.fromNative(call.arguments);
+    _trackYourData(data);
+    // Optionally add to controller or notify listeners
+  }
+});
+```
+
+#### Step 3: Implement the Method
+```dart
+Future<Result<List<YourDataType>>> yourStreamingMethod({
+  required YourParams params,
+}) async {
+  // Generate unique operation ID
+  final operationId = 'yourOp_${DateTime.now().millisecondsSinceEpoch}';
+  _currentYourOperationId = operationId;
+  _yourResults[operationId] = [];
+
+  try {
+    return await ZebraErrorBridge.executeAndHandle<List<YourDataType>>(
+      operation: () async {
+        final result = await _operationManager.execute<Map<String, dynamic>>(
+          method: 'yourStreamingMethod',
+          arguments: {'param': params.value},
+          timeout: Duration(seconds: params.timeout),
+        );
+
+        if (result.success) {
+          final collectedData = _yourResults[operationId] ?? [];
+          return collectedData;
+        } else {
+          throw Exception(result.error?.message ?? 'Operation failed');
+        }
+      },
+      operationType: OperationType.general,
+    );
+  } finally {
+    // Cleanup
+    _currentYourOperationId = null;
+    _yourResults.remove(operationId);
+  }
+}
+```
+
+### Common Implementation Patterns
+
+#### Error Handling
+- Always use `_operationSuccessResult` and `_operationErrorResult` for consistent callback handling
+- Native errors should include context information and appropriate error codes
+- Use descriptive callback method names for debugging
+
+#### Timeouts
+- Native operations should respect the timeout passed from Dart
+- Add buffer to timeout: `Duration(milliseconds: requestTimeout + 1000)`
+- Handle timeout scenarios gracefully
+
+#### Logging
+- Log operation start: `print("Starting operation...")`
+- Log success: `print("Operation completed successfully")`
+- Log errors: `print("Operation failed: \(error)")`
+
+### Checklist for New Native Operations
+
+- [ ] Native implementation with proper callbacks
+- [ ] Callback handlers in `zebra_printer_operation_callback_handler.dart`
+- [ ] Dart method in `zebra_printer.dart`
+- [ ] Error handling with `ZebraErrorBridge`
+- [ ] Appropriate timeouts
+- [ ] Logging for debugging
+- [ ] Unit tests
+- [ ] Integration tests
+- [ ] Documentation in method comments
 
 ## Architecture Principles
 
@@ -280,8 +484,28 @@ _logger.debug('Received native printer: ${data}');
 - Validate data at conversion points
 - Include context in error messages
 
+## Examples of Violations to Fix:
+1. Direct channel access in business logic
+2. Public channel property exposure
+3. Untyped channel invocations
+4. No delays or timing logic
+5. Return raw SDK data without interpretation
+
+## Examples of Correct Implementation:
+1. **✅ CORRECT**: `final result = await printer.discoverNetworkPrinters(timeout: timeout);`
+2. **❌ WRONG**: `final result = await printer.channel.invokeMethod('startNetworkDiscovery', args);`
+3. **✅ CORRECT**: `final status = await printer.getPrinterStatus();`
+4. **❌ WRONG**: `final status = await printer.channel.invokeMethod('getPrinterStatus');`
+
 ## Related Documentation
-- [Zebra Printer Architecture](mdc:.cursor/rules/zebra-printer-architecture.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)
+- [iOS Platform Standards](mdc:.cursor/rules/native/ios/ios-zsdk-integration.mdc)
+- [Android Platform Standards](mdc:.cursor/rules/android/)
+- [Result and Error-Handling Architecture](mdc:.cursor/rules/result-and-error-handling-architecture.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Test Standards](mdc:.cursor/rules/test-standards.mdc)
+## Related Documentation
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)
 - [iOS Platform Standards](mdc:.cursor/rules/ios/)
 - [Android Platform Standards](mdc:.cursor/rules/android/)
-- [Result-Based Architecture](mdc:.cursor/rules/result-based-architecture.mdc)
+- [Result and Error-Handling Architecture](mdc:.cursor/rules/result-and-error-handling-architecture.mdc)

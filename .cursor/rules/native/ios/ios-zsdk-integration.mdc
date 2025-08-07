@@ -1,20 +1,341 @@
 ---
-globs: ios/**/*.swift,ios/**/*.m,ios/**/*.h
+globs: ios/**/*.swift,ios/**/*.m,ios/**/*.h,ios/lib/zsdk/**/*.*
+alwaysApply: false
 ---
-
 # iOS ZSDK Integration and Update Guide
+
+## ⚠️ CRITICAL RULE: ZSDK FOLDER PROTECTION
+
+**NEVER CHANGE ANYTHING IN THE `ios/lib/zsdk/` FOLDER EXCEPT WHEN UPGRADING TO A NEW ZSDK VERSION.**
+
+This folder contains vendor-provided ZSDK framework files that must remain untouched during normal development. Any modifications to these files can break the plugin's functionality and cause build failures.
+
+### What is protected:
+- `ios/lib/zsdk/libZSDK_API.a` - ZSDK static library
+- `ios/lib/zsdk/Headers/` - All ZSDK header files
+- `ios/lib/zsdk/ZSDK_API.xcframework.backup/` - Original xcframework backup
+- `ios/lib/zsdk/_upgrade_backup/` - Upgrade backup directory (git-ignored)
+
+### When changes are allowed:
+- **ONLY** during ZSDK version upgrades following the documented process
+- **ONLY** when replacing files with newer versions from Zebra's official distribution
+- **NEVER** for bug fixes, feature additions, or any other development work
+
+### Consequences of violating this rule:
+- Build failures due to corrupted ZSDK files
+- Incompatibility with Zebra's official SDK
+- Potential legal issues with ZSDK licensing
+- Loss of support from Zebra
+
+## Adding New iOS Native Operations
+
+### iOS Implementation Patterns
+
+#### Step 1: Add Method Case in ZebraPrinterInstance.swift
+In `ios/Classes/ZebraPrinterInstance.swift`, add your method case:
+
+```swift
+case "yourNewMethod":
+    yourNewMethod(args: args, operationId: operationId, result: result)
+```
+
+#### Step 2: Implement the Method
+```swift
+private func yourNewMethod(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
+    // Your implementation using ZSDKWrapper
+    
+    // On success:
+    self._operationSuccessResult(
+        operationId: operationId,
+        result: result,
+        callbackMethod: "onYourMethodComplete",  // Pick a callback name
+        resultValue: yourResult
+    )
+    
+    // On error:
+    self._operationErrorResult(
+        operationId: operationId,
+        result: result,
+        callbackMethod: "onYourMethodError",     // Pick an error callback name
+        code: "ERROR_CODE",
+        message: "Error message"
+    )
+}
+```
+
+#### Step 3: Use ZSDKWrapper for ZSDK Calls
+Always use the Objective-C wrapper for ZSDK operations:
+
+```swift
+// ✅ CORRECT - Use ZSDKWrapper
+let success = ZSDKWrapper.send(commandData, toConnection: connection)
+
+// ❌ WRONG - Direct ZSDK calls
+let success = connection.send(commandData)
+```
+
+#### Step 4: Handle Connection State
+Always check connection state before operations:
+
+```swift
+private func yourNewMethod(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
+    connectionQueue.async { [weak self] in
+        guard let self = self, let connection = self.connection else {
+            self?._operationErrorResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onYourMethodError",
+                code: "CONNECTION_ERROR",
+                message: "Not connected to printer"
+            )
+            return
+        }
+        
+        // Your implementation here
+        let success = ZSDKWrapper.yourOperation(connection, args: args)
+        
+        if success {
+            self._operationSuccessResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onYourMethodComplete",
+                resultValue: true
+            )
+        } else {
+            self._operationErrorResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onYourMethodError",
+                code: "OPERATION_ERROR",
+                message: "Operation failed"
+            )
+        }
+    }
+}
+```
+
+### Streaming Operations for iOS
+
+#### Step 1: Stream Events Before Completion
+```swift
+private func yourStreamingMethod(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
+    connectionQueue.async { [weak self] in
+        guard let self = self, let connection = self.connection else {
+            self?._operationErrorResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onStreamError",
+                code: "CONNECTION_ERROR",
+                message: "Not connected to printer"
+            )
+            return
+        }
+        
+        // Stream individual results
+        DispatchQueue.main.async {
+            self.channel.invokeMethod("yourStreamEvent", arguments: eventData)
+        }
+        
+        // Complete when done
+        self._operationSuccessResult(
+            operationId: operationId,
+            result: result,
+            callbackMethod: "onYourStreamComplete",
+            resultValue: true,
+            arguments: ["totalCount": count]
+        )
+    }
+}
+```
+
+### iOS-Specific Error Handling
+
+#### Use Descriptive Error Codes
+```swift
+// iOS-specific error codes
+let errorCodes = [
+    "CONNECTION_ERROR": "Not connected to printer",
+    "ZSDK_ERROR": "ZSDK operation failed",
+    "TIMEOUT_ERROR": "Operation timed out",
+    "INVALID_ARGS": "Invalid arguments provided",
+    "PRINTER_ERROR": "Printer returned error",
+]
+```
+
+#### Handle ZSDK-Specific Errors
+```swift
+private func handleZSDKError(_ error: Error, operationId: String, result: @escaping FlutterResult) {
+    let errorMessage: String
+    let errorCode: String
+    
+    switch error {
+    case let zsdkError as ZSDKError:
+        errorCode = "ZSDK_ERROR"
+        errorMessage = zsdkError.localizedDescription
+    case let connectionError as ConnectionError:
+        errorCode = "CONNECTION_ERROR"
+        errorMessage = connectionError.localizedDescription
+    default:
+        errorCode = "UNKNOWN_ERROR"
+        errorMessage = error.localizedDescription
+    }
+    
+    self._operationErrorResult(
+        operationId: operationId,
+        result: result,
+        callbackMethod: "onYourMethodError",
+        code: errorCode,
+        message: errorMessage
+    )
+}
+```
+
+### iOS Logging Patterns
+
+#### Use iOS-Specific Logging
+```swift
+// Log operation start
+print("iOS: Starting yourNewMethod with args: \(String(describing: args))")
+
+// Log success
+print("iOS: yourNewMethod completed successfully")
+
+// Log errors
+print("iOS: yourNewMethod failed: \(error.localizedDescription)")
+```
+
+### Example: Adding a "Reset Printer" Operation
+
+#### Complete iOS Implementation
+```swift
+case "resetPrinter":
+    resetPrinter(args: args, operationId: operationId, result: result)
+
+private func resetPrinter(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
+    print("iOS: Starting resetPrinter operation")
+    
+    connectionQueue.async { [weak self] in
+        guard let self = self, let connection = self.connection else {
+            print("iOS: Reset failed - not connected to printer")
+            self?._operationErrorResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onResetError",
+                code: "CONNECTION_ERROR",
+                message: "Not connected to printer"
+            )
+            return
+        }
+        
+        // Send reset command using ZSDKWrapper
+        let resetCommand = "~JR"
+        if let commandData = resetCommand.data(using: .utf8) {
+            let success = ZSDKWrapper.send(commandData, toConnection: connection)
+            
+            if success {
+                print("iOS: Reset completed successfully")
+                self._operationSuccessResult(
+                    operationId: operationId,
+                    result: result,
+                    callbackMethod: "onResetComplete",
+                    resultValue: true
+                )
+            } else {
+                print("iOS: Reset failed - ZSDK operation failed")
+                self._operationErrorResult(
+                    operationId: operationId,
+                    result: result,
+                    callbackMethod: "onResetError",
+                    code: "RESET_ERROR",
+                    message: "Failed to reset printer"
+                )
+            }
+        } else {
+            print("iOS: Reset failed - invalid command data")
+            self._operationErrorResult(
+                operationId: operationId,
+                result: result,
+                callbackMethod: "onResetError",
+                code: "INVALID_ARGS",
+                message: "Invalid reset command"
+            )
+        }
+    }
+}
+```
+
+### iOS-Specific Best Practices
+
+#### Use Connection Queue
+- Always use `connectionQueue.async` for ZSDK operations
+- This ensures thread safety and proper connection state management
+
+#### Memory Management
+- Use `[weak self]` in closures to prevent retain cycles
+- Check for `nil` self before accessing properties
+
+#### Error Context
+- Include iOS-specific context in error messages
+- Use descriptive error codes for debugging
+
+#### ZSDK Integration
+- Always use `ZSDKWrapper` for ZSDK calls
+- Never make direct ZSDK API calls from Swift
+- Follow ZSDK documentation for proper API usage
+
+### iOS Testing Considerations
+
+#### Unit Testing
+- Mock `ZSDKWrapper` for unit tests
+- Test connection state handling
+- Test error scenarios
+
+#### Integration Testing
+- Test on real iOS device
+- Test with actual Zebra printer
+- Verify ZSDK integration
+
+#### Manual Testing
+- Test on different iOS versions
+- Test with various printer models
+- Verify memory management
+
+## Folder Organization
+
+The ZSDK framework files are organized in a clean structure separating them from the plugin implementation:
+
+- **Plugin Code**: `ios/Classes/` - Contains only the plugin's Swift/Objective-C implementation
+- **ZSDK Library**: `ios/lib/zsdk/` - Contains all ZSDK framework files:
+  - `libZSDK_API.a` - The static library
+  - `Headers/` - All ZSDK header files
+  - `ZSDK_API.xcframework.backup/` - Backup of the original xcframework
+  - `_upgrade_backup/` - Temporary backups during upgrades (git-ignored)
+
+This separation ensures:
+1. Clear distinction between plugin code and ZSDK dependencies
+2. Easier ZSDK updates without mixing files
+3. Organized backup of the original xcframework
+4. Temporary upgrade backups are properly isolated and git-ignored
 
 ## Current Project Structure
 ```
 zebra_printer_utility/
 ├── ios/
-│   ├── Classes/                    # All ZSDK headers and Swift/ObjC code
+│   ├── Classes/                    # Plugin Swift/ObjC code (ZSDK headers moved to lib/zsdk)
 │   │   ├── ZSDKWrapper.h/m         # Objective-C wrapper for ZSDK APIs
 │   │   ├── ZebraPrinterInstance.swift  # Swift implementation
 │   │   ├── ZebrautilPlugin.swift   # Main plugin registration
-│   │   └── [All ZSDK headers].h    # Extracted from xcframework
-│   ├── libZSDK_API.a              # Static library (extracted from xcframework)
-│   ├── ZSDK_API.xcframework.backup/  # Original xcframework (backup)
+│   │   └── nativeModel/            # Native model definitions
+│   ├── lib/                       # Library dependencies
+│   │   └── zsdk/                  # ZSDK framework files
+│   │       ├── libZSDK_API.a      # Static library (extracted from xcframework)
+│   │       ├── Headers/           # All ZSDK headers
+│   │       │   ├── ZebraPrinter.h
+│   │       │   ├── ZebraPrinterConnection.h
+│   │       │   ├── NetworkDiscoverer.h
+│   │       │   └── [All other ZSDK headers].h
+│   │       ├── ZSDK_API.xcframework.backup/  # Original xcframework (backup)
+│   │       └── _upgrade_backup/   # Upgrade backups (git-ignored)
 │   └── zebrautil.podspec          # CocoaPods configuration
 └── lib/                           # Dart/Flutter library code
     ├── zebra.dart                 # Main API entry point
@@ -26,15 +347,41 @@ zebra_printer_utility/
 ## Step-by-Step ZSDK Update Process
 
 ### Step 1: Prepare for Update
-1. **Backup current implementation:**
+1. **⚠️ REQUIRED: Explicit ZSDK upgrade request with new version path**
+   - This process should ONLY be initiated after an explicit request to upgrade ZSDK
+   - The request must specify the exact path to the new ZSDK xcframework
+   - Example: "Upgrade ZSDK to version X.X.X using framework at /path/to/new/ZSDK_API.xcframework"
+
+2. **Create upgrade backup directory:**
    ```bash
-   cd ios/Classes
-   cp -r . ../Classes_backup_$(date +%Y%m%d)
-   cd ..
-   cp libZSDK_API.a libZSDK_API_backup_$(date +%Y%m%d).a
+   cd ios/lib/zsdk
+   mkdir -p _upgrade_backup
+   UPGRADE_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+   mkdir -p _upgrade_backup/$UPGRADE_TIMESTAMP
    ```
 
-2. **Download new ZSDK xcframework** from Zebra's official distribution.
+3. **Backup current implementation:**
+   ```bash
+   cd ios/Classes
+   cp -r . ../lib/zsdk/_upgrade_backup/$UPGRADE_TIMESTAMP/Classes
+   cd ../lib/zsdk
+   cp -r . _upgrade_backup/$UPGRADE_TIMESTAMP/zsdk
+   ```
+
+4. **Backup current xcframework:**
+   ```bash
+   cd ios/lib/zsdk
+   cp -r ZSDK_API.xcframework.backup _upgrade_backup/$UPGRADE_TIMESTAMP/ZSDK_API.xcframework.backup
+   ```
+
+5. **Download new ZSDK xcframework** from Zebra's official distribution.
+
+6. **Note:** The original xcframework is kept as backup in `ios/lib/zsdk/ZSDK_API.xcframework.backup/`
+7. **Note:** All upgrade backups are stored in `ios/lib/zsdk/_upgrade_backup/` and are ignored by git
+8. **Note:** Each upgrade creates a timestamped folder (e.g., `20241220_143052/`) containing:
+   - `Classes/` - Backup of plugin implementation
+   - `zsdk/` - Backup of current zsdk folder
+   - `ZSDK_API.xcframework.backup/` - Backup of current xcframework
 
 ### Step 2: Extract Static Library
 1. **Navigate to the new xcframework:**
@@ -44,25 +391,32 @@ zebra_printer_utility/
 
 2. **Copy the static library:**
    ```bash
-   cp ZSDK_API.a /path/to/zebra_printer_utility/ios/libZSDK_API.a
+   cp ZSDK_API.a /path/to/zebra_printer_utility/ios/lib/zsdk/libZSDK_API.a
    ```
 
 3. **Verify the library:**
    ```bash
-   cd /path/to/zebra_printer_utility/ios
+   cd /path/to/zebra_printer_utility/ios/lib/zsdk
    lipo -info libZSDK_API.a
    # Should show: arm64
+   ```
+
+4. **Update the xcframework backup:**
+   ```bash
+   # Replace the current backup with the new xcframework
+   rm -rf ZSDK_API.xcframework.backup
+   cp -r /path/to/new/ZSDK_API.xcframework ZSDK_API.xcframework.backup
    ```
 
 ### Step 3: Extract Headers
 1. **Copy all headers from xcframework:**
    ```bash
-   cp /path/to/new/ZSDK_API.xcframework/ios-arm64/Headers/*.h ios/Classes/
+   cp /path/to/new/ZSDK_API.xcframework/ios-arm64/Headers/*.h ios/lib/zsdk/Headers/
    ```
 
 2. **Verify header extraction:**
    ```bash
-   ls ios/Classes/*.h | wc -l
+   ls ios/lib/zsdk/Headers/*.h | wc -l
    # Should match the count from the new xcframework
    ```
 
@@ -77,7 +431,13 @@ zebra_printer_utility/
 2. **Test wrapper compilation:**
    ```bash
    cd ios/Classes
-   clang -c ZSDKWrapper.m -I. -o /dev/null
+   clang -c ZSDKWrapper.m -I../lib/zsdk/Headers -o /dev/null
+   ```
+
+3. **Verify header imports work correctly:**
+   ```bash
+   # Test that all ZSDK headers can be found
+   clang -c ZSDKWrapper.m -I../lib/zsdk/Headers -I. -o /dev/null
    ```
 
 ### Step 5: Update Podspec (if needed)
@@ -88,10 +448,19 @@ zebra_printer_utility/
    s.libraries = 'z'                            # Update if needed
    ```
 
-2. **Verify static library reference:**
+2. **Update static library and header references:**
    ```ruby
-   s.vendored_libraries = 'libZSDK_API.a'
-   s.preserve_paths = 'libZSDK_API.a'
+   s.vendored_libraries = 'lib/zsdk/libZSDK_API.a'
+   s.preserve_paths = 'lib/zsdk/libZSDK_API.a', 'lib/zsdk/Headers/*.h'
+   s.public_header_files = 'Classes/ZSDKWrapper.h'
+   ```
+
+3. **Update header search paths:**
+   ```ruby
+   s.xcconfig = { 
+     'OTHER_LDFLAGS' => '-framework CoreBluetooth -framework QuartzCore -lz',
+     'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/lib/zsdk/Headers'
+   }
    ```
 
 ### Step 6: Clean and Rebuild
@@ -112,6 +481,15 @@ zebra_printer_utility/
 3. **Build for device:**
    ```bash
    flutter build ios --no-codesign
+   ```
+
+4. **Verify the build includes new ZSDK files:**
+   ```bash
+   # Check that the new static library is being used
+   find . -name "*.a" -exec lipo -info {} \;
+   
+   # Verify header search paths are correct
+   grep -r "HEADER_SEARCH_PATHS" ios/
    ```
 
 ### Step 7: Test Integration
@@ -142,19 +520,33 @@ zebra_printer_utility/
    - [List any breaking changes or new features]
    ```
 
+3. **Document the new xcframework version:**
+   ```bash
+   # Add a note about the new xcframework backup
+   echo "ZSDK Framework updated to version X.X.X on $(date)" >> ios/lib/zsdk/FRAMEWORK_VERSION.txt
+   ```
+
+4. **Verify folder structure integrity:**
+   ```bash
+   # Ensure all expected files are in place
+   ls -la ios/lib/zsdk/
+   ls -la ios/lib/zsdk/Headers/ | wc -l
+   ls -la ios/lib/zsdk/ZSDK_API.xcframework.backup/
+   ```
+
 ## Umbrella Header Policy
 
 - **Umbrella headers (e.g., `zebrautil-umbrella.h`) are NOT used in this project.**
-- **Reason:** The plugin does not bundle ZSDK as a framework, and all required headers are directly available in `ios/Classes/` after extraction from the xcframework.
+- **Reason:** The plugin does not bundle ZSDK as a framework, and all required headers are directly available in `ios/lib/zsdk/Headers/` after extraction from the xcframework.
 - CocoaPods automatically generates a module map for the plugin, and the combination of `s.source_files` and `s.public_header_files` in the podspec is sufficient for Swift/Objective-C bridging.
-- The Objective-C wrapper pattern (with all ZSDK headers present in `ios/Classes/`) ensures that Swift code can access the necessary APIs without a custom umbrella header.
+- The Objective-C wrapper pattern (with all ZSDK headers present in `ios/lib/zsdk/Headers/`) ensures that Swift code can access the necessary APIs without a custom umbrella header.
 - If you ever encounter Swift/Objective-C bridging issues, consider adding an umbrella header as a troubleshooting step, but it is not required for the current architecture.
 
 ## Troubleshooting
 
 ### Build Errors
-- **"Library 'ZSDK_API' not found"**: Verify `libZSDK_API.a` is in `ios/` directory and `s.vendored_libraries` is set correctly.
-- **"Cannot find 'ClassName' in scope"**: Check that all required headers are in `ios/Classes/` and imported in `ZSDKWrapper.m`.
+- **"Library 'ZSDK_API' not found"**: Verify `libZSDK_API.a` is in `ios/lib/zsdk/` directory and `s.vendored_libraries` is set correctly.
+- **"Cannot find 'ClassName' in scope"**: Check that all required headers are in `ios/lib/zsdk/Headers/` and imported correctly in `ZSDKWrapper.m`.
 - **"Undefined symbols"**: Verify the static library architecture matches your build target.
 
 ### Runtime Errors
@@ -165,6 +557,17 @@ zebra_printer_utility/
 
 - Always backup before updating ZSDK
 - Test on a real device after updates
+- Keep the Objective-C wrapper minimal and focused on bridging
+- Document any API changes in the changelog
+- Verify all headers are properly extracted and accessible
+
+---
+
+**See also:**
+- [Native Layer Standards](mdc:.cursor/rules/native/native-layer-standards.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Test Standards](mdc:.cursor/rules/test-standards.mdc)
+
 - Keep the Objective-C wrapper minimal and focused on bridging
 - Document any API changes in the changelog
 - Verify all headers are properly extracted and accessible

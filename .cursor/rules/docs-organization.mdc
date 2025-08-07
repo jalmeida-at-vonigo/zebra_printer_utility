@@ -25,8 +25,7 @@ globs: **/*.md
 - Example maintenance: `.cursor/rules/example-maintenance.mdc`
 - Platform-specific: `.cursor/rules/ios/`, `.cursor/rules/android/`
 - Event system: `.cursor/rules/event-system.mdc`
-- Zebra printer architecture: `.cursor/rules/zebra-printer-architecture.mdc`
-- Each rule must have a "Last updated" section at the top.
+- Zebra architecture: `.cursor/rules/zebra-architecture.mdc`
 - Rules must be consolidated for clarity, or split if a topic grows too large or covers multiple concerns.
 - All rules must be reviewed and updated after any relevant discussion or codebase change.
 
@@ -41,11 +40,9 @@ globs: **/*.md
 
 ## 4. Update Discipline
 - After any significant change, update all relevant documentation and Cursor rules immediately.
-- Add a "Last updated" section to every rule and doc.
 - If a rule is split, both parent and child rules must cross-link.
 - Regularly review and refactor documentation and rules for clarity and completeness.
 
-_Last updated: 2024-06-13_
 description:
 globs:
 alwaysApply: false

@@ -134,6 +134,65 @@ test('async operation completes', () async {
 - Should test complete workflows when possible
 - Should verify component integration
 
+## Testing Your New Operation
+
+### 1. Unit Test: Test the Dart Method Logic
+```dart
+test('yourNewMethod returns correct result', () async {
+  final printer = MockZebraPrinter();
+  final operationManager = MockOperationManager();
+  
+  when(() => operationManager.execute<YourReturnType>(
+    method: 'yourNewMethod',
+    arguments: {'param1': 'value1', 'param2': 'value2'},
+    timeout: anyNamed('timeout'),
+  )).thenAnswer((_) async => Result.success(expectedData));
+  
+  final result = await printer.yourNewMethod(YourParameters(value1: 'value1', value2: 'value2'));
+  
+  expect(result.success, isTrue);
+  expect(result.data, equals(expectedData));
+  verify(() => operationManager.execute<YourReturnType>(
+    method: 'yourNewMethod',
+    arguments: {'param1': 'value1', 'param2': 'value2'},
+    timeout: anyNamed('timeout'),
+  )).called(1);
+});
+```
+
+### 2. Integration Test: Test the Full Flow with Mocked Native Responses
+```dart
+test('yourNewMethod integration flow', () async {
+  final printer = ZebraPrinter('test_instance');
+  final mockCallbackHandler = MockZebraPrinterOperationCallbackHandler();
+  
+  // Mock the callback handler to simulate native responses
+  when(() => mockCallbackHandler.handleCallback(any)).thenAnswer((invocation) {
+    final call = invocation.positionalArguments[0] as MethodCall;
+    
+    switch (call.method) {
+      case 'onYourMethodComplete':
+        // Simulate successful completion
+        return;
+      case 'onYourMethodError':
+        // Simulate error completion
+        return;
+    }
+  });
+  
+  final result = await printer.yourNewMethod(YourParameters(value1: 'test', value2: 'test'));
+  
+  expect(result, isA<Result<YourReturnType>>());
+  // Add specific assertions based on expected behavior
+});
+```
+
+### 3. Manual Test: Test on Real Device with Example App
+- Test on actual Zebra printer hardware
+- Verify operation works with real printer responses
+- Test error scenarios with actual printer states
+- Verify timeout handling with slow operations
+
 ## Common Testing Patterns
 
 ### Testing with CommunicationPolicy
@@ -172,9 +231,124 @@ test('emits correct events', () async {
 });
 ```
 
+### Testing Streaming Operations
+```dart
+test('streaming operation collects data correctly', () async {
+  final printer = MockZebraPrinter();
+  final operationManager = MockOperationManager();
+  
+  // Mock the operation manager to simulate streaming
+  when(() => operationManager.execute<Map<String, dynamic>>(
+    method: 'yourStreamingMethod',
+    arguments: anyNamed('arguments'),
+    timeout: anyNamed('timeout'),
+  )).thenAnswer((_) async {
+    // Simulate streaming by triggering events
+    await Future.delayed(Duration(milliseconds: 100));
+    return Result.success({'totalCount': 2});
+  });
+  
+  final result = await printer.yourStreamingMethod(params: YourParams(value: 'test'));
+  
+  expect(result.success, isTrue);
+  expect(result.data, hasLength(2));
+});
+```
+
+### Testing Error Scenarios
+```dart
+test('handles native errors correctly', () async {
+  final printer = MockZebraPrinter();
+  final operationManager = MockOperationManager();
+  
+  when(() => operationManager.execute<YourReturnType>(
+    method: 'yourNewMethod',
+    arguments: anyNamed('arguments'),
+    timeout: anyNamed('timeout'),
+  )).thenAnswer((_) async => Result.failure(
+    ZebraError(
+      code: 'TEST_ERROR',
+      message: 'Test error message',
+      operationType: OperationType.general,
+    ),
+  ));
+  
+  final result = await printer.yourNewMethod(YourParameters(value1: 'test', value2: 'test'));
+  
+  expect(result.success, isFalse);
+  expect(result.error?.code, equals('TEST_ERROR'));
+  expect(result.error?.message, equals('Test error message'));
+});
+```
+
+### Testing Timeout Scenarios
+```dart
+test('handles timeout correctly', () async {
+  final printer = MockZebraPrinter();
+  final operationManager = MockOperationManager();
+  
+  when(() => operationManager.execute<YourReturnType>(
+    method: 'yourNewMethod',
+    arguments: anyNamed('arguments'),
+    timeout: anyNamed('timeout'),
+  )).thenAnswer((_) async {
+    // Simulate timeout by delaying longer than the timeout
+    await Future.delayed(Duration(seconds: 15));
+    return Result.success(expectedData);
+  });
+  
+  final result = await printer.yourNewMethod(YourParameters(value1: 'test', value2: 'test'));
+  
+  expect(result.success, isFalse);
+  expect(result.error?.code, contains('TIMEOUT'));
+});
+```
+
+## Testing Checklist for New Operations
+
+### Unit Tests
+- [ ] Test successful operation execution
+- [ ] Test error handling scenarios
+- [ ] Test timeout handling
+- [ ] Test parameter validation
+- [ ] Test return type correctness
+- [ ] Test operation manager integration
+- [ ] Test ZebraErrorBridge integration
+
+### Integration Tests
+- [ ] Test complete native-to-Dart flow
+- [ ] Test callback handler integration
+- [ ] Test event streaming (if applicable)
+- [ ] Test cleanup and resource management
+- [ ] Test concurrent operations (if applicable)
+
+### Manual Tests
+- [ ] Test on real Zebra printer hardware
+- [ ] Test with various printer states
+- [ ] Test error scenarios with actual printer
+- [ ] Test timeout scenarios
+- [ ] Test performance under load
+
+### Mock Requirements
+- [ ] Mock ZebraPrinter for unit tests
+- [ ] Mock OperationManager for integration tests
+- [ ] Mock callback handler for streaming tests
+- [ ] Mock native responses for error testing
+- [ ] Mock timeout scenarios
+
 ## Benefits
 - **Reliability**: All code paths are tested
 - **Confidence**: No skipped tests means full coverage
+- **Maintainability**: Mockito generates type-safe mocks
+- **Documentation**: Tests serve as usage examples
+- **Quality**: Bugs are caught before deployment
+
+---
+
+**See also:**
+- [Native Layer Standards](mdc:.cursor/rules/native/native-layer-standards.mdc)
+- [Command Implementation Guide](mdc:.cursor/rules/command-implementation-guide.mdc)
+- [Zebra Architecture](mdc:.cursor/rules/zebra-architecture.mdc)
 - **Maintainability**: Mockito generates type-safe mocks
 - **Documentation**: Tests serve as usage examples
  - **Quality**: Bugs are caught before deployment
