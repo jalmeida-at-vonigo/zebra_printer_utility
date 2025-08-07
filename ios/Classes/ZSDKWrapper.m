@@ -1,15 +1,15 @@
 #import "ZSDKWrapper.h"
-#import "ZebraPrinter.h"
-#import "ZebraPrinterConnection.h"
-#import "ZebraPrinterFactory.h"
-#import "TcpPrinterConnection.h"
-#import "MfiBtPrinterConnection.h"
-#import "NetworkDiscoverer.h"
-#import "DiscoveredPrinterNetwork.h"
+#import "../lib/zsdk/Headers/ZebraPrinter.h"
+#import "../lib/zsdk/Headers/ZebraPrinterConnection.h"
+#import "../lib/zsdk/Headers/ZebraPrinterFactory.h"
+#import "../lib/zsdk/Headers/TcpPrinterConnection.h"
+#import "../lib/zsdk/Headers/MfiBtPrinterConnection.h"
+#import "../lib/zsdk/Headers/NetworkDiscoverer.h"
+#import "../lib/zsdk/Headers/DiscoveredPrinterNetwork.h"
 
-#import "SGD.h"
-#import "PrinterStatus.h"
-#import "PrinterStatusMessages.h"
+#import "../lib/zsdk/Headers/SGD.h"
+#import "../lib/zsdk/Headers/PrinterStatus.h"
+#import "../lib/zsdk/Headers/PrinterStatusMessages.h"
 
 @implementation ZSDKWrapper
 

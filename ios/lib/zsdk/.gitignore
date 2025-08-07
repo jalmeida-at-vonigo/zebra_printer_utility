@@ -1,0 +1,7 @@
+# ZSDK Upgrade Backups
+# This folder contains temporary backups created during ZSDK version upgrades
+# These files should never be committed to version control
+_upgrade_backup/
+
+# Any other temporary files that might be created during upgrades
+*.tmp

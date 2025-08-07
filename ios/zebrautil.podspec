@@ -14,22 +14,23 @@ A new Flutter plugin project.
   s.author           = { 'Your Company' => 'email@example.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
-  s.public_header_files = 'Classes/**/*.h'
+  s.public_header_files = 'Classes/ZSDKWrapper.h'
   s.dependency 'Flutter'
   s.platform = :ios, '12.0'
   s.static_framework = true
   
   # Static library configuration
-  s.vendored_libraries = 'libZSDK_API.a'
-  s.preserve_paths = 'libZSDK_API.a'
+  s.vendored_libraries = 'lib/zsdk/libZSDK_API.a'
+  s.preserve_paths = 'lib/zsdk/libZSDK_API.a', 'lib/zsdk/Headers/*.h'
   
   # Required frameworks
   s.frameworks = 'CoreBluetooth', 'QuartzCore'
   s.libraries = 'z'
   
-  # Linker flags
+  # Linker flags and header search paths
   s.xcconfig = { 
-    'OTHER_LDFLAGS' => '-framework CoreBluetooth -framework QuartzCore -lz'
+    'OTHER_LDFLAGS' => '-framework CoreBluetooth -framework QuartzCore -lz',
+    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/lib/zsdk/Headers'
   }
   
   # Flutter.framework does not contain a i386 slice.
