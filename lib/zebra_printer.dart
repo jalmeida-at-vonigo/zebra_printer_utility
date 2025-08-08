@@ -33,28 +33,7 @@ class ZebraPrinter {
     _callbackHandler =
         ZebraPrinterOperationCallbackHandler(manager: _operationManager);
     
-    // Register stream handlers for all discovery events
-    final discoveryEventHandlers = {
-      MethodChannelConstants.discoverBTClassicEventPrinterFound,
-      MethodChannelConstants.discoverLocalBroadcastEventPrinterFound,
-      MethodChannelConstants.discoverSubnetEventPrinterFound,
-      MethodChannelConstants.discoverDirectedBroadcastEventPrinterFound,
-      MethodChannelConstants.discoverMulticastEventPrinterFound,
-    };
 
-    for (final eventName in discoveryEventHandlers) {
-      _callbackHandler.registerStreamHandler(eventName, (operationId, data) {
-        final printerInfo = NativePrinterInfo.fromNative(data);
-        final device = printerInfo.toZebraDevice();
-
-        // Track discovered printer for the specific operation
-        if (_discoveryResults.containsKey(operationId)) {
-          _discoveryResults[operationId]!.add(device);
-        }
-
-        // Streams subscribe via manager.operationEvents; no direct emission here
-      });
-    }
     _callbackHandler.registerEventHandler(
         MethodChannelConstants.connectionEventStatusChanged, (call) {
       final status = call.arguments?['Status'] ?? '';
@@ -83,7 +62,6 @@ class ZebraPrinter {
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
             operationId = opId;
-            _discoveryResults[opId] = [];
             _discoveryEventSubs[opId] =
                 _operationManager.operationEvents(opId).listen((evt) {
               final method = evt['method'] as String?;
@@ -122,7 +100,6 @@ class ZebraPrinter {
       } finally {
         if (!controller.isClosed) controller.close();
         if (operationId != null) {
-          _discoveryResults.remove(operationId);
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
         isScanning = false;
@@ -149,7 +126,6 @@ class ZebraPrinter {
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
             operationId = opId;
-            _discoveryResults[opId] = [];
             _discoveryEventSubs[opId] =
                 _operationManager.operationEvents(opId).listen((evt) {
               final method = evt['method'] as String?;
@@ -177,7 +153,6 @@ class ZebraPrinter {
       } finally {
         if (!controller.isClosed) controller.close();
         if (operationId != null) {
-          _discoveryResults.remove(operationId);
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
         isScanning = false;
@@ -206,7 +181,6 @@ class ZebraPrinter {
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
             operationId = opId;
-            _discoveryResults[opId] = [];
             _discoveryEventSubs[opId] =
                 _operationManager.operationEvents(opId).listen((evt) {
               final method = evt['method'] as String?;
@@ -233,7 +207,6 @@ class ZebraPrinter {
       } finally {
         if (!controller.isClosed) controller.close();
         if (operationId != null) {
-          _discoveryResults.remove(operationId);
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
         isScanning = false;
@@ -262,7 +235,6 @@ class ZebraPrinter {
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
             operationId = opId;
-            _discoveryResults[opId] = [];
             _discoveryEventSubs[opId] =
                 _operationManager.operationEvents(opId).listen((evt) {
               final method = evt['method'] as String?;
@@ -290,7 +262,6 @@ class ZebraPrinter {
       } finally {
         if (!controller.isClosed) controller.close();
         if (operationId != null) {
-          _discoveryResults.remove(operationId);
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
         isScanning = false;
@@ -317,7 +288,6 @@ class ZebraPrinter {
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
             operationId = opId;
-            _discoveryResults[opId] = [];
             _discoveryEventSubs[opId] =
                 _operationManager.operationEvents(opId).listen((evt) {
               final method = evt['method'] as String?;
@@ -344,7 +314,6 @@ class ZebraPrinter {
       } finally {
         if (!controller.isClosed) controller.close();
         if (operationId != null) {
-          _discoveryResults.remove(operationId);
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
         isScanning = false;
@@ -387,8 +356,7 @@ class ZebraPrinter {
   bool isScanning = false;
   bool shouldSync = false;
 
-  // Simple discovery tracking - maps operationId to discovered printers
-  final Map<String, List<ZebraDevice>> _discoveryResults = {};
+
   // Per-operation discovery event subscriptions
   final Map<String, StreamSubscription<Map<String, dynamic>>>
       _discoveryEventSubs = {};

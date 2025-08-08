@@ -18,11 +18,14 @@ This document consolidates all general project standards,code cleanup guidelines
 - If you find unrelated lint or analysis issues, fix them as part of your change.
 
 ## API Migration and Code Cleanup Rules
-### Zero Tolerance for Stub Code
+### Zero Tolerance for Stub Code and Future Code
 - **NEVER** leave commented-out code with explanatory comments like "These methods no longer exist in the new API".
 - **NEVER** use `skip: 'Method no longer exist in new API'` or similar excuses.
 - **NEVER** leave TODO comments explaining why code was removed or changed.
+- **NEVER** leave unused code "for future use" - if it's not used now, remove it completely.
+- **NEVER** track data that is not exposed or used (like unused tracking maps, unused variables).
 - **ALWAYS** complete the migration properly or remove the code entirely.
+- **ALWAYS** remove unused fields, methods, and variables immediately.
 
 ### Migration Requirements
 - **Complete Migration**: When APIs change, fully migrate all affected code to the new API.

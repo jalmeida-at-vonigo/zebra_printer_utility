@@ -15,9 +15,7 @@ class ZebraPrinterOperationCallbackHandler {
   /// Callbacks for events that don't belong to specific operations
   final Map<String, Function(MethodCall)> eventHandlers = {};
   
-  /// Callbacks for streaming events that belong to specific operations
-  final Map<String, Function(String operationId, Map<String, dynamic> data)>
-      streamHandlers = {};
+
 
   /// Handle a method call from native side
   Future<void> handleMethodCall(MethodCall call) async {
@@ -170,13 +168,7 @@ class ZebraPrinterOperationCallbackHandler {
             'data': call.arguments as Map<String, dynamic>,
           });
         }
-        // Also call any explicit handler if registered
-        final streamHandler = streamHandlers[call.method];
-        if (streamHandler != null) {
-          try {
-            streamHandler(operationId, call.arguments ?? {});
-          } catch (e) {}
-        }
+
         return;
       }
 
@@ -270,14 +262,5 @@ class ZebraPrinterOperationCallbackHandler {
     eventHandlers.remove(method);
   }
   
-  /// Register a stream handler for operation-specific streaming events
-  void registerStreamHandler(String method,
-      Function(String operationId, Map<String, dynamic> data) handler) {
-    streamHandlers[method] = handler;
-  }
 
-  /// Unregister a stream handler
-  void unregisterStreamHandler(String method) {
-    streamHandlers.remove(method);
-  }
 }

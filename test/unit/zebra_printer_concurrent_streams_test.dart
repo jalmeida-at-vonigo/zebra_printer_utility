@@ -1,10 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zebrautil/internal/native_models/method_channel_constants.dart';
-import 'package:zebrautil/zebra_printer.dart';
 import 'package:zebrautil/models/zebra_device.dart';
+import 'package:zebrautil/zebra_printer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

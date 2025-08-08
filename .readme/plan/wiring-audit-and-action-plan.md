@@ -29,7 +29,7 @@ Overall verdict: Architecture will work as designed. A few consistency and polis
   **RESOLVED**: Removed unused channel-based permission method completely.
 
 ### Medium
-- Method name divergence between constants and invocations
+- ~~Method name divergence between constants and invocations~~ **RESOLVED**: All method names now use `MethodChannelConstants` consistently across Dart and Swift.
   - Example: `isPrinterConnected` (Dart + iOS) vs constant `isConnectedMethod = 'isConnected'`.
   - Impact: Not a runtime bug (strings match across layers), but drifts from the “single source of truth” standard and increases maintenance cost.
 
@@ -45,8 +45,9 @@ Overall verdict: Architecture will work as designed. A few consistency and polis
 - Printer connection lost event not used
   - `MethodChannelConstants.connectionEventLost` exists but is not emitted by native. Only `connection_statusChanged` is sent. Consider signaling explicit loss for better UX.
 
-- Discovery result tracking duplication
-  - `ZebraPrinter` both tracks `_discoveryResults[operationId]` and also emits via per-operation streams; the tracked list is not exposed. Not harmful, but can be simplified.
+- ~~Discovery result tracking duplication~~
+  - ~~`ZebraPrinter` both tracks `_discoveryResults[operationId]` and also emits via per-operation streams; the tracked list is not exposed. Not harmful, but can be simplified.~~
+  **RESOLVED**: Removed unused `_discoveryResults` tracking map completely.
 
 - Minor formatting/consistency
   - `print()` returns `Result.errorCode(ErrorCodes.printError, formatArgs: [message])` where template does not use `{0}`; the arg is ignored.
@@ -97,8 +98,9 @@ Overall verdict: Architecture will work as designed. A few consistency and polis
 5) Emit `connection_lost` when appropriate
    - In iOS, when connection state transitions to nil or write/read fails irrecoverably, emit `connection_lost` once. Update Dart handler to mark UI red and reset internal state if needed.
 
-6) Simplify discovery result tracking in `ZebraPrinter`
-   - Remove `_discoveryResults` map unless needed for future aggregation. Rely on per-operation streams only.
+6) ~~Simplify discovery result tracking in `ZebraPrinter`~~
+   - ~~Remove `_discoveryResults` map unless needed for future aggregation. Rely on per-operation streams only.~~
+   **RESOLVED**: Removed unused `_discoveryResults` tracking map and all related assignments/cleanup calls.
 
 7) Minor consistency fixes
    - Remove unused formatArgs in `print()` failure return or switch to a template that uses `{0}`.
