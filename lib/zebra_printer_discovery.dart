@@ -444,6 +444,8 @@ class ZebraPrinterDiscovery {
   Future<void> _discoverBluetoothPrintersStream(
     Duration timeout,
     void Function(ZebraDevice) onPrinterFound,
+      {void Function({String? phase, String? target, String? message})?
+          onWarning}
   ) async {
     try {
       _isScanning = true;
@@ -453,7 +455,11 @@ class ZebraPrinterDiscovery {
           .discoverBTClassic(timeout: timeout.inMilliseconds)
           .listen(
             (device) => onPrinterFound(device),
-            onError: (e) => _logger.warning('BT Classic discovery error: $e'),
+        onError: (e) {
+          _logger.warning('BT Classic discovery error: $e');
+          onWarning?.call(phase: 'btClassic', target: null, message: '$e');
+          _statusStreamController?.add('BT Classic discovery warning: $e');
+        },
       );
       await subscription.asFuture<void>();
       await subscription.cancel();
@@ -481,6 +487,8 @@ class ZebraPrinterDiscovery {
                 timeout: timeout.inMilliseconds, onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Local broadcast discovery error: $e');
+          onWarning?.call(phase: 'localBroadcast', target: null, message: '$e');
+          _statusStreamController?.add('Local broadcast discovery warning: $e');
         });
         await sub.asFuture<void>();
         await sub.cancel();
@@ -495,6 +503,8 @@ class ZebraPrinterDiscovery {
                 onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Subnet discovery error: $e');
+          onWarning?.call(phase: 'subnet', target: null, message: '$e');
+          _statusStreamController?.add('Subnet discovery warning: $e');
         });
         await sub.asFuture<void>();
         await sub.cancel();
@@ -509,6 +519,10 @@ class ZebraPrinterDiscovery {
                 onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Directed broadcast discovery error: $e');
+          onWarning?.call(
+              phase: 'directedBroadcast', target: null, message: '$e');
+          _statusStreamController
+              ?.add('Directed broadcast discovery warning: $e');
         });
         await sub.asFuture<void>();
         await sub.cancel();
@@ -521,6 +535,8 @@ class ZebraPrinterDiscovery {
                 hops: 5, timeout: timeout.inMilliseconds, onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Multicast discovery error: $e');
+          onWarning?.call(phase: 'multicast', target: 'hops=5', message: '$e');
+          _statusStreamController?.add('Multicast discovery warning: $e');
         });
         await sub.asFuture<void>();
         await sub.cancel();
