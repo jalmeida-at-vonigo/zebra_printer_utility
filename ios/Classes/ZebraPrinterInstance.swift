@@ -51,49 +51,49 @@ class ZebraPrinterInstance: NSObject {
         }
 
         switch call.method {
-        case "discoverBTClassic":
+        case MethodChannelConstants.discoverBTClassicMethod:
             discoverBTClassic(args: args, operationId: operationId, result: result)
 
-        case "discoverLocalBroadcast":
+        case MethodChannelConstants.discoverLocalBroadcastMethod:
             discoverLocalBroadcast(args: args, operationId: operationId, result: result)
 
-        case "discoverSubnet":
+        case MethodChannelConstants.discoverSubnetMethod:
             discoverSubnet(args: args, operationId: operationId, result: result)
 
-        case "discoverDirectedBroadcast":
+        case MethodChannelConstants.discoverDirectedBroadcastMethod:
             discoverDirectedBroadcast(args: args, operationId: operationId, result: result)
 
-        case "discoverMulticast":
+        case MethodChannelConstants.discoverMulticastMethod:
             discoverMulticast(args: args, operationId: operationId, result: result)
 
-        case "stopScan":
+        case MethodChannelConstants.stopScanMethod:
             stopScan(operationId: operationId, result: result)
 
-        case "connectToPrinter":
+        case MethodChannelConstants.connectToPrinterMethod:
             connectToPrinter(args: args, operationId: operationId, result: result)
 
-        case "print":
+        case MethodChannelConstants.printMethod:
             printData(args: args, operationId: operationId, result: result)
 
-        case "disconnect":
+        case MethodChannelConstants.disconnectMethod:
             disconnect(operationId: operationId, result: result)
 
-        case "isPrinterConnected":
+        case MethodChannelConstants.isConnectedMethod:
             isPrinterConnected(operationId: operationId, result: result)
 
-        case "setSettings":
+        case MethodChannelConstants.setSettingsMethod:
             setSettings(args: args, operationId: operationId, result: result)
 
-        case "getLocateValue":
+        case MethodChannelConstants.getValueForMethod:
             getLocateValue(args: args, operationId: operationId, result: result)
 
-        case "getSetting":
+        case MethodChannelConstants.getSettingMethod:
             getSetting(args: args, operationId: operationId, result: result)
 
-        case "getPrinterStatus":
+        case MethodChannelConstants.getPrinterStatusMethod:
             getPrinterStatus(operationId: operationId, result: result)
 
-        case "getDetailedPrinterStatus":
+        case MethodChannelConstants.getDetailedPrinterStatusMethod:
             getDetailedPrinterStatus(operationId: operationId, result: result)
 
         default:

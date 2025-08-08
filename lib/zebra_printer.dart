@@ -78,7 +78,7 @@ class ZebraPrinter {
           throw Exception('Bluetooth permission denied');
         }
         await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverBTClassic',
+          method: MethodChannelConstants.discoverBTClassicMethod,
           arguments: {'timeout': timeout},
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
@@ -144,7 +144,7 @@ class ZebraPrinter {
     () async {
       try {
         await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverLocalBroadcast',
+          method: MethodChannelConstants.discoverLocalBroadcastMethod,
           arguments: {'timeout': timeout},
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
@@ -201,7 +201,7 @@ class ZebraPrinter {
     () async {
       try {
         await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverSubnet',
+          method: MethodChannelConstants.discoverSubnetMethod,
           arguments: {'subnet': subnet, 'timeout': timeout},
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
@@ -257,7 +257,7 @@ class ZebraPrinter {
     () async {
       try {
         await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverDirectedBroadcast',
+          method: MethodChannelConstants.discoverDirectedBroadcastMethod,
           arguments: {'ipAddress': ipAddress, 'timeout': timeout},
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
@@ -312,7 +312,7 @@ class ZebraPrinter {
     () async {
       try {
         await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverMulticast',
+          method: MethodChannelConstants.discoverMulticastMethod,
           arguments: {'hops': hops, 'timeout': timeout},
           timeout: Duration(milliseconds: timeout + 1000),
           onOperationStart: (opId) {
@@ -437,7 +437,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<void>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
-          method: 'stopScan',
+          method: MethodChannelConstants.stopScanMethod,
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
@@ -476,7 +476,7 @@ class ZebraPrinter {
 
         controller.selectedAddress = address;
         final result = await _operationManager.execute<bool>(
-          method: 'connectToPrinter',
+          method: MethodChannelConstants.connectToPrinterMethod,
           arguments: {'Address': address},
           timeout: const Duration(seconds: 7),
         );
@@ -514,7 +514,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<void>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
-          method: 'disconnect',
+          method: MethodChannelConstants.disconnectMethod,
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
@@ -554,7 +554,7 @@ class ZebraPrinter {
     final result = await ZebraErrorBridge.executeAndHandle<void>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
-          method: 'print',
+          method: MethodChannelConstants.printMethod,
           arguments: {'Data': data},
           timeout: const Duration(seconds: 30),
         );
@@ -589,7 +589,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
       operation: () async {
         final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'getPrinterStatus',
+          method: MethodChannelConstants.getPrinterStatusMethod,
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
@@ -614,7 +614,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
       operation: () async {
         final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'getDetailedPrinterStatus',
+          method: MethodChannelConstants.getDetailedPrinterStatusMethod,
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
@@ -638,7 +638,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<String?>(
       operation: () async {
         final result = await _operationManager.execute<String>(
-          method: 'getSetting',
+          method: MethodChannelConstants.getSettingMethod,
           arguments: {'setting': setting},
           timeout: const Duration(seconds: 7),
         );
@@ -664,7 +664,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<bool>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
-          method: 'isPrinterConnected',
+          method: MethodChannelConstants.isConnectedMethod,
           arguments: {},
           timeout: const Duration(seconds: 7),
         );
@@ -687,7 +687,7 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandle<String>(
       operation: () async {
         final result = await _operationManager.execute<String>(
-          method: 'getInstance',
+          method: MethodChannelConstants.getInstanceMethod,
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
