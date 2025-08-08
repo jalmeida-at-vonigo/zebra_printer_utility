@@ -120,7 +120,7 @@ class ZebraPrinterInstance: NSObject {
         self._operationSuccessResult(
             operationId: operationId,
             result: result,
-            callbackMethod: "onPermissionResult",
+            callbackMethod: MethodChannelConstants.getBluetoothPermissionStatusCallbackOnResult,
             resultValue: bluetoothAvailable,
             arguments: ["granted": bluetoothAvailable]
         )
@@ -134,7 +134,8 @@ class ZebraPrinterInstance: NSObject {
         let timeout = args?["timeout"] as? Int ?? 5000
         isScanning = true
 
-        let workItem = DispatchWorkItem { [weak self] in
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             var foundCount = 0
 
@@ -144,11 +145,12 @@ class ZebraPrinterInstance: NSObject {
 
             for accessory in connectedAccessories {
                 // Check if cancelled or scanning stopped
-                guard !workItem.isCancelled, self.isScanning else { break }
+                guard let workItem = workItem, !workItem.isCancelled, self.isScanning else { break }
 
                 // Check if this is a Zebra printer
                 if accessory.protocolStrings.contains("com.zebra.rawport") {
-                    if let serialNumber = accessory.serialNumber, !serialNumber.isEmpty {
+                    let serialNumber = accessory.serialNumber ?? ""
+                    if !serialNumber.isEmpty {
                         // Create PrinterInfo object
                         let printerInfo = PrinterInfo(
                             address: serialNumber,
@@ -166,9 +168,11 @@ class ZebraPrinterInstance: NSObject {
 
                         // Stream each printer as it's found
                         if self.isScanning {
-                            DispatchQueue.main.async {
-                                self.channel.invokeMethod("printerFound", arguments: printerInfo.toDictionary())
-                            }
+                            self._operationStreamEvent(
+                                operationId: operationId,
+                                eventMethod: MethodChannelConstants.discoverBTClassicEventPrinterFound,
+                                eventData: printerInfo.toDictionary()
+                            )
                         }
                         foundCount += 1
                     }
@@ -177,15 +181,17 @@ class ZebraPrinterInstance: NSObject {
 
             // Remove work item when done
             DispatchQueue.main.async {
-                self.activeDiscoveryWorkItems.removeAll { $0 === workItem }
+                if let workItem = workItem {
+                    self.activeDiscoveryWorkItems.removeAll { $0 === workItem }
+                }
             }
 
             // Complete operation properly - operationId is required
-            if workItem.isCancelled {
+            if let workItem = workItem, workItem.isCancelled {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryError",
+                    callbackMethod: MethodChannelConstants.discoverBTClassicCallbackOnError,
                     code: "OPERATION_CANCELLED",
                     message: "Operation cancelled",
                     context: ["reason": "Operation cancelled"]
@@ -194,7 +200,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryDone",
+                    callbackMethod: MethodChannelConstants.discoverBTClassicCallbackOnComplete,
                     resultValue: true,
                     arguments: ["foundCount": foundCount]
                 )
@@ -202,49 +208,40 @@ class ZebraPrinterInstance: NSObject {
         }
 
         // Store and execute work item
-        activeDiscoveryWorkItems.append(workItem)
-        discoveryQueue.async(execute: workItem)
+        if let workItem = workItem {
+            activeDiscoveryWorkItems.append(workItem)
+            discoveryQueue.async(execute: workItem)
+        }
     }
 
     private func discoverLocalBroadcast(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
         let timeout = args?["timeout"] as? Int ?? 5000
         isScanning = true
 
-        let workItem = DispatchWorkItem { [weak self] in
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             var foundCount = 0
 
             do {
-                var error: NSError?
-                let printers = ZSDKWrapper.discoverLocalPrintersWithTimeout(timeout, error: &error)
-
-                if let error = error {
-                    self._operationErrorResult(
-                        operationId: operationId,
-                        result: result,
-                        callbackMethod: "onDiscoveryError",
-                        code: "DISCOVERY_ERROR",
-                        message: "Local broadcast discovery failed",
-                        nativeError: error,
-                        context: ["method": "discoverLocalBroadcast"]
-                    )
-                    return
-                }
+                let printers = try ZSDKWrapper.discoverLocalPrinters(withTimeout: timeout)
 
                 let printerInfos = self.convertNetworkPrinters(printers)
                 // Stream each printer as it's found
                 for printerInfo in printerInfos {
                     // Check if cancelled
-                    guard !workItem.isCancelled, self.isScanning else { break }
+                    guard let workItem = workItem, !workItem.isCancelled, self.isScanning else { break }
 
                     // Override discovery method
                     var dict = printerInfo.toDictionary()
                     dict["discoveryMethod"] = "localBroadcast"
 
                     if self.isScanning {
-                        DispatchQueue.main.async {
-                            self.channel.invokeMethod("printerFound", arguments: dict)
-                        }
+                        self._operationStreamEvent(
+                            operationId: operationId,
+                            eventMethod: MethodChannelConstants.discoverLocalBroadcastEventPrinterFound,
+                            eventData: dict
+                        )
                     }
                     foundCount += 1
                 }
@@ -255,11 +252,11 @@ class ZebraPrinterInstance: NSObject {
                 }
 
                 // Complete operation properly - operationId is required
-                if workItem.isCancelled {
+                if let workItem = workItem, workItem.isCancelled {
                     self._operationErrorResult(
                         operationId: operationId,
                         result: result,
-                        callbackMethod: "onDiscoveryError",
+                        callbackMethod: MethodChannelConstants.discoverLocalBroadcastCallbackOnError,
                         code: "OPERATION_CANCELLED",
                         message: "Operation cancelled",
                         context: ["reason": "Operation cancelled"]
@@ -268,7 +265,7 @@ class ZebraPrinterInstance: NSObject {
                     self._operationSuccessResult(
                         operationId: operationId,
                         result: result,
-                        callbackMethod: "onDiscoveryDone",
+                        callbackMethod: MethodChannelConstants.discoverLocalBroadcastCallbackOnComplete,
                         resultValue: true,
                         arguments: ["foundCount": foundCount])
                 }
@@ -277,7 +274,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryError",
+                    callbackMethod: MethodChannelConstants.discoverLocalBroadcastCallbackOnError,
                     code: "DISCOVERY_ERROR",
                     message: "Local broadcast discovery failed",
                     nativeError: error as NSError,
@@ -287,8 +284,10 @@ class ZebraPrinterInstance: NSObject {
         }
 
         // Store and execute work item
-        activeDiscoveryWorkItems.append(workItem)
-        discoveryQueue.async(execute: workItem)
+        if let workItem = workItem {
+            activeDiscoveryWorkItems.append(workItem)
+            discoveryQueue.async(execute: workItem)
+        }
     }
 
     private func discoverSubnet(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
@@ -296,7 +295,8 @@ class ZebraPrinterInstance: NSObject {
         let subnet = args?["subnet"] as? String ?? "192.168.1"
         isScanning = true
 
-        let workItem = DispatchWorkItem { [weak self] in
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             var foundCount = 0
 
@@ -308,12 +308,10 @@ class ZebraPrinterInstance: NSObject {
 
             for range in ranges {
                 // Check if cancelled
-                guard !workItem.isCancelled, self.isScanning else { break }
+                guard let workItem = workItem, !workItem.isCancelled, self.isScanning else { break }
 
-                var error: NSError?
-                let printers = ZSDKWrapper.discoverSubnetPrintersWithRange(range, timeout: timeout, error: &error)
-
-                if error == nil {
+                do {
+                    let printers = try ZSDKWrapper.discoverSubnetPrinters(withRange: range, timeout: timeout)
                     let printerInfos = self.convertNetworkPrinters(printers)
                     for printerInfo in printerInfos {
                         // Check if cancelled
@@ -324,12 +322,16 @@ class ZebraPrinterInstance: NSObject {
                         dict["discoveryMethod"] = "subnet"
 
                         if self.isScanning {
-                            DispatchQueue.main.async {
-                                self.channel.invokeMethod("printerFound", arguments: dict)
-                            }
+                            self._operationStreamEvent(
+                                operationId: operationId,
+                                eventMethod: MethodChannelConstants.discoverSubnetEventPrinterFound,
+                                eventData: dict
+                            )
                         }
                         foundCount += 1
                     }
+                } catch {
+                    // Ignore errors for individual ranges and continue
                 }
             }
 
@@ -339,11 +341,11 @@ class ZebraPrinterInstance: NSObject {
             }
 
             // Complete operation properly - operationId is required
-            if workItem.isCancelled {
+            if let workItem = workItem, workItem.isCancelled {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryError",
+                    callbackMethod: MethodChannelConstants.discoverSubnetCallbackOnError,
                     code: "OPERATION_CANCELLED",
                     message: "Operation cancelled",
                     context: ["reason": "Operation cancelled"]
@@ -352,7 +354,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryDone",
+                    callbackMethod: MethodChannelConstants.discoverSubnetCallbackOnComplete,
                     resultValue: true,
                     arguments: ["foundCount": foundCount]
                 )
@@ -360,8 +362,10 @@ class ZebraPrinterInstance: NSObject {
         }
 
         // Store and execute work item
-        activeDiscoveryWorkItems.append(workItem)
-        discoveryQueue.async(execute: workItem)
+        if let workItem = workItem {
+            activeDiscoveryWorkItems.append(workItem)
+            discoveryQueue.async(execute: workItem)
+        }
     }
 
     private func discoverDirectedBroadcast(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
@@ -369,7 +373,8 @@ class ZebraPrinterInstance: NSObject {
         let ipAddress = args?["ipAddress"] as? String ?? "192.168.1.255"
         isScanning = true
 
-        let workItem = DispatchWorkItem { [weak self] in
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             var foundCount = 0
 
@@ -381,12 +386,10 @@ class ZebraPrinterInstance: NSObject {
 
             for address in addresses {
                 // Check if cancelled
-                guard !workItem.isCancelled, self.isScanning else { break }
+                guard let workItem = workItem, !workItem.isCancelled, self.isScanning else { break }
 
-                var error: NSError?
-                let printers = ZSDKWrapper.discoverDirectedBroadcastWithIp(address, timeout: timeout, error: &error)
-
-                if error == nil {
+                do {
+                    let printers = try ZSDKWrapper.discoverDirectedBroadcast(withIp: address, timeout: timeout)
                     let printerInfos = self.convertNetworkPrinters(printers)
                     for printerInfo in printerInfos {
                         // Check if cancelled
@@ -397,12 +400,16 @@ class ZebraPrinterInstance: NSObject {
                         dict["discoveryMethod"] = "directedBroadcast"
 
                         if self.isScanning {
-                            DispatchQueue.main.async {
-                                self.channel.invokeMethod("printerFound", arguments: dict)
-                            }
+                            self._operationStreamEvent(
+                                operationId: operationId,
+                                eventMethod: MethodChannelConstants.discoverDirectedBroadcastEventPrinterFound,
+                                eventData: dict
+                            )
                         }
                         foundCount += 1
                     }
+                } catch {
+                    // Ignore errors for individual addresses and continue
                 }
             }
 
@@ -412,11 +419,11 @@ class ZebraPrinterInstance: NSObject {
             }
 
             // Complete operation properly - operationId is required
-            if workItem.isCancelled {
+            if let workItem = workItem, workItem.isCancelled {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryError",
+                    callbackMethod: MethodChannelConstants.discoverDirectedBroadcastCallbackOnError,
                     code: "OPERATION_CANCELLED",
                     message: "Operation cancelled",
                     context: ["reason": "Operation cancelled"]
@@ -425,7 +432,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryDone",
+                    callbackMethod: MethodChannelConstants.discoverDirectedBroadcastCallbackOnComplete,
                     resultValue: true,
                     arguments: ["foundCount": foundCount]
                 )
@@ -433,8 +440,10 @@ class ZebraPrinterInstance: NSObject {
         }
 
         // Store and execute work item
-        activeDiscoveryWorkItems.append(workItem)
-        discoveryQueue.async(execute: workItem)
+        if let workItem = workItem {
+            activeDiscoveryWorkItems.append(workItem)
+            discoveryQueue.async(execute: workItem)
+        }
     }
 
     private func discoverMulticast(args: [String: Any]?, operationId: String, result: @escaping FlutterResult) {
@@ -442,41 +451,43 @@ class ZebraPrinterInstance: NSObject {
         let hops = args?["hops"] as? Int ?? 5
         isScanning = true
 
-        let workItem = DispatchWorkItem { [weak self] in
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             var foundCount = 0
 
-            var error: NSError?
-            let printers = ZSDKWrapper.discoverMulticastWithHops(hops, timeout: timeout, error: &error)
+            do {
+                let printers = try ZSDKWrapper.discoverMulticast(withHops: hops, timeout: timeout)
 
-            if let error = error {
-                self._operationErrorResult(
-                    operationId: operationId,
-                    result: result,
-                    callbackMethod: "onDiscoveryError",
-                    code: "DISCOVERY_ERROR",
-                    message: "Multicast discovery failed",
-                    nativeError: error,
-                    context: ["method": "discoverMulticast"]
-                )
-                return
-            }
-
-            let printerInfos = self.convertNetworkPrinters(printers)
-            for printerInfo in printerInfos {
+                let printerInfos = self.convertNetworkPrinters(printers)
+                for printerInfo in printerInfos {
                 // Check if cancelled
-                guard !workItem.isCancelled, self.isScanning else { break }
+                guard let workItem = workItem, !workItem.isCancelled, self.isScanning else { break }
 
                 // Override discovery method
                 var dict = printerInfo.toDictionary()
                 dict["discoveryMethod"] = "multicast"
 
                 if self.isScanning {
-                    DispatchQueue.main.async {
-                        self.channel.invokeMethod("printerFound", arguments: dict)
-                    }
+                    self._operationStreamEvent(
+                        operationId: operationId,
+                        eventMethod: MethodChannelConstants.discoverMulticastEventPrinterFound,
+                        eventData: dict
+                    )
                 }
                 foundCount += 1
+            }
+            } catch {
+                self._operationErrorResult(
+                    operationId: operationId,
+                    result: result,
+                    callbackMethod: MethodChannelConstants.discoverMulticastCallbackOnError,
+                    code: "DISCOVERY_ERROR",
+                    message: "Multicast discovery failed",
+                    nativeError: error as NSError,
+                    context: ["method": "discoverMulticast"]
+                )
+                return
             }
 
             // Remove work item when done
@@ -485,11 +496,11 @@ class ZebraPrinterInstance: NSObject {
             }
 
             // Complete operation properly - operationId is required
-            if workItem.isCancelled {
+            if let workItem = workItem, workItem.isCancelled {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryError",
+                    callbackMethod: MethodChannelConstants.discoverMulticastCallbackOnError,
                     code: "OPERATION_CANCELLED",
                     message: "Operation cancelled",
                     context: ["reason": "Operation cancelled"]
@@ -498,7 +509,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDiscoveryDone",
+                    callbackMethod: MethodChannelConstants.discoverMulticastCallbackOnComplete,
                     resultValue: true,
                     arguments: ["foundCount": foundCount]
                 )
@@ -506,8 +517,10 @@ class ZebraPrinterInstance: NSObject {
         }
 
         // Store and execute work item
-        activeDiscoveryWorkItems.append(workItem)
-        discoveryQueue.async(execute: workItem)
+        if let workItem = workItem {
+            activeDiscoveryWorkItems.append(workItem)
+            discoveryQueue.async(execute: workItem)
+        }
     }
 
     private func stopScan(operationId: String, result: @escaping FlutterResult) {
@@ -520,15 +533,13 @@ class ZebraPrinterInstance: NSObject {
         activeDiscoveryWorkItems.removeAll()
 
         // Send completion event
-        DispatchQueue.main.async {
-            self.channel.invokeMethod("onDiscoveryStopped", arguments: nil)
-        }
+        // No extra event; completion handled via stopScanCallbackOnComplete
 
         // Complete the stopScan operation - operationId is required
         _operationSuccessResult(
             operationId: operationId,
             result: result,
-            callbackMethod: "onStopScanComplete",
+            callbackMethod: MethodChannelConstants.stopScanCallbackOnComplete,
             resultValue: true
         )
     }
@@ -574,7 +585,7 @@ class ZebraPrinterInstance: NSObject {
             _operationErrorResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onConnectError",
+                callbackMethod: MethodChannelConstants.connectToPrinterCallbackOnError,
                 code: "INVALID_ARGUMENT",
                 message: "Address is required")
             return
@@ -599,14 +610,14 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onConnectComplete",
+                    callbackMethod: MethodChannelConstants.connectToPrinterCallbackOnComplete,
                     resultValue: true
                 )
             } else {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onConnectError",
+                    callbackMethod: MethodChannelConstants.connectToPrinterCallbackOnError,
                     code: "CONNECTION_ERROR",
                     message: "Failed to connect to printer"
                 )
@@ -621,7 +632,7 @@ class ZebraPrinterInstance: NSObject {
             self?._operationSuccessResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onDisconnectComplete",
+                callbackMethod: MethodChannelConstants.disconnectCallbackOnComplete,
                 resultValue: true
             )
         }
@@ -641,7 +652,7 @@ class ZebraPrinterInstance: NSObject {
             self?._operationSuccessResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onConnectionStatusResult",
+                callbackMethod: MethodChannelConstants.isConnectedCallbackOnResult,
                 resultValue: isConnected,
                 arguments: ["connected": isConnected]
             )
@@ -655,7 +666,7 @@ class ZebraPrinterInstance: NSObject {
             _operationErrorResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onPrintError",
+                callbackMethod: MethodChannelConstants.printCallbackOnError,
                 code: "INVALID_ARGUMENT",
                 message: "Data is required")
             return
@@ -665,7 +676,7 @@ class ZebraPrinterInstance: NSObject {
                 self?._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onPrintError",
+                    callbackMethod: MethodChannelConstants.printCallbackOnError,
                     code: "PRINT_ERROR",
                     message: "Not connected to printer",
                     context: ["operation": "print", "dataLength": data.count]
@@ -675,7 +686,7 @@ class ZebraPrinterInstance: NSObject {
 
             // Update status
             DispatchQueue.main.async {
-                self.channel.invokeMethod("changePrinterStatus", arguments: [
+                self.channel.invokeMethod(MethodChannelConstants.connectionEventStatusChanged, arguments: [
                     "Status": "Sending Data",
                     "Color": "Y"
                 ])
@@ -686,7 +697,7 @@ class ZebraPrinterInstance: NSObject {
 
                 if success {
                     DispatchQueue.main.async {
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                        self.channel.invokeMethod(MethodChannelConstants.connectionEventStatusChanged, arguments: [
                             "Status": "Done",
                             "Color": "G"
                         ])
@@ -694,13 +705,13 @@ class ZebraPrinterInstance: NSObject {
                     self._operationSuccessResult(
                         operationId: operationId,
                         result: result,
-                        callbackMethod: "onPrintComplete",
+                        callbackMethod: MethodChannelConstants.printCallbackOnComplete,
                         resultValue: true
                     )
                 } else {
                     let errorMsg = "Failed to send data to printer"
                     DispatchQueue.main.async {
-                        self.channel.invokeMethod("changePrinterStatus", arguments: [
+                        self.channel.invokeMethod(MethodChannelConstants.connectionEventStatusChanged, arguments: [
                             "Status": "Print Error: \(errorMsg)",
                             "Color": "R"
                         ])
@@ -708,7 +719,7 @@ class ZebraPrinterInstance: NSObject {
                     self._operationErrorResult(
                         operationId: operationId,
                         result: result,
-                        callbackMethod: "onPrintError",
+                        callbackMethod: MethodChannelConstants.printCallbackOnError,
                         code: "PRINT_ERROR",
                         message: errorMsg,
                         context: ["operation": "print", "dataLength": data.count, "dataPreview": String(data.prefix(100))]
@@ -719,7 +730,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onPrintError",
+                    callbackMethod: MethodChannelConstants.printCallbackOnError,
                     code: "PRINT_ERROR",
                     message: errorMsg,
                     context: ["operation": "print", "dataLength": data.count, "encodingIssue": true]
@@ -735,7 +746,7 @@ class ZebraPrinterInstance: NSObject {
             _operationErrorResult(
                 operationId: operationId, 
                 result: result, 
-                callbackMethod: "onSettingsError",
+                callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                 code: "INVALID_ARGUMENT", 
                 message: "SettingCommand is required")
             return
@@ -745,7 +756,7 @@ class ZebraPrinterInstance: NSObject {
                 self?._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onSettingsError",
+                    callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                     code: "CONNECTION_ERROR",
                     message: "Not connected to printer",
                     arguments: ["error": "Not connected to printer"]
@@ -762,14 +773,14 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onSettingsComplete",
+                    callbackMethod: MethodChannelConstants.setSettingsCallbackOnComplete,
                     resultValue: true
                 )
             } else {
                 self._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onSettingsError",
+                    callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                     code: "SETTINGS_ERROR",
                     message: "Failed to set printer settings",
                     context: ["operation": "setSettings", "command": command]
@@ -783,7 +794,7 @@ class ZebraPrinterInstance: NSObject {
             _operationErrorResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onLocateValueError",
+                callbackMethod: MethodChannelConstants.getValueForCallbackOnError,
                 code: "INVALID_ARGUMENT",
                 message: "ResourceKey is required")
             return
@@ -793,7 +804,7 @@ class ZebraPrinterInstance: NSObject {
                 self?._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onLocateValueResult",
+                    callbackMethod: MethodChannelConstants.getValueForCallbackOnResult,
                     resultValue: "Connected",
                     arguments: ["value": "Connected"]
                 )
@@ -804,7 +815,7 @@ class ZebraPrinterInstance: NSObject {
                 self?._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onSettingsError",
+                    callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                     code: "CONNECTION_ERROR",
                     message: "Not connected to printer",
                     arguments: ["error": "Not connected to printer"]
@@ -816,7 +827,7 @@ class ZebraPrinterInstance: NSObject {
             self._operationSuccessResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onLocateValueResult",
+                callbackMethod: MethodChannelConstants.getValueForCallbackOnResult,
                 resultValue: value ?? "",
                 arguments: ["value": value ?? ""]
             )
@@ -828,7 +839,7 @@ class ZebraPrinterInstance: NSObject {
             _operationErrorResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onSettingsError",
+                callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                 code: "INVALID_ARGUMENT",
                 message: "setting is required")
             return
@@ -838,7 +849,7 @@ class ZebraPrinterInstance: NSObject {
                 self?._operationErrorResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onSettingsError",
+                    callbackMethod: MethodChannelConstants.setSettingsCallbackOnError,
                     code: "CONNECTION_ERROR",
                     message: "Not connected to printer",
                     arguments: ["error": "Not connected to printer"]
@@ -850,7 +861,7 @@ class ZebraPrinterInstance: NSObject {
             self._operationSuccessResult(
                 operationId: operationId,
                 result: result,
-                callbackMethod: "onSettingsResult",
+                callbackMethod: MethodChannelConstants.getSettingCallbackOnResult,
                 resultValue: value ?? "",
                 arguments: ["value": value ?? ""]
             )
@@ -895,7 +906,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onPrinterStatusResult",
+                    callbackMethod: MethodChannelConstants.getPrinterStatusCallbackOnResult,
                     resultValue: status,
                     arguments: ["status": status]
                 )
@@ -912,7 +923,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onPrinterStatusResult",
+                    callbackMethod: MethodChannelConstants.getPrinterStatusCallbackOnResult,
                     resultValue: errorStatus,
                     arguments: ["status": errorStatus]
                 )
@@ -930,7 +941,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDetailedPrinterStatusResult",
+                    callbackMethod: MethodChannelConstants.getDetailedPrinterStatusCallbackOnResult,
                     resultValue: detailedStatus,
                     arguments: ["detailedStatus": detailedStatus]
                 )
@@ -952,7 +963,7 @@ class ZebraPrinterInstance: NSObject {
                 self._operationSuccessResult(
                     operationId: operationId,
                     result: result,
-                    callbackMethod: "onDetailedPrinterStatusResult",
+                    callbackMethod: MethodChannelConstants.getDetailedPrinterStatusCallbackOnResult,
                     resultValue: errorStatus,
                     arguments: ["detailedStatus": errorStatus]
                 )
@@ -1021,6 +1032,21 @@ class ZebraPrinterInstance: NSObject {
             
             // Always return false for errors
             result(false)
+        }
+    }
+    
+    /// Send streaming event to operation manager (REQUIRED operationId for proper routing)
+    private func _operationStreamEvent(
+        operationId: String,
+        eventMethod: String,
+        eventData: [String: Any]) {
+        // Add operationId to event data for proper routing
+        var finalEventData = eventData
+        finalEventData["operationId"] = operationId
+        
+        DispatchQueue.main.async {
+            // Send the event with operationId for routing
+            self.channel.invokeMethod(eventMethod, arguments: finalEventData)
         }
     }
 }

@@ -5,14 +5,15 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
 
-import 'package:flutter/services.dart' as _i8;
+import 'package:flutter/services.dart' as _i9;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
-import 'package:zebrautil/internal/communication_policy.dart' as _i9;
-import 'package:zebrautil/models/communication_policy_options.dart' as _i10;
-import 'package:zebrautil/models/print_enums.dart' as _i7;
-import 'package:zebrautil/models/print_operation_tracker.dart' as _i6;
+import 'package:zebrautil/internal/communication_policy.dart' as _i10;
+import 'package:zebrautil/models/communication_policy_options.dart' as _i11;
+import 'package:zebrautil/models/print_enums.dart' as _i8;
+import 'package:zebrautil/models/print_operation_tracker.dart' as _i7;
 import 'package:zebrautil/models/result.dart' as _i3;
+import 'package:zebrautil/models/zebra_device.dart' as _i6;
 import 'package:zebrautil/zebra_printer.dart' as _i2;
 
 // ignore_for_file: type=lint
@@ -122,47 +123,103 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverBTClassic(
+  _i5.Stream<_i6.ZebraDevice> discoverBTClassicStream({int? timeout = 5000}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverBTClassicStream,
+          [],
+          {#timeout: timeout},
+        ),
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
+
+  @override
+  _i5.Stream<_i6.ZebraDevice> discoverLocalBroadcastStream(
           {int? timeout = 5000}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverLocalBroadcastStream,
+          [],
+          {#timeout: timeout},
+        ),
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
+
+  @override
+  _i5.Stream<_i6.ZebraDevice> discoverSubnetStream({
+    String? subnet = '192.168.1',
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverSubnetStream,
+          [],
+          {
+            #subnet: subnet,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
+
+  @override
+  _i5.Stream<_i6.ZebraDevice> discoverDirectedBroadcastStream({
+    String? ipAddress = '192.168.1.255',
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverDirectedBroadcastStream,
+          [],
+          {
+            #ipAddress: ipAddress,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
+
+  @override
+  _i5.Stream<_i6.ZebraDevice> discoverMulticastStream({
+    int? hops = 5,
+    int? timeout = 5000,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #discoverMulticastStream,
+          [],
+          {
+            #hops: hops,
+            #timeout: timeout,
+          },
+        ),
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
+
+  @override
+  _i5.Stream<_i6.ZebraDevice> discoverBTClassic({int? timeout = 5000}) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverBTClassic,
           [],
           {#timeout: timeout},
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #discoverBTClassic,
-            [],
-            {#timeout: timeout},
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverLocalBroadcast(
-          {int? timeout = 5000}) =>
+  _i5.Stream<_i6.ZebraDevice> discoverLocalBroadcast({int? timeout = 5000}) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverLocalBroadcast,
           [],
           {#timeout: timeout},
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #discoverLocalBroadcast,
-            [],
-            {#timeout: timeout},
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverSubnet({
+  _i5.Stream<_i6.ZebraDevice> discoverSubnet({
     String? subnet = '192.168.1',
     int? timeout = 5000,
   }) =>
@@ -175,22 +232,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #timeout: timeout,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #discoverSubnet,
-            [],
-            {
-              #subnet: subnet,
-              #timeout: timeout,
-            },
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverDirectedBroadcast({
+  _i5.Stream<_i6.ZebraDevice> discoverDirectedBroadcast({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
   }) =>
@@ -203,22 +249,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #timeout: timeout,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #discoverDirectedBroadcast,
-            [],
-            {
-              #ipAddress: ipAddress,
-              #timeout: timeout,
-            },
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> discoverMulticast({
+  _i5.Stream<_i6.ZebraDevice> discoverMulticast({
     int? hops = 5,
     int? timeout = 5000,
   }) =>
@@ -231,19 +266,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #timeout: timeout,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
-          this,
-          Invocation.method(
-            #discoverMulticast,
-            [],
-            {
-              #hops: hops,
-              #timeout: timeout,
-            },
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i6.ZebraDevice>);
 
   @override
   _i5.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
@@ -292,9 +316,9 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<_i6.PrintOperationTracker>> print({
+  _i5.Future<_i3.Result<_i7.PrintOperationTracker>> print({
     required String? data,
-    _i7.PrintFormat? format = _i7.PrintFormat.zpl,
+    _i8.PrintFormat? format = _i8.PrintFormat.zpl,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -305,8 +329,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #format: format,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<_i6.PrintOperationTracker>>.value(
-            _FakeResult_1<_i6.PrintOperationTracker>(
+        returnValue: _i5.Future<_i3.Result<_i7.PrintOperationTracker>>.value(
+            _FakeResult_1<_i7.PrintOperationTracker>(
           this,
           Invocation.method(
             #print,
@@ -317,7 +341,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             },
           ),
         )),
-      ) as _i5.Future<_i3.Result<_i6.PrintOperationTracker>>);
+      ) as _i5.Future<_i3.Result<_i7.PrintOperationTracker>>);
 
   @override
   _i5.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
@@ -395,34 +419,6 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<bool>>);
 
   @override
-  _i5.Future<_i3.Result<List<Map<String, dynamic>>>> discoverNetworkPrinters({
-    Duration? timeout = const Duration(seconds: 10),
-    List<String>? customSubnets = const [],
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverNetworkPrinters,
-          [],
-          {
-            #timeout: timeout,
-            #customSubnets: customSubnets,
-          },
-        ),
-        returnValue: _i5.Future<_i3.Result<List<Map<String, dynamic>>>>.value(
-            _FakeResult_1<List<Map<String, dynamic>>>(
-          this,
-          Invocation.method(
-            #discoverNetworkPrinters,
-            [],
-            {
-              #timeout: timeout,
-              #customSubnets: customSubnets,
-            },
-          ),
-        )),
-      ) as _i5.Future<_i3.Result<List<Map<String, dynamic>>>>);
-
-  @override
   _i5.Future<_i3.Result<String>> getInstanceId() => (super.noSuchMethod(
         Invocation.method(
           #getInstanceId,
@@ -438,7 +434,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<String>>);
 
   @override
-  _i5.Future<void> nativeMethodCallHandler(_i8.MethodCall? methodCall) =>
+  _i5.Future<void> nativeMethodCallHandler(_i9.MethodCall? methodCall) =>
       (super.noSuchMethod(
         Invocation.method(
           #nativeMethodCallHandler,
@@ -462,7 +458,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockCommunicationPolicy extends _i1.Mock
-    implements _i9.CommunicationPolicy {
+    implements _i10.CommunicationPolicy {
   MockCommunicationPolicy() {
     _i1.throwOnMissingStub(this);
   }
@@ -471,7 +467,7 @@ class MockCommunicationPolicy extends _i1.Mock
   _i5.Future<_i3.Result<T>> execute<T>(
     _i5.Future<_i3.Result<T>> Function()? operation,
     String? operationName, {
-    _i10.CommunicationPolicyOptions? options,
+    _i11.CommunicationPolicyOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(

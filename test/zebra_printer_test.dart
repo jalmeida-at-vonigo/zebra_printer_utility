@@ -4,6 +4,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zebrautil/models/print_operation_tracker.dart';
 import 'package:zebrautil/models/result.dart';
+import 'package:zebrautil/models/zebra_device.dart';
 import 'package:zebrautil/zebra_printer.dart';
 
 @GenerateMocks([ZebraPrinter])
@@ -33,43 +34,34 @@ void main() {
     });
 
     group('discovery operations', () {
-      test('discoverBTClassic returns success result', () async {
+      test('discoverBTClassic returns device stream', () async {
         when(printer.discoverBTClassic(timeout: anyNamed('timeout')))
-            .thenAnswer(
-          (_) async => Result.success({'foundCount': 2}),
-        );
+            .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final result = await printer.discoverBTClassic();
-        expect(result.success, isTrue);
-        expect(result.data?['foundCount'], equals(2));
+        final stream = printer.discoverBTClassic();
+        expect(stream, isA<Stream<ZebraDevice>>());
         verify(printer.discoverBTClassic(timeout: anyNamed('timeout')))
             .called(1);
       });
 
-      test('discoverLocalBroadcast returns success result', () async {
+      test('discoverLocalBroadcast returns device stream', () async {
         when(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
-            .thenAnswer(
-          (_) async => Result.success({'foundCount': 1}),
-        );
+            .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final result = await printer.discoverLocalBroadcast();
-        expect(result.success, isTrue);
-        expect(result.data?['foundCount'], equals(1));
+        final stream = printer.discoverLocalBroadcast();
+        expect(stream, isA<Stream<ZebraDevice>>());
         verify(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
             .called(1);
       });
 
-      test('discoverSubnet returns success result', () async {
+      test('discoverSubnet returns device stream', () async {
         when(printer.discoverSubnet(
           subnet: anyNamed('subnet'),
           timeout: anyNamed('timeout'),
-        )).thenAnswer(
-          (_) async => Result.success({'foundCount': 3}),
-        );
+        )).thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final result = await printer.discoverSubnet(subnet: '192.168.1');
-        expect(result.success, isTrue);
-        expect(result.data?['foundCount'], equals(3));
+        final stream = printer.discoverSubnet(subnet: '192.168.1');
+        expect(stream, isA<Stream<ZebraDevice>>());
         verify(printer.discoverSubnet(
           subnet: anyNamed('subnet'),
           timeout: anyNamed('timeout'),
@@ -216,27 +208,14 @@ void main() {
     });
 
     group('discovery operations', () {
-      test('discoverNetworkPrinters returns network printers', () async {
-        final networkPrinters = [
-          {
-            'address': '192.168.1.100',
-            'name': 'Zebra Printer 1',
-            'isWifi': true,
-          },
-          {
-            'address': '192.168.1.101',
-            'name': 'Zebra Printer 2',
-            'isWifi': true,
-          },
-        ];
-        when(printer.discoverNetworkPrinters()).thenAnswer(
-          (_) async => Result.success(networkPrinters),
-        );
+      test('discoverLocalBroadcast returns device stream', () async {
+        when(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+            .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final result = await printer.discoverNetworkPrinters();
-        expect(result.success, isTrue);
-        expect(result.data, equals(networkPrinters));
-        verify(printer.discoverNetworkPrinters()).called(1);
+        final stream = printer.discoverLocalBroadcast();
+        expect(stream, isA<Stream<ZebraDevice>>());
+        verify(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+            .called(1);
       });
     });
 

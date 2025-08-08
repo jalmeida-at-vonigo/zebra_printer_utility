@@ -1,5 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/services.dart';
+
+import 'native_models/method_channel_constants.dart';
 import 'zebra_printer_operation_manager.dart';
 
 /// Handles method calls from native side and routes them to appropriate operations
@@ -11,6 +14,10 @@ class ZebraPrinterOperationCallbackHandler {
 
   /// Callbacks for events that don't belong to specific operations
   final Map<String, Function(MethodCall)> eventHandlers = {};
+  
+  /// Callbacks for streaming events that belong to specific operations
+  final Map<String, Function(String operationId, Map<String, dynamic> data)>
+      streamHandlers = {};
 
   /// Handle a method call from native side
   Future<void> handleMethodCall(MethodCall call) async {
@@ -21,80 +28,160 @@ class ZebraPrinterOperationCallbackHandler {
       if (operationId != null) {
         switch (call.method) {
           // Connection callbacks
-          case 'onConnectComplete':
+          case MethodChannelConstants.connectToPrinterCallbackOnComplete:
             manager.completeOperation(operationId, true);
             break;
-          case 'onConnectError':
+          case MethodChannelConstants.connectToPrinterCallbackOnError:
             _handleEnrichedError(
                 operationId, call.arguments, 'Connection failed');
             break;
 
           // Disconnect callbacks
-          case 'onDisconnectComplete':
+          case MethodChannelConstants.disconnectCallbackOnComplete:
             manager.completeOperation(operationId, true);
             break;
-          case 'onDisconnectError':
+          case MethodChannelConstants.disconnectCallbackOnError:
             _handleEnrichedError(
                 operationId, call.arguments, 'Disconnect failed');
             break;
 
           // Print callbacks
-          case 'onPrintComplete':
+          case MethodChannelConstants.printCallbackOnComplete:
             manager.completeOperation(operationId, true);
             break;
-          case 'onPrintError':
+          case MethodChannelConstants.printCallbackOnError:
             _handleEnrichedError(operationId, call.arguments, 'Print failed');
             break;
 
           // Settings callbacks
-          case 'onSettingsComplete':
+          case MethodChannelConstants.setSettingsCallbackOnComplete:
             manager.completeOperation(operationId, true);
             break;
-          case 'onSettingsResult':
+          case MethodChannelConstants.getSettingCallbackOnResult:
             final value = call.arguments?['value'];
             manager.completeOperation(operationId, value);
             break;
-          case 'onSettingsError':
+          case MethodChannelConstants.setSettingsCallbackOnError:
             _handleEnrichedError(
                 operationId, call.arguments, 'Settings operation failed');
             break;
 
-          // Discovery callbacks
-          case 'onDiscoveryDone':
-            manager.completeOperation(operationId, true);
+          // Discovery callbacks - BT Classic
+          case MethodChannelConstants.discoverBTClassicCallbackOnComplete:
+            final foundCount = call.arguments?['foundCount'] ?? 0;
+            manager.completeOperation(operationId, {'foundCount': foundCount});
             break;
-          case 'onStopScanComplete':
+          case MethodChannelConstants.discoverBTClassicCallbackOnError:
+            _handleEnrichedError(
+                operationId, call.arguments, 'BT Classic discovery failed');
+            break;
+
+          // Discovery callbacks - Local Broadcast
+          case MethodChannelConstants.discoverLocalBroadcastCallbackOnComplete:
+            final foundCount = call.arguments?['foundCount'] ?? 0;
+            manager.completeOperation(operationId, {'foundCount': foundCount});
+            break;
+          case MethodChannelConstants.discoverLocalBroadcastCallbackOnError:
+            _handleEnrichedError(operationId, call.arguments,
+                'Local broadcast discovery failed');
+            break;
+
+          // Discovery callbacks - Subnet
+          case MethodChannelConstants.discoverSubnetCallbackOnComplete:
+            final foundCount = call.arguments?['foundCount'] ?? 0;
+            manager.completeOperation(operationId, {'foundCount': foundCount});
+            break;
+          case MethodChannelConstants.discoverSubnetCallbackOnError:
+            _handleEnrichedError(
+                operationId, call.arguments, 'Subnet discovery failed');
+            break;
+
+          // Discovery callbacks - Directed Broadcast
+          case MethodChannelConstants
+                .discoverDirectedBroadcastCallbackOnComplete:
+            final foundCount = call.arguments?['foundCount'] ?? 0;
+            manager.completeOperation(operationId, {'foundCount': foundCount});
+            break;
+          case MethodChannelConstants.discoverDirectedBroadcastCallbackOnError:
+            _handleEnrichedError(operationId, call.arguments,
+                'Directed broadcast discovery failed');
+            break;
+
+          // Discovery callbacks - Multicast
+          case MethodChannelConstants.discoverMulticastCallbackOnComplete:
+            final foundCount = call.arguments?['foundCount'] ?? 0;
+            manager.completeOperation(operationId, {'foundCount': foundCount});
+            break;
+          case MethodChannelConstants.discoverMulticastCallbackOnError:
+            _handleEnrichedError(
+                operationId, call.arguments, 'Multicast discovery failed');
+            break;
+
+          // Stop scan callback
+          case MethodChannelConstants.stopScanCallbackOnComplete:
             manager.completeOperation(operationId, true);
             break;
 
           // Permission callbacks
-          case 'onPermissionResult':
+          case MethodChannelConstants
+                .getBluetoothPermissionStatusCallbackOnResult:
             final granted = call.arguments?['granted'] ?? false;
             manager.completeOperation(operationId, granted);
             break;
 
           // Status callbacks
-          case 'onStatusResult':
+          case MethodChannelConstants.getPrinterStatusCallbackOnResult:
             final status = call.arguments?['status'];
             manager.completeOperation(operationId, status);
             break;
-          case 'onStatusError':
+          case MethodChannelConstants.getDetailedPrinterStatusCallbackOnResult:
+            final detailedStatus = call.arguments?['detailedStatus'];
+            manager.completeOperation(operationId, detailedStatus);
+            break;
+          case MethodChannelConstants.getPrinterStatusCallbackOnError:
             _handleEnrichedError(
                 operationId, call.arguments, 'Status check failed');
             break;
 
           // Connection status callback
-          case 'onConnectionStatusResult':
+          case MethodChannelConstants.isConnectedCallbackOnResult:
             final isConnected = call.arguments?['connected'] ?? false;
             manager.completeOperation(operationId, isConnected);
             break;
 
           // Locate value callback
-          case 'onLocateValueResult':
+          case MethodChannelConstants.getValueForCallbackOnResult:
             final value = call.arguments?['value'] ?? '';
             manager.completeOperation(operationId, value);
             break;
+          case MethodChannelConstants.getValueForCallbackOnError:
+            _handleEnrichedError(
+                operationId, call.arguments, 'Locate value failed');
+            break;
+
+          // Fallback for unknown methods
+          case MethodChannelConstants.callbackOnMethodNotImplemented:
+            _handleEnrichedError(
+                operationId, call.arguments, 'Method not implemented');
+            break;
         }
+      }
+
+      // Handle streaming events with operationId (like printer discovery)
+      if (operationId != null) {
+        // Emit via manager's per-operation event stream
+        if (call.arguments is Map<String, dynamic>) {
+          manager.emitEvent(
+              operationId, call.arguments as Map<String, dynamic>);
+        }
+        // Also call any explicit handler if registered
+        final streamHandler = streamHandlers[call.method];
+        if (streamHandler != null) {
+          try {
+            streamHandler(operationId, call.arguments ?? {});
+          } catch (e) {}
+        }
+        return;
       }
 
       // Handle non-operation events (like printer discovery events)
@@ -185,5 +272,16 @@ class ZebraPrinterOperationCallbackHandler {
   /// Unregister an event handler
   void unregisterEventHandler(String method) {
     eventHandlers.remove(method);
+  }
+  
+  /// Register a stream handler for operation-specific streaming events
+  void registerStreamHandler(String method,
+      Function(String operationId, Map<String, dynamic> data) handler) {
+    streamHandlers[method] = handler;
+  }
+
+  /// Unregister a stream handler
+  void unregisterStreamHandler(String method) {
+    streamHandlers.remove(method);
   }
 }

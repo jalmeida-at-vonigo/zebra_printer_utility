@@ -85,6 +85,22 @@ sequenceDiagram
   - Communication policy (how assurance works)
   - Command implementation/usage (how to add and execute commands)
 
+## Async/Await and Stream Abstraction (Callback-Hiding Goal)
+
+The Dart layer MUST fully abstract the native/ZSDK callback style into idiomatic Dart async/await and Streams.
+
+- **Single-Response Operations**: Expose as `Future<Result<T>>` (never raw callbacks). All errors are returned as `Result<T>` (no throws), using the centralized error architecture.
+- **Streaming Operations**: Expose as `Stream<E>` per operation. Each call returns an independent stream that emits events only for that call, and then completes.
+- **Per-Operation Isolation**: Streams are keyed by the native `operationId` and MUST only receive events that belong to that operation. No cross-talk between concurrent operations.
+- **Cancellation Semantics**: Canceling a stream subscription MUST invoke the corresponding native cancel/stop (e.g., `stopScan`) and complete the stream gracefully.
+- **No Global Broadcasts from Primitives**: Primitive bridge methods in `ZebraPrinter` MUST NOT publish discovery results to global state for consumption. They should emit into the per-operation stream (or collect per-operation results for `Future`-based APIs). Any global/broadcast updates for UI happen in higher-level services (e.g., `ZebraPrinterDiscovery`) that subscribe to these per-operation streams and rebroadcast as needed.
+- **UI Integration**: UI code should subscribe to the service/manager streams. Real-time UI updates are a stream-consumption concern, not a side-effect of primitive calls.
+- **Operation Completion**: Streams MUST close when native signals completion or when cancellation occurs. All resources (controllers, timers, handlers) must be cleaned up.
+
+Implications for Discovery:
+- `ZebraPrinter` provides discovery as per-operation Streams (e.g., `discoverSubnetStream(...) → Stream<ZebraDevice>`). The same operation might also have a Future form that aggregates stream events into a final list.
+- `ZebraPrinterDiscovery` (service) subscribes to one or more per-operation streams and rebroadcasts device lists and status to its own broadcast streams for UI. It manages union/filters, timeouts, and stop logic. Canceling the service stream stops the underlying native discovery.
+
 ## Readiness Architecture
 - PrinterReadiness lazily reads and caches per-property status; single hardware read per property
 - PrinterReadinessManager uses cached values to apply fixes; does not re-read post-fix

@@ -35,6 +35,10 @@ class ZebraDevice {
   factory ZebraDevice.empty() =>
       ZebraDevice(address: '', name: '', isWifi: false, status: '');
 
+  /// Creates a ZebraDevice from a Map
+  factory ZebraDevice.fromMap(Map<String, dynamic> map) =>
+      ZebraDevice.fromJson(map);
+
   /// Creates a ZebraDevice from a JSON string
   factory ZebraDevice.fromJson(Map<String, dynamic> json) => ZebraDevice(
       address: json['address'] ?? json['ipAddress'] ?? json['macAddress'] ?? '',
@@ -88,6 +92,8 @@ class ZebraDevice {
   final bool? isBluetooth;
   final int? port;
   final String? discoveryMethod;
+
+  Map<String, dynamic> toMap() => toJson();
 
   Map<String, dynamic> toJson() => {
         'address': address,

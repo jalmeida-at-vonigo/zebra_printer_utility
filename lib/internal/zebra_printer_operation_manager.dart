@@ -26,6 +26,10 @@ class ZebraPrinterOperationManager {
   /// Active operations being tracked
   final Map<String, NativeOperation> _activeOperations = {};
 
+  /// Per-operation event streams (for streaming operations)
+  final Map<String, StreamController<Map<String, dynamic>>>
+      _operationEventStreams = {};
+
   /// Timer for checking operation timeouts
   Timer? _timeoutChecker;
 
@@ -60,6 +64,7 @@ class ZebraPrinterOperationManager {
     Map<String, dynamic>? arguments,
     Duration timeout = const Duration(seconds: 30),
     CancellationToken? cancellationToken,
+    void Function(String operationId)? onOperationStart,
   }) async {
     final operationId = _generateOperationId();
     final startTime = DateTime.now();
@@ -71,6 +76,9 @@ class ZebraPrinterOperationManager {
     );
 
     _activeOperations[operationId] = operation;
+    
+    // Notify caller of the operation ID
+    onOperationStart?.call(operationId);
     
     // Log operation start
     final startEntry = OperationLogEntry(
@@ -127,6 +135,8 @@ class ZebraPrinterOperationManager {
       _addLogEntry(successEntry);
       
       onLog?.call('Operation $operationId completed successfully');
+      // Close any associated event stream
+      _closeEventStream(operationId);
       return Result<T>.success(result);
     } on TimeoutException catch (e) {
       final duration = DateTime.now().difference(startTime);
@@ -143,6 +153,7 @@ class ZebraPrinterOperationManager {
       );
       _addLogEntry(timeoutEntry);
       onLog?.call('Operation $operationId timed out: ${e.message}');
+      _closeEventStream(operationId);
       return Result.errorCode(
         ErrorCodes.operationTimeout,
         formatArgs: [timeout.inSeconds],
@@ -164,6 +175,7 @@ class ZebraPrinterOperationManager {
       _addLogEntry(errorEntry);
       
       onLog?.call('Operation $operationId failed: $e');
+      _closeEventStream(operationId);
       return Result.errorCode(
         ErrorCodes.operationError,
         formatArgs: [e.toString()],
@@ -192,6 +204,7 @@ class ZebraPrinterOperationManager {
     if (operation != null) {
       onLog?.call('Failing operation $operationId with error: $error');
       operation.completeError(error);
+      _closeEventStream(operationId);
     } else {
       onLog?.call('Warning: Attempted to fail unknown operation $operationId');
     }
@@ -204,6 +217,13 @@ class ZebraPrinterOperationManager {
       operation.cancel();
     }
     _activeOperations.clear();
+    // Close all event streams
+    for (final controller in _operationEventStreams.values) {
+      if (!controller.isClosed) {
+        controller.close();
+      }
+    }
+    _operationEventStreams.clear();
   }
 
   /// Get the number of active operations
@@ -221,6 +241,12 @@ class ZebraPrinterOperationManager {
       }
     }
     _activeOperations.clear();
+    for (final controller in _operationEventStreams.values) {
+      if (!controller.isClosed) {
+        controller.close();
+      }
+    }
+    _operationEventStreams.clear();
   }
 
   /// Generate a unique operation ID
@@ -253,6 +279,33 @@ class ZebraPrinterOperationManager {
           'Arguments: ${operation?.arguments.toString() ?? "{}"}';
       failOperation(operationId, errorMessage);
       _activeOperations.remove(operationId);
+    }
+  }
+
+  // ===== Streaming event helpers =====
+
+  /// Ensure an operation event stream exists and return its stream
+  Stream<Map<String, dynamic>> operationEvents(String operationId) {
+    final controller = _operationEventStreams.putIfAbsent(
+      operationId,
+      () => StreamController<Map<String, dynamic>>.broadcast(),
+    );
+    return controller.stream;
+  }
+
+  /// Emit an event for a specific operation (used by callback routing)
+  void emitEvent(String operationId, Map<String, dynamic> data) {
+    final controller = _operationEventStreams[operationId];
+    if (controller != null && !controller.isClosed) {
+      controller.add(data);
+    }
+  }
+
+  /// Close and remove an event stream for an operation
+  void _closeEventStream(String operationId) {
+    final controller = _operationEventStreams.remove(operationId);
+    if (controller != null && !controller.isClosed) {
+      controller.close();
     }
   }
 }

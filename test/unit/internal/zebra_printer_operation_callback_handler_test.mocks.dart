@@ -97,6 +97,7 @@ class MockZebraPrinterOperationManager extends _i1.Mock
     Map<String, dynamic>? arguments,
     Duration? timeout = const Duration(seconds: 30),
     _i7.CancellationToken? cancellationToken,
+    void Function(String)? onOperationStart,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -107,6 +108,7 @@ class MockZebraPrinterOperationManager extends _i1.Mock
             #arguments: arguments,
             #timeout: timeout,
             #cancellationToken: cancellationToken,
+            #onOperationStart: onOperationStart,
           },
         ),
         returnValue: _i6.Future<_i3.Result<T>>.value(_FakeResult_1<T>(
@@ -119,6 +121,7 @@ class MockZebraPrinterOperationManager extends _i1.Mock
               #arguments: arguments,
               #timeout: timeout,
               #cancellationToken: cancellationToken,
+              #onOperationStart: onOperationStart,
             },
           ),
         )),

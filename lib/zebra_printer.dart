@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'internal/logger.dart';
+import 'internal/native_models/method_channel_constants.dart';
 import 'internal/native_models/printer_info.dart';
 import 'internal/permission_manager.dart';
 import 'internal/zebra_error_bridge.dart';
@@ -29,34 +30,244 @@ class ZebraPrinter {
     _callbackHandler =
         ZebraPrinterOperationCallbackHandler(manager: _operationManager);
     
-    // Register event handlers for non-operation callbacks
-    _callbackHandler.registerEventHandler('printerFound', (call) {
-      if (call.arguments is Map<String, dynamic>) {
-        final printerInfo = NativePrinterInfo.fromNative(call.arguments);
-        this.controller.addPrinter(printerInfo.toZebraDevice());
-      } else {
-        _logger.warning('Invalid printerFound event data: ${call.arguments}');
-      }
-    });
-    _callbackHandler.registerEventHandler('changePrinterStatus', (call) {
+    // Register stream handlers for all discovery events
+    final discoveryEventHandlers = {
+      MethodChannelConstants.discoverBTClassicEventPrinterFound,
+      MethodChannelConstants.discoverLocalBroadcastEventPrinterFound,
+      MethodChannelConstants.discoverSubnetEventPrinterFound,
+      MethodChannelConstants.discoverDirectedBroadcastEventPrinterFound,
+      MethodChannelConstants.discoverMulticastEventPrinterFound,
+    };
+
+    for (final eventName in discoveryEventHandlers) {
+      _callbackHandler.registerStreamHandler(eventName, (operationId, data) {
+        final printerInfo = NativePrinterInfo.fromNative(data);
+        final device = printerInfo.toZebraDevice();
+
+        // Track discovered printer for the specific operation
+        if (_discoveryResults.containsKey(operationId)) {
+          _discoveryResults[operationId]!.add(device);
+        }
+
+        // Streams subscribe via manager.operationEvents; no direct emission here
+      });
+    }
+    _callbackHandler.registerEventHandler(
+        MethodChannelConstants.connectionEventStatusChanged, (call) {
       final status = call.arguments?['Status'] ?? '';
       final color = call.arguments?['Color'] ?? 'R';
       this.controller.updatePrinterStatus(status, color);
     });
-    _callbackHandler.registerEventHandler('printerRemoved', (call) {
-      final address = call.arguments?['Address'] ?? '';
-      this.controller.removePrinter(address);
-    });
-    _callbackHandler.registerEventHandler('onDiscoveryError', (call) {
-      final errorText = call.arguments?['ErrorText'] ?? 'Unknown error';
-      _logger.warning('Discovery error: $errorText');
-    });
-    _callbackHandler.registerEventHandler('onPrinterDiscoveryDone', (call) {
-      isScanning = false;
-    });
-    _callbackHandler.registerEventHandler('onDiscoveryStopped', (call) {
-      isScanning = false;
-    });
+
+  }
+
+  // Streamed discovery primitives (per-operation streams)
+  Stream<ZebraDevice> discoverBTClassicStream({int timeout = 5000}) {
+    final controller = StreamController<ZebraDevice>.broadcast();
+    String? operationId;
+
+    () async {
+      try {
+        final hasPermission =
+            await PermissionManager.checkBluetoothPermission();
+        if (!hasPermission) {
+          throw Exception('Bluetooth permission denied');
+        }
+        await _operationManager.execute<Map<String, dynamic>>(
+          method: 'discoverBTClassic',
+          arguments: {'timeout': timeout},
+          timeout: Duration(milliseconds: timeout + 1000),
+          onOperationStart: (opId) {
+            operationId = opId;
+            _discoveryResults[opId] = [];
+            _discoveryEventSubs[opId] =
+                _operationManager.operationEvents(opId).listen((data) {
+              final device = NativePrinterInfo.fromNative(data).toZebraDevice();
+              if (!controller.isClosed) controller.add(device);
+            });
+            isScanning = true;
+          },
+        );
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      } finally {
+        if (!controller.isClosed) controller.close();
+        if (operationId != null) {
+          _discoveryResults.remove(operationId);
+          await _discoveryEventSubs.remove(operationId)?.cancel();
+        }
+        isScanning = false;
+      }
+    }();
+
+    controller.onCancel = () async {
+      await stopDiscovery();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<ZebraDevice> discoverLocalBroadcastStream({int timeout = 5000}) {
+    final controller = StreamController<ZebraDevice>.broadcast();
+    String? operationId;
+
+    () async {
+      try {
+        await _operationManager.execute<Map<String, dynamic>>(
+          method: 'discoverLocalBroadcast',
+          arguments: {'timeout': timeout},
+          timeout: Duration(milliseconds: timeout + 1000),
+          onOperationStart: (opId) {
+            operationId = opId;
+            _discoveryResults[opId] = [];
+            _discoveryEventSubs[opId] =
+                _operationManager.operationEvents(opId).listen((data) {
+              final device = NativePrinterInfo.fromNative(data).toZebraDevice();
+              if (!controller.isClosed) controller.add(device);
+            });
+            isScanning = true;
+          },
+        );
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      } finally {
+        if (!controller.isClosed) controller.close();
+        if (operationId != null) {
+          _discoveryResults.remove(operationId);
+          await _discoveryEventSubs.remove(operationId)?.cancel();
+        }
+        isScanning = false;
+      }
+    }();
+
+    controller.onCancel = () async {
+      await stopDiscovery();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<ZebraDevice> discoverSubnetStream(
+      {String subnet = '192.168.1', int timeout = 5000}) {
+    final controller = StreamController<ZebraDevice>.broadcast();
+    String? operationId;
+
+    () async {
+      try {
+        await _operationManager.execute<Map<String, dynamic>>(
+          method: 'discoverSubnet',
+          arguments: {'subnet': subnet, 'timeout': timeout},
+          timeout: Duration(milliseconds: timeout + 1000),
+          onOperationStart: (opId) {
+            operationId = opId;
+            _discoveryResults[opId] = [];
+            _discoveryEventSubs[opId] =
+                _operationManager.operationEvents(opId).listen((data) {
+              final device = NativePrinterInfo.fromNative(data).toZebraDevice();
+              if (!controller.isClosed) controller.add(device);
+            });
+            isScanning = true;
+          },
+        );
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      } finally {
+        if (!controller.isClosed) controller.close();
+        if (operationId != null) {
+          _discoveryResults.remove(operationId);
+          await _discoveryEventSubs.remove(operationId)?.cancel();
+        }
+        isScanning = false;
+      }
+    }();
+
+    controller.onCancel = () async {
+      await stopDiscovery();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<ZebraDevice> discoverDirectedBroadcastStream(
+      {String ipAddress = '192.168.1.255', int timeout = 5000}) {
+    final controller = StreamController<ZebraDevice>.broadcast();
+    String? operationId;
+
+    () async {
+      try {
+        await _operationManager.execute<Map<String, dynamic>>(
+          method: 'discoverDirectedBroadcast',
+          arguments: {'ipAddress': ipAddress, 'timeout': timeout},
+          timeout: Duration(milliseconds: timeout + 1000),
+          onOperationStart: (opId) {
+            operationId = opId;
+            _discoveryResults[opId] = [];
+            _discoveryEventSubs[opId] =
+                _operationManager.operationEvents(opId).listen((data) {
+              final device = NativePrinterInfo.fromNative(data).toZebraDevice();
+              if (!controller.isClosed) controller.add(device);
+            });
+            isScanning = true;
+          },
+        );
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      } finally {
+        if (!controller.isClosed) controller.close();
+        if (operationId != null) {
+          _discoveryResults.remove(operationId);
+          await _discoveryEventSubs.remove(operationId)?.cancel();
+        }
+        isScanning = false;
+      }
+    }();
+
+    controller.onCancel = () async {
+      await stopDiscovery();
+    };
+
+    return controller.stream;
+  }
+
+  Stream<ZebraDevice> discoverMulticastStream(
+      {int hops = 5, int timeout = 5000}) {
+    final controller = StreamController<ZebraDevice>.broadcast();
+    String? operationId;
+
+    () async {
+      try {
+        await _operationManager.execute<Map<String, dynamic>>(
+          method: 'discoverMulticast',
+          arguments: {'hops': hops, 'timeout': timeout},
+          timeout: Duration(milliseconds: timeout + 1000),
+          onOperationStart: (opId) {
+            operationId = opId;
+            _discoveryResults[opId] = [];
+            _discoveryEventSubs[opId] =
+                _operationManager.operationEvents(opId).listen((data) {
+              final device = NativePrinterInfo.fromNative(data).toZebraDevice();
+              if (!controller.isClosed) controller.add(device);
+            });
+            isScanning = true;
+          },
+        );
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      } finally {
+        if (!controller.isClosed) controller.close();
+        if (operationId != null) {
+          _discoveryResults.remove(operationId);
+          await _discoveryEventSubs.remove(operationId)?.cancel();
+        }
+        isScanning = false;
+      }
+    }();
+
+    controller.onCancel = () async {
+      await stopDiscovery();
+    };
+
+    return controller.stream;
   }
 
   /// Factory method to create a ZebraPrinter instance
@@ -64,9 +275,10 @@ class ZebraPrinter {
     ZebraController? controller,
   }) async {
     // Get instance ID from platform
-    const platform = MethodChannel('zebrautil');
-    final String instanceId =
-        await platform.invokeMethod<String>('getInstance') ?? 'default';
+    const platform = MethodChannel(MethodChannelConstants.mainChannel);
+    final String instanceId = await platform
+            .invokeMethod<String>(MethodChannelConstants.getInstanceMethod) ??
+        'default';
 
     return ZebraPrinter._(
       instanceId,
@@ -78,7 +290,6 @@ class ZebraPrinter {
   final String instanceId;
   final ZebraController controller;
 
-
   late final MethodChannel _channel;
   late final ZebraPrinterOperationManager _operationManager;
   late final ZebraPrinterOperationCallbackHandler _callbackHandler;
@@ -88,156 +299,34 @@ class ZebraPrinter {
   bool isScanning = false;
   bool shouldSync = false;
 
+  // Simple discovery tracking - maps operationId to discovered printers
+  final Map<String, List<ZebraDevice>> _discoveryResults = {};
+  // Per-operation discovery event subscriptions
+  final Map<String, StreamSubscription<Map<String, dynamic>>>
+      _discoveryEventSubs = {};
+
   // Primitive: Discover MFi Bluetooth printers (BT Classic on iOS)
-  Future<Result<Map<String, dynamic>>> discoverBTClassic({
-    int timeout = 5000,
-  }) async {
-    _logger.info('Starting BT Classic (MFi) discovery');
-    isScanning = true;
-    
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
-      operation: () async {
-        final hasPermission =
-            await PermissionManager.checkBluetoothPermission();
-        if (!hasPermission) {
-          _logger.warning('Bluetooth permission permanently denied');
-          throw Exception('Bluetooth permission denied');
-        }
+  // Returns a per-operation stream of devices
+  Stream<ZebraDevice> discoverBTClassic({int timeout = 5000}) =>
+      discoverBTClassicStream(timeout: timeout);
 
-        final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverBTClassic',
-          arguments: {'timeout': timeout},
-          timeout: Duration(milliseconds: timeout + 1000),
-        );
+  // Returns a per-operation stream of devices
+  Stream<ZebraDevice> discoverLocalBroadcast({int timeout = 5000}) =>
+      discoverLocalBroadcastStream(timeout: timeout);
 
-        if (result.success && result.data != null) {
-          _logger.info('BT Classic discovery completed: ${result.data}');
-          return result.data!;
-        } else {
-          throw Exception(result.error?.message ??
-              'Failed to discover BT Classic printers');
-        }
-      },
-      operationType: OperationType.discovery,
-      timeout: Duration(milliseconds: timeout + 1000),
-    );
-  }
+  // Returns a per-operation stream of devices
+  Stream<ZebraDevice> discoverSubnet(
+          {String subnet = '192.168.1', int timeout = 5000}) =>
+      discoverSubnetStream(subnet: subnet, timeout: timeout);
 
-  // Primitive: Discover printers using local broadcast
-  Future<Result<Map<String, dynamic>>> discoverLocalBroadcast({
-    int timeout = 5000,
-  }) async {
-    _logger.info('Starting local broadcast discovery');
-    isScanning = true;
+  // Returns a per-operation stream of devices
+  Stream<ZebraDevice> discoverDirectedBroadcast(
+          {String ipAddress = '192.168.1.255', int timeout = 5000}) =>
+      discoverDirectedBroadcastStream(ipAddress: ipAddress, timeout: timeout);
 
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
-      operation: () async {
-        final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverLocalBroadcast',
-          arguments: {'timeout': timeout},
-          timeout: Duration(milliseconds: timeout + 1000),
-        );
-
-        if (result.success && result.data != null) {
-          _logger.info('Local broadcast discovery completed: ${result.data}');
-          return result.data!;
-        } else {
-          throw Exception(result.error?.message ??
-              'Failed to discover printers via local broadcast');
-        }
-      },
-      operationType: OperationType.discovery,
-      timeout: Duration(milliseconds: timeout + 1000),
-    );
-  }
-
-  // Primitive: Discover printers on subnet
-  Future<Result<Map<String, dynamic>>> discoverSubnet({
-    String subnet = '192.168.1',
-    int timeout = 5000,
-  }) async {
-    _logger.info('Starting subnet discovery: $subnet');
-    isScanning = true;
-
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
-      operation: () async {
-        final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverSubnet',
-          arguments: {'subnet': subnet, 'timeout': timeout},
-          timeout: Duration(milliseconds: timeout + 1000),
-        );
-
-        if (result.success && result.data != null) {
-          _logger.info('Subnet discovery completed: ${result.data}');
-          return result.data!;
-        } else {
-          throw Exception(
-              result.error?.message ?? 'Failed to discover printers on subnet');
-        }
-      },
-      operationType: OperationType.discovery,
-      timeout: Duration(milliseconds: timeout + 1000),
-    );
-  }
-
-  // Primitive: Discover printers using directed broadcast
-  Future<Result<Map<String, dynamic>>> discoverDirectedBroadcast({
-    String ipAddress = '192.168.1.255',
-    int timeout = 5000,
-  }) async {
-    _logger.info('Starting directed broadcast discovery: $ipAddress');
-    isScanning = true;
-
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
-      operation: () async {
-        final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverDirectedBroadcast',
-          arguments: {'ipAddress': ipAddress, 'timeout': timeout},
-          timeout: Duration(milliseconds: timeout + 1000),
-        );
-
-        if (result.success && result.data != null) {
-          _logger
-              .info('Directed broadcast discovery completed: ${result.data}');
-          return result.data!;
-        } else {
-          throw Exception(result.error?.message ??
-              'Failed to discover printers via directed broadcast');
-        }
-      },
-      operationType: OperationType.discovery,
-      timeout: Duration(milliseconds: timeout + 1000),
-    );
-  }
-
-  // Primitive: Discover printers using multicast
-  Future<Result<Map<String, dynamic>>> discoverMulticast({
-    int hops = 5,
-    int timeout = 5000,
-  }) async {
-    _logger.info('Starting multicast discovery with $hops hops');
-    isScanning = true;
-
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
-      operation: () async {
-        final result = await _operationManager.execute<Map<String, dynamic>>(
-          method: 'discoverMulticast',
-          arguments: {'hops': hops, 'timeout': timeout},
-          timeout: Duration(milliseconds: timeout + 1000),
-        );
-
-        if (result.success && result.data != null) {
-          _logger.info('Multicast discovery completed: ${result.data}');
-          return result.data!;
-        } else {
-          throw Exception(result.error?.message ??
-              'Failed to discover printers via multicast');
-        }
-      },
-      operationType: OperationType.discovery,
-      timeout: Duration(milliseconds: timeout + 1000),
-    );
-  }
+  // Returns a per-operation stream of devices
+  Stream<ZebraDevice> discoverMulticast({int hops = 5, int timeout = 5000}) =>
+      discoverMulticastStream(hops: hops, timeout: timeout);
 
   // Primitive: Stop all discovery operations
   Future<Result<void>> stopDiscovery() async {

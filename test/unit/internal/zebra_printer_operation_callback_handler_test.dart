@@ -4,6 +4,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:zebrautil/internal/zebra_printer_operation_callback_handler.dart';
 import 'package:zebrautil/internal/zebra_printer_operation_manager.dart';
+import 'package:zebrautil/internal/native_models/method_channel_constants.dart';
 
 import 'zebra_printer_operation_callback_handler_test.mocks.dart';
 
@@ -34,14 +35,14 @@ void main() {
     });
 
     test('routes connect callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall('onConnectComplete', {'operationId': '1'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.connectToPrinterCallbackOnComplete,
+          {'operationId': '1'}));
       expect(calls, contains('complete:1:true'));
       verify(mockManager.completeOperation('1', true)).called(1);
       
-      await handler.handleMethodCall(
-          const MethodCall(
-          'onConnectError', {
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.connectToPrinterCallbackOnError, {
         'operationId': '2',
         'message': 'fail',
         'code': 'CONNECTION_ERROR',
@@ -60,13 +61,14 @@ void main() {
     });
 
     test('routes disconnect callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall('onDisconnectComplete', {'operationId': '1'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.disconnectCallbackOnComplete,
+          {'operationId': '1'}));
       expect(calls, contains('complete:1:true'));
       verify(mockManager.completeOperation('1', true)).called(1);
       
       await handler.handleMethodCall(const MethodCall(
-          'onDisconnectError', {
+          MethodChannelConstants.disconnectCallbackOnError, {
         'operationId': '2',
         'message': 'fail',
         'code': 'DISCONNECT_ERROR',
@@ -85,14 +87,14 @@ void main() {
     });
 
     test('routes print callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall('onPrintComplete', {'operationId': '1'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.printCallbackOnComplete,
+          {'operationId': '1'}));
       expect(calls, contains('complete:1:true'));
       verify(mockManager.completeOperation('1', true)).called(1);
       
       await handler.handleMethodCall(
-          const MethodCall(
-          'onPrintError', {
+          const MethodCall(MethodChannelConstants.printCallbackOnError, {
         'operationId': '2',
         'message': 'fail',
         'code': 'PRINT_ERROR',
@@ -111,20 +113,20 @@ void main() {
     });
 
     test('routes settings callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall('onSettingsComplete', {'operationId': '1'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.setSettingsCallbackOnComplete,
+          {'operationId': '1'}));
       expect(calls, contains('complete:1:true'));
       verify(mockManager.completeOperation('1', true)).called(1);
       
-      await handler.handleMethodCall(
-          const MethodCall(
-          'onSettingsResult', {'operationId': '2', 'value': 42}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.getSettingCallbackOnResult,
+          {'operationId': '2', 'value': 42}));
       expect(calls, contains('complete:2:42'));
       verify(mockManager.completeOperation('2', 42)).called(1);
       
       await handler.handleMethodCall(
-          const MethodCall(
-          'onSettingsError', {
+          const MethodCall(MethodChannelConstants.setSettingsCallbackOnError, {
         'operationId': '3',
         'message': 'fail',
         'code': 'SETTINGS_ERROR',
@@ -144,32 +146,34 @@ void main() {
     });
 
     test('routes discovery and permission callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall('onDiscoveryDone', {'operationId': '1'}));
-      expect(calls, contains('complete:1:true'));
-      verify(mockManager.completeOperation('1', true)).called(1);
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.discoverBTClassicCallbackOnComplete,
+          {'operationId': '1', 'foundCount': 0}));
+      expect(calls, contains('complete:1:{foundCount: 0}'));
+      verify(mockManager.completeOperation('1', {'foundCount': 0})).called(1);
       
-      await handler.handleMethodCall(
-          const MethodCall('onStopScanComplete', {'operationId': '2'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.stopScanCallbackOnComplete,
+          {'operationId': '2'}));
       expect(calls, contains('complete:2:true'));
       verify(mockManager.completeOperation('2', true)).called(1);
       
       await handler.handleMethodCall(const MethodCall(
-          'onPermissionResult', {'operationId': '3', 'granted': true}));
+          MethodChannelConstants.getBluetoothPermissionStatusCallbackOnResult,
+          {'operationId': '3', 'granted': true}));
       expect(calls, contains('complete:3:true'));
       verify(mockManager.completeOperation('3', true)).called(1);
     });
 
     test('routes status and connection status callbacks', () async {
-      await handler.handleMethodCall(
-          const MethodCall(
-          'onStatusResult', {'operationId': '1', 'status': 'OK'}));
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.getPrinterStatusCallbackOnResult,
+          {'operationId': '1', 'status': 'OK'}));
       expect(calls, contains('complete:1:OK'));
       verify(mockManager.completeOperation('1', 'OK')).called(1);
       
-      await handler.handleMethodCall(
-          const MethodCall(
-          'onStatusError', {
+      await handler.handleMethodCall(const MethodCall(
+          MethodChannelConstants.getPrinterStatusCallbackOnError, {
         'operationId': '2',
         'message': 'fail',
         'code': 'STATUS_ERROR',
@@ -186,14 +190,16 @@ void main() {
           .called(1);
       
       await handler.handleMethodCall(const MethodCall(
-          'onConnectionStatusResult', {'operationId': '3', 'connected': true}));
+          MethodChannelConstants.isConnectedCallbackOnResult,
+          {'operationId': '3', 'connected': true}));
       expect(calls, contains('complete:3:true'));
       verify(mockManager.completeOperation('3', true)).called(1);
     });
 
     test('routes locate value callback', () async {
       await handler.handleMethodCall(const MethodCall(
-          'onLocateValueResult', {'operationId': '1', 'value': 'loc'}));
+          MethodChannelConstants.getValueForCallbackOnResult,
+          {'operationId': '1', 'value': 'loc'}));
       expect(calls, contains('complete:1:loc'));
       verify(mockManager.completeOperation('1', 'loc')).called(1);
     });

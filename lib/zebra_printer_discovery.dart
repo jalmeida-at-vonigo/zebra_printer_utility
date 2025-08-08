@@ -135,6 +135,17 @@ class ZebraPrinterDiscovery {
     // Discovery will be started by individual methods
     _statusStreamController?.add('Scanning for printers...');
 
+    // Kick off discovery concurrently so the stream can yield while discovery runs
+    final Set<String> uniqueAddresses = {};
+    final List<ZebraDevice> allPrinters = [];
+    (() async {
+      try {
+        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters);
+      } catch (e) {
+        _logger.warning('Failed to start streaming discovery: $e');
+      }
+    })();
+
     // Set up timeout
     _discoveryTimer?.cancel();
     _discoveryTimer = Timer(timeout, () {
@@ -426,8 +437,6 @@ class ZebraPrinterDiscovery {
     }
   }
 
-
-
   /// Discover Bluetooth printers with streaming callback
   Future<void> _discoverBluetoothPrintersStream(
     Duration timeout,
@@ -436,18 +445,16 @@ class ZebraPrinterDiscovery {
     try {
       _isScanning = true;
       
-      // Use BT Classic discovery
-      final result = await _printer.discoverBTClassic(
-        timeout: timeout.inMilliseconds,
+      // Use BT Classic discovery (per-operation stream)
+      final subscription = _printer
+          .discoverBTClassic(timeout: timeout.inMilliseconds)
+          .listen(
+            (device) => onPrinterFound(device),
+            onError: (e) => _logger.warning('BT Classic discovery error: $e'),
       );
-      
-      if (result.success) {
-        _logger.info(
-            'BT Classic discovery completed: ${result.data?['foundCount'] ?? 0} printers');
-      } else if (result.error != null) {
-        _logger
-            .warning('BT Classic discovery failed: ${result.error?.message}');
-      }
+      await subscription.asFuture<void>();
+      await subscription.cancel();
+      _logger.info('BT Classic discovery stream completed');
     } catch (e) {
       _logger.warning('Bluetooth discovery stream failed: $e');
     }
@@ -459,65 +466,54 @@ class ZebraPrinterDiscovery {
     void Function(ZebraDevice) onPrinterFound,
   ) async {
     try {
-      // Run all network discovery methods concurrently
+      // Run all network discovery streams concurrently
       final futures = <Future<void>>[];
 
       // Local broadcast
-      futures.add(
-        _printer
+      futures.add(() async {
+        final sub = _printer
             .discoverLocalBroadcast(timeout: timeout.inMilliseconds)
-            .then((result) {
-          if (result.success) {
-            _logger.info(
-                'Local broadcast completed: ${result.data?['foundCount'] ?? 0} printers');
-          }
-        }),
-      );
+            .listen(onPrinterFound, onError: (e) {
+          _logger.warning('Local broadcast discovery error: $e');
+        });
+        await sub.asFuture<void>();
+        await sub.cancel();
+      }());
       
       // Subnet search (including iPad hotspot)
-      futures.add(
-        _printer
+      futures.add(() async {
+        final sub = _printer
             .discoverSubnet(
-          subnet: '192.168.1',
-          timeout: timeout.inMilliseconds,
-        )
-            .then((result) {
-          if (result.success) {
-            _logger.info(
-                'Subnet discovery completed: ${result.data?['foundCount'] ?? 0} printers');
-          }
-        }),
-      );
+                subnet: '192.168.1', timeout: timeout.inMilliseconds)
+            .listen(onPrinterFound, onError: (e) {
+          _logger.warning('Subnet discovery error: $e');
+        });
+        await sub.asFuture<void>();
+        await sub.cancel();
+      }());
       
       // Directed broadcast
-      futures.add(
-        _printer
+      futures.add(() async {
+        final sub = _printer
             .discoverDirectedBroadcast(
-          ipAddress: '192.168.1.255',
-          timeout: timeout.inMilliseconds,
-        )
-            .then((result) {
-          if (result.success) {
-            _logger.info(
-                'Directed broadcast completed: ${result.data?['foundCount'] ?? 0} printers');
-          }
-        }),
-      );
+                ipAddress: '192.168.1.255', timeout: timeout.inMilliseconds)
+            .listen(onPrinterFound, onError: (e) {
+          _logger.warning('Directed broadcast discovery error: $e');
+        });
+        await sub.asFuture<void>();
+        await sub.cancel();
+      }());
 
       // Multicast
-      futures.add(
-        _printer
-            .discoverMulticast(
-          hops: 5,
-          timeout: timeout.inMilliseconds,
-        )
-            .then((result) {
-          if (result.success) {
-            _logger.info(
-                'Multicast completed: ${result.data?['foundCount'] ?? 0} printers');
-          }
-        }),
-      );
+      futures.add(() async {
+        final sub = _printer
+            .discoverMulticast(hops: 5, timeout: timeout.inMilliseconds)
+            .listen(onPrinterFound, onError: (e) {
+          _logger.warning('Multicast discovery error: $e');
+        });
+        await sub.asFuture<void>();
+        await sub.cancel();
+      }());
 
       // Wait for all network discovery methods
       await Future.wait(futures);

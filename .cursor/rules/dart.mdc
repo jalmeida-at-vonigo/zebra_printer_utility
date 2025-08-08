@@ -13,3 +13,11 @@ globs: **/*.dart
 - Provide meaningful error messages.
 - All code must be null safe and use the latest Dart language features.
 - All public APIs must be documented with Dartdoc comments.
+
+## Async and Stream Abstraction Policy
+
+- The Dart layer MUST hide native/ZSDK callbacks behind idiomatic Dart constructs:
+  - Single-response ops → `Future<Result<T>>`
+  - Streaming ops → `Stream<E>` per operation (independent streams, no cross-talk)
+- Canceling a discovery stream MUST propagate to native (e.g., `stopScan`) and close the stream.
+- Primitive bridge code MUST avoid global broadcast side-effects; managers/services may rebroadcast to UI as needed.

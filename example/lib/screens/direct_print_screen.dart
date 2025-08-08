@@ -50,10 +50,12 @@ class DirectPrinterChannel {
     }
   }
 
+  // NOTE: This screen demonstrates direct low-level MethodChannel usage
+  // For production code, use the high-level API (Zebra.global or ZebraPrinter)
   Future<bool> startDiscovery() async {
     if (_instanceChannel == null) return false;
     try {
-      // Start all discovery methods concurrently
+      // Start all discovery methods concurrently via direct channel calls
       await Future.wait([
         _instanceChannel.invokeMethod('discoverBTClassic', {'timeout': 10000}),
         _instanceChannel
