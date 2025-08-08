@@ -76,13 +76,13 @@ import Foundation
     @objc public static let discoverMulticastCallbackOnError = "discoverMulticast_onError"
     @objc public static let discoverMulticastEventPrinterFound = "discoverMulticast_printerFound"
     
+    // MARK: - Discovery log/warning event
+    @objc public static let discoveryEventLogWarning = "discovery_logWarning"
+    
     // MARK: - stopScan
     @objc public static let stopScanMethod = "stopScan"
     @objc public static let stopScanCallbackOnComplete = "stopScan_onComplete"
     
-    // MARK: - getBluetoothPermissionStatus
-    @objc public static let getBluetoothPermissionStatusMethod = "getBluetoothPermissionStatus"
-    @objc public static let getBluetoothPermissionStatusCallbackOnResult = "getBluetoothPermissionStatus_onResult"
     
     // MARK: - getPrinterStatus
     @objc public static let getPrinterStatusMethod = "getPrinterStatus"

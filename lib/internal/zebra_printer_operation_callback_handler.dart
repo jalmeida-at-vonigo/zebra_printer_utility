@@ -122,13 +122,6 @@ class ZebraPrinterOperationCallbackHandler {
             manager.completeOperation(operationId, true);
             break;
 
-          // Permission callbacks
-          case MethodChannelConstants
-                .getBluetoothPermissionStatusCallbackOnResult:
-            final granted = call.arguments?['granted'] ?? false;
-            manager.completeOperation(operationId, granted);
-            break;
-
           // Status callbacks
           case MethodChannelConstants.getPrinterStatusCallbackOnResult:
             final status = call.arguments?['status'];
@@ -171,8 +164,11 @@ class ZebraPrinterOperationCallbackHandler {
       if (operationId != null) {
         // Emit via manager's per-operation event stream
         if (call.arguments is Map<String, dynamic>) {
-          manager.emitEvent(
-              operationId, call.arguments as Map<String, dynamic>);
+          // Wrap with method tag so callers can filter by event kind
+          manager.emitEvent(operationId, {
+            'method': call.method,
+            'data': call.arguments as Map<String, dynamic>,
+          });
         }
         // Also call any explicit handler if registered
         final streamHandler = streamHandlers[call.method];

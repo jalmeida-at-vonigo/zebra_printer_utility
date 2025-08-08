@@ -29,6 +29,7 @@ class ZebraPrinterDiscovery {
   ZebraController? _controller;
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<String>? _statusStreamController;
+  // No per-operation log subscription here; status stream already provides public messages
   
   Timer? _discoveryTimer;
   bool _isScanning = false;
@@ -127,6 +128,7 @@ class ZebraPrinterDiscovery {
     bool stopOnFirstPrinter = false,
     bool includeWifi = true,
     bool includeBluetooth = true,
+    void Function({String? phase, String? target, String? message})? onWarning,
   }) async* {
     await _ensureInitialized();
 
@@ -140,7 +142,8 @@ class ZebraPrinterDiscovery {
     final List<ZebraDevice> allPrinters = [];
     (() async {
       try {
-        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters);
+        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters,
+            onWarning: onWarning);
       } catch (e) {
         _logger.warning('Failed to start streaming discovery: $e');
       }
@@ -464,6 +467,8 @@ class ZebraPrinterDiscovery {
   Future<void> _discoverNetworkPrintersStream(
     Duration timeout,
     void Function(ZebraDevice) onPrinterFound,
+      {void Function({String? phase, String? target, String? message})?
+          onWarning}
   ) async {
     try {
       // Run all network discovery streams concurrently
@@ -472,7 +477,8 @@ class ZebraPrinterDiscovery {
       // Local broadcast
       futures.add(() async {
         final sub = _printer
-            .discoverLocalBroadcast(timeout: timeout.inMilliseconds)
+            .discoverLocalBroadcast(
+                timeout: timeout.inMilliseconds, onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Local broadcast discovery error: $e');
         });
@@ -484,7 +490,9 @@ class ZebraPrinterDiscovery {
       futures.add(() async {
         final sub = _printer
             .discoverSubnet(
-                subnet: '192.168.1', timeout: timeout.inMilliseconds)
+                subnet: '192.168.1',
+                timeout: timeout.inMilliseconds,
+                onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Subnet discovery error: $e');
         });
@@ -496,7 +504,9 @@ class ZebraPrinterDiscovery {
       futures.add(() async {
         final sub = _printer
             .discoverDirectedBroadcast(
-                ipAddress: '192.168.1.255', timeout: timeout.inMilliseconds)
+                ipAddress: '192.168.1.255',
+                timeout: timeout.inMilliseconds,
+                onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Directed broadcast discovery error: $e');
         });
@@ -507,7 +517,8 @@ class ZebraPrinterDiscovery {
       // Multicast
       futures.add(() async {
         final sub = _printer
-            .discoverMulticast(hops: 5, timeout: timeout.inMilliseconds)
+            .discoverMulticast(
+                hops: 5, timeout: timeout.inMilliseconds, onWarning: onWarning)
             .listen(onPrinterFound, onError: (e) {
           _logger.warning('Multicast discovery error: $e');
         });
@@ -528,6 +539,8 @@ class ZebraPrinterDiscovery {
     Duration timeout,
     Set<String> uniqueAddresses,
     List<ZebraDevice> allPrinters,
+      {void Function({String? phase, String? target, String? message})?
+          onWarning}
   ) async {
     final completer = Completer<void>();
     int completedMethods = 0;
@@ -561,7 +574,8 @@ class ZebraPrinterDiscovery {
 
     // Start enhanced network discovery with real-time callback
     _statusStreamController?.add('Starting enhanced network discovery...');
-    _discoverNetworkPrintersStream(timeout, addPrinter).then((_) {
+    _discoverNetworkPrintersStream(timeout, addPrinter, onWarning: onWarning)
+        .then((_) {
       checkCompletion();
     }).catchError((e) {
       _logger.warning('Network discovery failed: $e');
@@ -573,6 +587,11 @@ class ZebraPrinterDiscovery {
       completer.future,
       Future.delayed(timeout),
     ]);
+
+    // Note: per-operation log warnings are emitted via the operation manager.
+    // ZebraPrinterDiscovery already exposes status messages; callers can choose to listen
+    // to status stream for high-level messages. Detailed per-address/range warnings are
+    // available by subscribing directly to ZebraPrinter.operationEvents if needed.
   }
 
   /// Stop all discovery operations

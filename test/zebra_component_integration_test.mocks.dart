@@ -156,24 +156,35 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverBTClassicStream({int? timeout = 5000}) =>
+  _i7.Stream<_i8.ZebraDevice> discoverBTClassicStream({
+    int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverBTClassicStream,
           [],
-          {#timeout: timeout},
+          {
+            #timeout: timeout,
+            #onWarning: onWarning,
+          },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
       ) as _i7.Stream<_i8.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcastStream(
-          {int? timeout = 5000}) =>
+  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcastStream({
+    int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverLocalBroadcastStream,
           [],
-          {#timeout: timeout},
+          {
+            #timeout: timeout,
+            #onWarning: onWarning,
+          },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
       ) as _i7.Stream<_i8.ZebraDevice>);
@@ -182,6 +193,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverSubnetStream({
     String? subnet = '192.168.1',
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -190,6 +202,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #subnet: subnet,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
@@ -199,6 +212,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverDirectedBroadcastStream({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -207,6 +221,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #ipAddress: ipAddress,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
@@ -216,6 +231,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverMulticastStream({
     int? hops = 5,
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -224,29 +240,42 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #hops: hops,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
       ) as _i7.Stream<_i8.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverBTClassic({int? timeout = 5000}) =>
+  _i7.Stream<_i8.ZebraDevice> discoverBTClassic({
+    int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverBTClassic,
           [],
-          {#timeout: timeout},
+          {
+            #timeout: timeout,
+            #onWarning: onWarning,
+          },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
       ) as _i7.Stream<_i8.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcast({int? timeout = 5000}) =>
+  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcast({
+    int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #discoverLocalBroadcast,
           [],
-          {#timeout: timeout},
+          {
+            #timeout: timeout,
+            #onWarning: onWarning,
+          },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
       ) as _i7.Stream<_i8.ZebraDevice>);
@@ -255,6 +284,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverSubnet({
     String? subnet = '192.168.1',
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -263,6 +293,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #subnet: subnet,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
@@ -272,6 +303,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverDirectedBroadcast({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -280,6 +312,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #ipAddress: ipAddress,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
@@ -289,6 +322,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i7.Stream<_i8.ZebraDevice> discoverMulticast({
     int? hops = 5,
     int? timeout = 5000,
+    _i2.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -297,6 +331,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           {
             #hops: hops,
             #timeout: timeout,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
@@ -854,6 +889,11 @@ class MockZebraPrinterDiscovery extends _i1.Mock
     bool? stopOnFirstPrinter = false,
     bool? includeWifi = true,
     bool? includeBluetooth = true,
+    void Function({
+      String? message,
+      String? phase,
+      String? target,
+    })? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -865,6 +905,7 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             #stopOnFirstPrinter: stopOnFirstPrinter,
             #includeWifi: includeWifi,
             #includeBluetooth: includeBluetooth,
+            #onWarning: onWarning,
           },
         ),
         returnValue: _i7.Stream<List<_i8.ZebraDevice>>.empty(),

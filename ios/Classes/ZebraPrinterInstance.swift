@@ -51,9 +51,6 @@ class ZebraPrinterInstance: NSObject {
         }
 
         switch call.method {
-        case "checkPermission":
-            checkPermission(operationId: operationId, result: result)
-
         case "discoverBTClassic":
             discoverBTClassic(args: args, operationId: operationId, result: result)
 
@@ -107,23 +104,6 @@ class ZebraPrinterInstance: NSObject {
                 code: "METHOD_NOT_IMPLEMENTED",
                 message: "Method not implemented: \(call.method)")
         }
-    }
-
-    // MARK: - Permission Handling
-
-    private func checkPermission(operationId: String, result: @escaping FlutterResult) {
-        // For MFi Bluetooth, we don't need special permissions
-        // The system handles MFi accessory permissions automatically
-        let bluetoothAvailable = true
-
-        // Use the original callback pattern for permission results
-        self._operationSuccessResult(
-            operationId: operationId,
-            result: result,
-            callbackMethod: MethodChannelConstants.getBluetoothPermissionStatusCallbackOnResult,
-            resultValue: bluetoothAvailable,
-            arguments: ["granted": bluetoothAvailable]
-        )
     }
 
     // MARK: - Discovery Operations
@@ -331,7 +311,18 @@ class ZebraPrinterInstance: NSObject {
                         foundCount += 1
                     }
                 } catch {
-                    // Ignore errors for individual ranges and continue
+                    // Emit warning for individual range failure and continue
+                    self._operationStreamEvent(
+                        operationId: operationId,
+                        eventMethod: MethodChannelConstants.discoveryEventLogWarning,
+                        eventData: [
+                            "eventType": "log",
+                            "level": "warning",
+                            "phase": "subnet",
+                            "target": range,
+                            "message": String(describing: error)
+                        ]
+                    )
                 }
             }
 
@@ -409,7 +400,18 @@ class ZebraPrinterInstance: NSObject {
                         foundCount += 1
                     }
                 } catch {
-                    // Ignore errors for individual addresses and continue
+                    // Emit warning for individual address failure and continue
+                    self._operationStreamEvent(
+                        operationId: operationId,
+                        eventMethod: MethodChannelConstants.discoveryEventLogWarning,
+                        eventData: [
+                            "eventType": "log",
+                            "level": "warning",
+                            "phase": "directedBroadcast",
+                            "target": address,
+                            "message": String(describing: error)
+                        ]
+                    )
                 }
             }
 

@@ -76,13 +76,13 @@ class MethodChannelConstants {
   static const String discoverMulticastCallbackOnError = 'discoverMulticast_onError';
   static const String discoverMulticastEventPrinterFound = 'discoverMulticast_printerFound';
 
+  // discovery generic log/warning event
+  static const String discoveryEventLogWarning = 'discovery_logWarning';
+
   // stopScan
   static const String stopScanMethod = 'stopScan';
   static const String stopScanCallbackOnComplete = 'stopScan_onComplete';
 
-  // getBluetoothPermissionStatus
-  static const String getBluetoothPermissionStatusMethod = 'getBluetoothPermissionStatus';
-  static const String getBluetoothPermissionStatusCallbackOnResult = 'getBluetoothPermissionStatus_onResult';
 
   // getPrinterStatus
   static const String getPrinterStatusMethod = 'getPrinterStatus';

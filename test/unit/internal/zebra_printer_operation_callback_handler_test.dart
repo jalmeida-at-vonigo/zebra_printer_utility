@@ -158,11 +158,6 @@ void main() {
       expect(calls, contains('complete:2:true'));
       verify(mockManager.completeOperation('2', true)).called(1);
       
-      await handler.handleMethodCall(const MethodCall(
-          MethodChannelConstants.getBluetoothPermissionStatusCallbackOnResult,
-          {'operationId': '3', 'granted': true}));
-      expect(calls, contains('complete:3:true'));
-      verify(mockManager.completeOperation('3', true)).called(1);
     });
 
     test('routes status and connection status callbacks', () async {

@@ -176,4 +176,30 @@ class MockZebraPrinterOperationManager extends _i1.Mock
         ),
         returnValueForMissingStub: null,
       );
+
+  @override
+  _i6.Stream<Map<String, dynamic>> operationEvents(String? operationId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #operationEvents,
+          [operationId],
+        ),
+        returnValue: _i6.Stream<Map<String, dynamic>>.empty(),
+      ) as _i6.Stream<Map<String, dynamic>>);
+
+  @override
+  void emitEvent(
+    String? operationId,
+    Map<String, dynamic>? data,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #emitEvent,
+          [
+            operationId,
+            data,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
 }
