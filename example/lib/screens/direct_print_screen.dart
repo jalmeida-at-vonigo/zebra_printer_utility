@@ -177,7 +177,7 @@ class _DirectPrintScreenState extends State<DirectPrintScreen> {
   
   DirectPrinterChannel? _printerChannel;
   DirectDevice? _selectedDevice;
-  bool _isConnected = false;
+  bool _isPrinterConnected = false;
   bool _isPrinting = false;
   bool _isDiscovering = false;
   PrintFormat _format = PrintFormat.cpcl;
@@ -304,7 +304,7 @@ PRINT''';
       if (result) {
         setState(() {
           _selectedDevice = device;
-          _isConnected = true;
+          _isPrinterConnected = true;
         });
         _addLog('Connected successfully', 'success');
       } else {
@@ -340,7 +340,7 @@ PRINT''';
       await _printerChannel!.disconnect();
       setState(() {
         _selectedDevice = null;
-        _isConnected = false;
+        _isPrinterConnected = false;
       });
       _addLog('Disconnected', 'success');
     } catch (e) {
@@ -349,7 +349,7 @@ PRINT''';
   }
 
   Future<void> _print() async {
-    if (!_isConnected || _printerChannel == null) {
+    if (!_isPrinterConnected || _printerChannel == null) {
       _addLog('Not connected to printer', 'warning');
       return;
     }
@@ -446,7 +446,7 @@ PRINT''';
                 _format = format;
               });
             },
-            onPrint: _isConnected && !_isPrinting ? _print : null,
+            onPrint: _isPrinterConnected && !_isPrinting ? _print : null,
             isPrinting: _isPrinting,
           ),
         ),
@@ -497,7 +497,7 @@ PRINT''';
                 _format = format;
               });
             },
-            onPrint: _isConnected && !_isPrinting ? _print : null,
+            onPrint: _isPrinterConnected && !_isPrinting ? _print : null,
             isPrinting: _isPrinting,
           ),
         ),
@@ -535,7 +535,7 @@ PRINT''';
               ],
             ),
             const SizedBox(height: 12),
-            if (_isConnected && _selectedDevice != null) ...[
+            if (_isPrinterConnected && _selectedDevice != null) ...[
               // Connected state
               Row(
                 children: [

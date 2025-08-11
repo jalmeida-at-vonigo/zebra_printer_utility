@@ -174,8 +174,8 @@ class Zebra {
   }
 
   /// Check if a printer is currently connected
-  Future<Result<bool>> isConnected() async {
-    final connected = await manager.isConnected();
+  Future<Result<bool>> isPrinterConnected() async {
+    final connected = await manager.isPrinterConnected();
     return Result.success(connected);
   }
 

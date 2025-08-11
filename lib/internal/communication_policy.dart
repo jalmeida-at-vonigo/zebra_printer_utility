@@ -345,11 +345,11 @@ class CommunicationPolicy {
     }
   }
   
-  /// Get connection status (for external use)
+  /// Get printer connection status (for external use)
   /// Uses cached value when available for faster response
-  Future<Result<bool>> getConnectionStatus() async {
+  Future<Result<bool>> getPrinterConnectionStatus() async {
     // Try cached value first for quick response
-    final cached = _printer.isConnectedCached;
+    final cached = _printer.isPrinterConnectedCached;
     if (cached == true) {
       _logger.debug('Using cached connection status: connected');
       return Result.success(true);

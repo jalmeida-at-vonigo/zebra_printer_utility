@@ -523,13 +523,13 @@ class ZebraErrorBridge {
     }
   }
 
-  /// Execute an operation that already returns Result<T> and ensure no exceptions leak
-  /// This method handles operations that return Result<T> and provides additional
+  /// Execute an operation that already returns Result\<T\> and ensure no exceptions leak
+  /// This method handles operations that return Result\<T\> and provides additional
   /// error context enrichment if the result indicates failure
   ///
   /// Example usage:
   /// ```dart
-  /// final result = await ZebraErrorBridge.executeAndHandleResult<String>(
+  /// final result = await ZebraErrorBridge.executeAndHandleResult\<String\>(
   ///   operation: () => operationManager.execute(...),
   ///   operationType: OperationType.command,
   ///   context: {'setting': 'device.language'},

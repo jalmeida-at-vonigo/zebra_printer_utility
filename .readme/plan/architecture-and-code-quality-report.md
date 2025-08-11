@@ -11,7 +11,7 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
 
 **Why**: The error system contains 70+ error codes, many of which are never used or serve no practical purpose. This creates maintenance burden without value.
 
-**How**: Reduce to ~15-20 essential error codes that actually provide actionable information to users.
+**How**: Organize error codes into clear categories and remove unused ones while improving error classification and grouping.
 
 **Impact**: 
 - Reduces code complexity by ~500 lines
@@ -42,34 +42,46 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
    - Identify which codes are never referenced
    - Note: Additional unused codes may be discovered during deeper analysis
 
-2. **Define Essential Error Set** (1 day)
-   - Workshop with team to identify truly actionable errors
-   - Group similar errors into categories
-   - Define ~15-20 core error codes that users can actually handle
-   - Consider: connection errors, hardware errors, data errors, permission errors
+2. **Analyze Error Categories and Extensions** (1 day)
+   - Review existing `ResultCategory` enum (13 categories: connection, discovery, print, status, command, data, operation, platform, system, configuration, validation)
+   - Review existing `ResultErrorClassification` extension with methods:
+     * `errorCategory` and `errorType` getters
+     * Boolean classification methods: `isConnectionError`, `isTimeoutError`, `isPermissionError`, `isHardwareError`, `isRetryableError`, `isNonRetryableError`
+   - Review existing `ErrorType` enum (22 types: connectionFailure, connectionTimeout, connectionLost, permissionDenied, etc.)
+   - Identify redundant error codes within same categories
+   - Analyze how error classifications are used in UI and business logic
 
-3. **Create Migration Plan** (1 day)
-   - Map old error codes to new simplified set
-   - Identify breaking changes for API users
-   - Plan deprecation strategy for gradual migration
+3. **Consolidate Redundant Errors** (1 day)
+   - Remove duplicate error codes that serve the same purpose
+   - Merge similar errors within categories (e.g., multiple "unknown" errors)
+   - Ensure each remaining error has a unique, actionable purpose
+   - Update error code mappings in `fromCode()` method
 
-4. **Refactor Error System** (2-3 days)
-   - Update `result.dart` with new minimal error set
-   - Remove all unused error code definitions
-   - Update `ZebraErrorBridge` to use new codes
-   - Simplify error categorization logic
+4. **Enhance Error Classification** (2-3 days)
+   - Improve existing `ResultErrorClassification` extension methods (currently has: `isConnectionError`, `isTimeoutError`, `isPermissionError`, `isHardwareError`, `isRetryableError`, `isNonRetryableError`)
+   - Add missing helper methods for common error groupings (e.g., `isPrintError`, `isDiscoveryError`, `isRecoverableError`, `isCriticalError`)
+   - Enhance `ErrorType` enum mapping logic in `errorType` getter for better classification accuracy
+   - Update error handling throughout codebase to use classifications consistently
+   - Ensure all 70+ error codes map correctly to appropriate `ErrorType` values
 
-5. **Update Error Documentation** (1 day)
-   - Rewrite error handling guide with new codes
-   - Create clear examples for each error type
-   - Update API documentation
+5. **Remove Unused Error Codes** (1 day)  
+   - Delete error codes with zero usage across the codebase
+   - Update `fromCode()` method to exclude removed codes
+   - Ensure no breaking changes for currently used codes
+   - Document removed codes for reference
 
-6. **Testing and Validation** (1-2 days)
-   - Write tests for new error system
-   - Ensure all error paths still work correctly
-   - Validate error messages are meaningful
+6. **Update Error Documentation** (1 day)
+   - Document error categories and their purposes
+   - Create examples showing proper error classification usage
+   - Update API documentation with new helper methods
 
-*Note: During implementation, additional error consolidation opportunities may emerge. The final error set might be even smaller than initially planned.*
+7. **Testing and Validation** (1-2 days)
+   - Write tests for error classification extensions
+   - Ensure all error categorization works correctly
+   - Validate error helper methods provide correct classifications
+   - Test that existing error handling continues to work
+
+*Note: The goal is better organization and removal of unused codes, not necessarily a smaller total set. Categories and classifications will be enhanced for better developer experience.*
 
 **Priority**: HIGH - Directly impacts every operation in the library
 
@@ -219,7 +231,7 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
 
 **Why**: The library presents users with multiple ways to accomplish the same task, creating confusion about which approach to use and when.
 
-**How**: Provide a single, clear path for common operations with advanced options hidden behind explicit opt-in APIs.
+**How**: Replace multiple printing methods with a single, clear path for common operations. Advanced options available through explicit opt-in APIs.
 
 **Impact**:
 - Faster onboarding for new developers
@@ -315,11 +327,11 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
    - Create clear separation between basic and advanced APIs
    - Consider: `Zebra.print()` for basic, `Zebra.advanced()` for complex
 
-3. **Consolidate Print Methods** (3-4 days)
-   - Deprecate redundant print methods
+3. **Replace Print Methods** (3-4 days)
+   - Remove redundant print methods completely
    - Route all basic operations through single method
    - Move advanced options to dedicated API surface
-   - Maintain backward compatibility with deprecation warnings
+   - Complete replacement with no compatibility layer
 
 4. **Simplify Event System** (2-3 days)
    - Replace multiple event types with single `PrintEvent`
@@ -339,10 +351,10 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
    - Hide internal complexity from users
    - Provide convenience getters for common checks
 
-7. **Create Migration Guide** (2 days)
-   - Write clear migration path from old to new API
-   - Provide code examples for common migrations
-   - Create automated migration tool if possible
+7. **Update Implementation** (2 days)
+   - Rewrite affected code to use new API
+   - Remove all old API references completely
+   - Update internal implementations
    - Include decision flowchart for API selection
 
 8. **Update Documentation** (2-3 days)
@@ -351,7 +363,7 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
    - Add "recipes" for common tasks
    - Include clear "when to use what" guide
 
-*Note: User feedback during beta testing may reveal additional simplification opportunities. The API might evolve based on real-world usage patterns.*
+*Note: During implementation, additional simplification opportunities may emerge. The final API design might be even simpler than initially planned.*
 
 **Priority**: HIGH - Directly impacts developer adoption and satisfaction
 
@@ -440,9 +452,10 @@ test('handles printerFound callback', () async {
 
 **Examples**:
 1. Connection verification logic duplicated in:
-   - `CommunicationPolicy._executeOperation`
-   - `CommunicationPolicy._executeWithRetry`
+   - `CommunicationPolicy._executeOperation` and `_executeWithRetry`
    - `ZebraPrinterManager.connect`
+   - `SmartPrintManager._connectToPrinter`
+   - **Fix**: Delete local loops and call `CommunicationPolicy.execute()` with default connection assurance.
 
 2. Print data preparation logic repeated in:
    - `ZebraPrinterManager._preparePrintData`
@@ -458,11 +471,8 @@ test('handles printerFound callback', () async {
    - Categorize duplications by type and impact
    - Prioritize based on maintenance burden
 
-2. **Extract Connection Utilities** (1-2 days)
-   - Create `ConnectionVerifier` utility class
-   - Consolidate all connection checking logic
-   - Standardize connection verification flow
-   - Update all callers to use shared utility
+2. **Consolidate into CommunicationPolicy** (1-2 days)
+   - Remove duplicated code; rely solely on policy.
 
 3. **Unify Data Preparation** (2 days)
    - Create `PrintDataPreparer` service
@@ -618,12 +628,12 @@ test('handles printerFound callback', () async {
 4. **Remove Legacy Code** (1-2 days)
    - Delete legacy callback patterns
    - Remove commented-out code blocks
-   - Clean up old migration code
-   - Remove backward compatibility for very old versions
+   - Clean up old implementation patterns
+   - Remove unused code completely
 
 5. **Prune Utility Methods** (1 day)
    - Identify unused utility functions
-   - Remove or deprecate unused methods
+   - Remove unused methods completely
    - Update utility documentation
    - Consider moving rarely-used utilities to separate package
 
@@ -781,7 +791,7 @@ test('handles printerFound callback', () async {
    - Standardize to `isConnected` for state
    - Use `checkConnection()` for verification
    - Update all references consistently
-   - Deprecate old naming with clear migration path
+   - Replace old naming completely
 
 4. **Unify Status Naming** (2 days)
    - Standardize on `status` property pattern
@@ -807,11 +817,11 @@ test('handles printerFound callback', () async {
    - Standardize stream naming conventions
    - Remove inconsistent patterns
 
-8. **Create Migration Tooling** (2 days)
-   - Build automated renaming scripts
-   - Create deprecation helpers
-   - Provide clear migration timeline
-   - Generate migration report for users
+8. **Update All References** (2 days)
+   - Update all code to use new naming conventions
+   - Update all tests to reflect new names  
+   - Update all documentation with new conventions
+   - Ensure complete transition
 
 9. **Update All Documentation** (2 days)
    - Update API documentation
@@ -819,7 +829,7 @@ test('handles printerFound callback', () async {
    - Update README and guides
    - Ensure consistency throughout
 
-*Note: Naming changes are breaking changes. A phased migration approach with deprecation warnings may be needed. Some names might need to stay for backward compatibility.*
+*Note: Naming changes require complete replacement of old patterns. Some refactoring might be more extensive than initially estimated if deeply embedded naming patterns are discovered.*
 
 **Priority**: LOW - Quality of life improvement but impacts entire codebase
 
@@ -924,3 +934,37 @@ The investment in cleanup will pay dividends in:
 - Easier onboarding of new developers
 - Lower support burden
 - Higher developer satisfaction
+
+### New Architecture Alignment Findings (2025-08-11)
+
+#### Manager & Discovery Layer Separation
+- **Issue**: `ZebraPrinterManager` directly constructs and uses `ZebraPrinterDiscovery`, creating hidden coupling and upward references.
+- **Impact**: Violates layering rules; harder to test each component; discovery logic duplicated.
+- **Fix Plan**: Remove manager → discovery dependency. Inject `ZebraPrinterDiscovery` where needed. `SmartPrintManager` orchestrates both.
+- **Change Size**: ~150 LOC touched across 3 files (`ZebraPrinterManager`, `SmartPrintManager`, `Zebra.dart`).
+
+#### CommunicationPolicy Sharing
+- **Issue**: Multiple instances of `CommunicationPolicy` created, some managers bypass it.
+- **Impact**: Inconsistent retry logic, harder to debug.
+- **Fix Plan**: Singleton-per-printer injected into all managers; SmartPrintManager uses manager-provided instance.
+
+#### Example App Outdated API Usage
+- **Issue**: Example screens rely on deprecated command pattern and old event system.
+- **Impact**: New adopters see outdated patterns.
+- **Fix Plan**: Align example with new API (`Zebra.print()`, new event streams). See Delivery Plan Step 15.
+
+#### Mobile ZebraPrinter Widgets Monolith
+- **Issue**: `ZebraPrintingPopup` 1,700+ lines and holds discovery, state, animation.
+- **Impact**: Hard to maintain UI, violates SRP.
+- **Fix Plan**: Extract components (`PrintStateManager`, `DiscoveryCoordinator`, etc.) per Delivery Plan Step 16.
+
+*These findings are now reflected in the Delivery Plan steps 9, 15, and 16. Implementation details may evolve during coding, but goals remain separation, simplicity, and maintainability.*
+
+#### Layer Responsibilities Recap
+| Layer | Responsibility | Key Classes |
+|-------|----------------|-------------|
+| Workflow / Orchestration | High-level workflows, retries, progress | `SmartPrintManager` |
+| State / Primitives | Connection state, discovery, readiness, policy | `ZebraPrinterManager`, `ZebraPrinterDiscovery`, `CommunicationPolicy` |
+| Native Wrapper | Thin typed bridge to Link-OS SDK | `ZebraPrinter`, native binders |
+
+*(Replaces standalone zebra-architecture rule file – information consolidated into reports.)*

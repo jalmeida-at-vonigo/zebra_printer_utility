@@ -5,15 +5,16 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i7;
 
-import 'package:flutter/services.dart' as _i11;
+import 'package:flutter/services.dart' as _i12;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
-import 'package:zebrautil/models/communication_policy_options.dart' as _i12;
-import 'package:zebrautil/models/print_enums.dart' as _i10;
-import 'package:zebrautil/models/print_operation_tracker.dart' as _i9;
-import 'package:zebrautil/models/print_options.dart' as _i13;
+import 'package:zebrautil/models/communication_policy_options.dart' as _i13;
+import 'package:zebrautil/models/connection_event.dart' as _i8;
+import 'package:zebrautil/models/print_enums.dart' as _i11;
+import 'package:zebrautil/models/print_operation_tracker.dart' as _i10;
+import 'package:zebrautil/models/print_options.dart' as _i14;
 import 'package:zebrautil/models/result.dart' as _i3;
-import 'package:zebrautil/models/zebra_device.dart' as _i8;
+import 'package:zebrautil/models/zebra_device.dart' as _i9;
 import 'package:zebrautil/zebra_printer.dart' as _i2;
 import 'package:zebrautil/zebra_printer_discovery.dart' as _i4;
 import 'package:zebrautil/zebrautil.dart' as _i5;
@@ -129,6 +130,12 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as bool);
 
   @override
+  _i7.Stream<_i8.ConnectionEvent> get connectionEvents => (super.noSuchMethod(
+        Invocation.getter(#connectionEvents),
+        returnValue: _i7.Stream<_i8.ConnectionEvent>.empty(),
+      ) as _i7.Stream<_i8.ConnectionEvent>);
+
+  @override
   set isRotated(bool? _isRotated) => super.noSuchMethod(
         Invocation.setter(
           #isRotated,
@@ -156,7 +163,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverBTClassicStream({
+  _i7.Stream<_i9.ZebraDevice> discoverBTClassicStream({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -169,11 +176,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcastStream({
+  _i7.Stream<_i9.ZebraDevice> discoverLocalBroadcastStream({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -186,11 +193,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverSubnetStream({
+  _i7.Stream<_i9.ZebraDevice> discoverSubnetStream({
     String? subnet = '192.168.1',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -205,11 +212,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverDirectedBroadcastStream({
+  _i7.Stream<_i9.ZebraDevice> discoverDirectedBroadcastStream({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -224,11 +231,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverMulticastStream({
+  _i7.Stream<_i9.ZebraDevice> discoverMulticastStream({
     int? hops = 5,
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -243,11 +250,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverBTClassic({
+  _i7.Stream<_i9.ZebraDevice> discoverBTClassic({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -260,11 +267,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverLocalBroadcast({
+  _i7.Stream<_i9.ZebraDevice> discoverLocalBroadcast({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -277,11 +284,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverSubnet({
+  _i7.Stream<_i9.ZebraDevice> discoverSubnet({
     String? subnet = '192.168.1',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -296,11 +303,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverDirectedBroadcast({
+  _i7.Stream<_i9.ZebraDevice> discoverDirectedBroadcast({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -315,11 +322,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
-  _i7.Stream<_i8.ZebraDevice> discoverMulticast({
+  _i7.Stream<_i9.ZebraDevice> discoverMulticast({
     int? hops = 5,
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -334,8 +341,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<_i8.ZebraDevice>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice>);
+        returnValue: _i7.Stream<_i9.ZebraDevice>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice>);
 
   @override
   _i7.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
@@ -384,9 +391,9 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i7.Future<_i3.Result<void>>);
 
   @override
-  _i7.Future<_i3.Result<_i9.PrintOperationTracker>> print({
+  _i7.Future<_i3.Result<_i10.PrintOperationTracker>> print({
     required String? data,
-    _i10.PrintFormat? format = _i10.PrintFormat.zpl,
+    _i11.PrintFormat? format = _i11.PrintFormat.zpl,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -397,8 +404,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #format: format,
           },
         ),
-        returnValue: _i7.Future<_i3.Result<_i9.PrintOperationTracker>>.value(
-            _FakeResult_1<_i9.PrintOperationTracker>(
+        returnValue: _i7.Future<_i3.Result<_i10.PrintOperationTracker>>.value(
+            _FakeResult_1<_i10.PrintOperationTracker>(
           this,
           Invocation.method(
             #print,
@@ -409,7 +416,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             },
           ),
         )),
-      ) as _i7.Future<_i3.Result<_i9.PrintOperationTracker>>);
+      ) as _i7.Future<_i3.Result<_i10.PrintOperationTracker>>);
 
   @override
   _i7.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
@@ -472,19 +479,38 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i7.Future<_i3.Result<bool>> isPrinterConnected() => (super.noSuchMethod(
+  _i7.Future<_i3.Result<bool>> isPrinterConnected({bool? forceCheck = false}) =>
+      (super.noSuchMethod(
         Invocation.method(
           #isPrinterConnected,
           [],
+          {#forceCheck: forceCheck},
         ),
         returnValue: _i7.Future<_i3.Result<bool>>.value(_FakeResult_1<bool>(
           this,
           Invocation.method(
             #isPrinterConnected,
             [],
+            {#forceCheck: forceCheck},
           ),
         )),
       ) as _i7.Future<_i3.Result<bool>>);
+
+  @override
+  _i7.Future<_i3.Result<void>> sendCommand(String? command) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #sendCommand,
+          [command],
+        ),
+        returnValue: _i7.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #sendCommand,
+            [command],
+          ),
+        )),
+      ) as _i7.Future<_i3.Result<void>>);
 
   @override
   _i7.Future<_i3.Result<String>> getInstanceId() => (super.noSuchMethod(
@@ -502,7 +528,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i7.Future<_i3.Result<String>>);
 
   @override
-  _i7.Future<void> nativeMethodCallHandler(_i11.MethodCall? methodCall) =>
+  _i7.Future<void> nativeMethodCallHandler(_i12.MethodCall? methodCall) =>
       (super.noSuchMethod(
         Invocation.method(
           #nativeMethodCallHandler,
@@ -541,16 +567,22 @@ class MockZebraPrinterManager extends _i1.Mock
       ) as _i2.ZebraPrinter);
 
   @override
-  _i7.Stream<_i8.ZebraDevice?> get connection => (super.noSuchMethod(
+  _i7.Stream<_i9.ZebraDevice?> get connection => (super.noSuchMethod(
         Invocation.getter(#connection),
-        returnValue: _i7.Stream<_i8.ZebraDevice?>.empty(),
-      ) as _i7.Stream<_i8.ZebraDevice?>);
+        returnValue: _i7.Stream<_i9.ZebraDevice?>.empty(),
+      ) as _i7.Stream<_i9.ZebraDevice?>);
 
   @override
   _i7.Stream<String> get status => (super.noSuchMethod(
         Invocation.getter(#status),
         returnValue: _i7.Stream<String>.empty(),
       ) as _i7.Stream<String>);
+
+  @override
+  _i7.Stream<_i8.ConnectionEvent> get connectionEvents => (super.noSuchMethod(
+        Invocation.getter(#connectionEvents),
+        returnValue: _i7.Stream<_i8.ConnectionEvent>.empty(),
+      ) as _i7.Stream<_i8.ConnectionEvent>);
 
   @override
   _i4.ZebraPrinterDiscovery get discovery => (super.noSuchMethod(
@@ -562,10 +594,10 @@ class MockZebraPrinterManager extends _i1.Mock
       ) as _i4.ZebraPrinterDiscovery);
 
   @override
-  List<_i8.ZebraDevice> get discoveredPrinters => (super.noSuchMethod(
+  List<_i9.ZebraDevice> get discoveredPrinters => (super.noSuchMethod(
         Invocation.getter(#discoveredPrinters),
-        returnValue: <_i8.ZebraDevice>[],
-      ) as List<_i8.ZebraDevice>);
+        returnValue: <_i9.ZebraDevice>[],
+      ) as List<_i9.ZebraDevice>);
 
   @override
   _i7.Future<_i3.Result<bool>> initialize() => (super.noSuchMethod(
@@ -585,7 +617,7 @@ class MockZebraPrinterManager extends _i1.Mock
   @override
   _i7.Future<_i3.Result<void>> connect(
     dynamic printerIdentifier, {
-    _i12.CommunicationPolicyOptions? options,
+    _i13.CommunicationPolicyOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -619,9 +651,9 @@ class MockZebraPrinterManager extends _i1.Mock
       ) as _i7.Future<_i3.Result<void>>);
 
   @override
-  _i7.Future<_i3.Result<_i9.PrintOperationTracker>> print(
+  _i7.Future<_i3.Result<_i10.PrintOperationTracker>> print(
     String? data, {
-    _i13.PrintOptions? options,
+    _i14.PrintOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -629,8 +661,8 @@ class MockZebraPrinterManager extends _i1.Mock
           [data],
           {#options: options},
         ),
-        returnValue: _i7.Future<_i3.Result<_i9.PrintOperationTracker>>.value(
-            _FakeResult_1<_i9.PrintOperationTracker>(
+        returnValue: _i7.Future<_i3.Result<_i10.PrintOperationTracker>>.value(
+            _FakeResult_1<_i10.PrintOperationTracker>(
           this,
           Invocation.method(
             #print,
@@ -638,7 +670,7 @@ class MockZebraPrinterManager extends _i1.Mock
             {#options: options},
           ),
         )),
-      ) as _i7.Future<_i3.Result<_i9.PrintOperationTracker>>);
+      ) as _i7.Future<_i3.Result<_i10.PrintOperationTracker>>);
 
   @override
   _i7.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
@@ -675,9 +707,9 @@ class MockZebraPrinterManager extends _i1.Mock
       ) as _i7.Future<_i3.Result<Map<String, dynamic>>>);
 
   @override
-  _i7.Future<bool> isConnected() => (super.noSuchMethod(
+  _i7.Future<bool> isPrinterConnected() => (super.noSuchMethod(
         Invocation.method(
-          #isConnected,
+          #isPrinterConnected,
           [],
         ),
         returnValue: _i7.Future<bool>.value(false),
@@ -740,9 +772,9 @@ class MockSmartPrintManager extends _i1.Mock implements _i5.SmartPrintManager {
   @override
   _i7.Future<void> smartPrint({
     required String? data,
-    _i8.ZebraDevice? device,
+    _i9.ZebraDevice? device,
     int? maxAttempts = 3,
-    _i13.PrintOptions? options,
+    _i14.PrintOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -827,10 +859,10 @@ class MockZebraPrinterDiscovery extends _i1.Mock
       ) as bool);
 
   @override
-  _i7.Stream<List<_i8.ZebraDevice>> get devices => (super.noSuchMethod(
+  _i7.Stream<List<_i9.ZebraDevice>> get devices => (super.noSuchMethod(
         Invocation.getter(#devices),
-        returnValue: _i7.Stream<List<_i8.ZebraDevice>>.empty(),
-      ) as _i7.Stream<List<_i8.ZebraDevice>>);
+        returnValue: _i7.Stream<List<_i9.ZebraDevice>>.empty(),
+      ) as _i7.Stream<List<_i9.ZebraDevice>>);
 
   @override
   _i7.Stream<String> get status => (super.noSuchMethod(
@@ -839,10 +871,10 @@ class MockZebraPrinterDiscovery extends _i1.Mock
       ) as _i7.Stream<String>);
 
   @override
-  List<_i8.ZebraDevice> get discoveredPrinters => (super.noSuchMethod(
+  List<_i9.ZebraDevice> get discoveredPrinters => (super.noSuchMethod(
         Invocation.getter(#discoveredPrinters),
-        returnValue: <_i8.ZebraDevice>[],
-      ) as List<_i8.ZebraDevice>);
+        returnValue: <_i9.ZebraDevice>[],
+      ) as List<_i9.ZebraDevice>);
 
   @override
   _i7.Future<void> initialize({
@@ -863,7 +895,7 @@ class MockZebraPrinterDiscovery extends _i1.Mock
       ) as _i7.Future<void>);
 
   @override
-  _i7.Future<_i3.Result<List<_i8.ZebraDevice>>> discoverPrinters(
+  _i7.Future<_i3.Result<List<_i9.ZebraDevice>>> discoverPrinters(
           {Duration? timeout = const Duration(seconds: 10)}) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -871,8 +903,8 @@ class MockZebraPrinterDiscovery extends _i1.Mock
           [],
           {#timeout: timeout},
         ),
-        returnValue: _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>.value(
-            _FakeResult_1<List<_i8.ZebraDevice>>(
+        returnValue: _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>.value(
+            _FakeResult_1<List<_i9.ZebraDevice>>(
           this,
           Invocation.method(
             #discoverPrinters,
@@ -880,10 +912,10 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             {#timeout: timeout},
           ),
         )),
-      ) as _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>);
+      ) as _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>);
 
   @override
-  _i7.Stream<List<_i8.ZebraDevice>> discoverPrintersStream({
+  _i7.Stream<List<_i9.ZebraDevice>> discoverPrintersStream({
     Duration? timeout = const Duration(seconds: 10),
     int? stopAfterCount,
     bool? stopOnFirstPrinter = false,
@@ -908,11 +940,11 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i7.Stream<List<_i8.ZebraDevice>>.empty(),
-      ) as _i7.Stream<List<_i8.ZebraDevice>>);
+        returnValue: _i7.Stream<List<_i9.ZebraDevice>>.empty(),
+      ) as _i7.Stream<List<_i9.ZebraDevice>>);
 
   @override
-  _i7.Future<_i3.Result<List<_i8.ZebraDevice>>> discoverPrintersUntilFirst({
+  _i7.Future<_i3.Result<List<_i9.ZebraDevice>>> discoverPrintersUntilFirst({
     Duration? timeout = const Duration(seconds: 10),
     bool? includeWifi = true,
     bool? includeBluetooth = true,
@@ -927,8 +959,8 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             #includeBluetooth: includeBluetooth,
           },
         ),
-        returnValue: _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>.value(
-            _FakeResult_1<List<_i8.ZebraDevice>>(
+        returnValue: _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>.value(
+            _FakeResult_1<List<_i9.ZebraDevice>>(
           this,
           Invocation.method(
             #discoverPrintersUntilFirst,
@@ -940,10 +972,10 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             },
           ),
         )),
-      ) as _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>);
+      ) as _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>);
 
   @override
-  _i7.Future<_i3.Result<List<_i8.ZebraDevice>>> discoverPrintersCount({
+  _i7.Future<_i3.Result<List<_i9.ZebraDevice>>> discoverPrintersCount({
     required int? count,
     Duration? timeout = const Duration(seconds: 10),
     bool? includeWifi = true,
@@ -960,8 +992,8 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             #includeBluetooth: includeBluetooth,
           },
         ),
-        returnValue: _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>.value(
-            _FakeResult_1<List<_i8.ZebraDevice>>(
+        returnValue: _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>.value(
+            _FakeResult_1<List<_i9.ZebraDevice>>(
           this,
           Invocation.method(
             #discoverPrintersCount,
@@ -974,7 +1006,7 @@ class MockZebraPrinterDiscovery extends _i1.Mock
             },
           ),
         )),
-      ) as _i7.Future<_i3.Result<List<_i8.ZebraDevice>>>);
+      ) as _i7.Future<_i3.Result<List<_i9.ZebraDevice>>>);
 
   @override
   _i7.Future<void> stopDiscovery() => (super.noSuchMethod(
@@ -987,25 +1019,25 @@ class MockZebraPrinterDiscovery extends _i1.Mock
       ) as _i7.Future<void>);
 
   @override
-  _i7.Future<List<_i8.ZebraDevice>> findPairedPrinters() => (super.noSuchMethod(
+  _i7.Future<List<_i9.ZebraDevice>> findPairedPrinters() => (super.noSuchMethod(
         Invocation.method(
           #findPairedPrinters,
           [],
         ),
         returnValue:
-            _i7.Future<List<_i8.ZebraDevice>>.value(<_i8.ZebraDevice>[]),
-      ) as _i7.Future<List<_i8.ZebraDevice>>);
+            _i7.Future<List<_i9.ZebraDevice>>.value(<_i9.ZebraDevice>[]),
+      ) as _i7.Future<List<_i9.ZebraDevice>>);
 
   @override
-  _i7.Future<List<_i8.ZebraDevice>> getAvailablePrinters() =>
+  _i7.Future<List<_i9.ZebraDevice>> getAvailablePrinters() =>
       (super.noSuchMethod(
         Invocation.method(
           #getAvailablePrinters,
           [],
         ),
         returnValue:
-            _i7.Future<List<_i8.ZebraDevice>>.value(<_i8.ZebraDevice>[]),
-      ) as _i7.Future<List<_i8.ZebraDevice>>);
+            _i7.Future<List<_i9.ZebraDevice>>.value(<_i9.ZebraDevice>[]),
+      ) as _i7.Future<List<_i9.ZebraDevice>>);
 
   @override
   void dispose() => super.noSuchMethod(

@@ -148,7 +148,7 @@ class ZebraPrinterReadinessManager {
   /// Centralized connection assurance method for other managers to use
   /// This is the single point of truth for connection assurance
   Future<Result<bool>> ensureConnection() async {
-    return await _communicationPolicy.getConnectionStatus();
+    return await _communicationPolicy.getPrinterConnectionStatus();
   }
 
   /// Centralized command execution with connection assurance and retry logic

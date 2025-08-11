@@ -1,6 +1,7 @@
 /// Enriched error information from native operations
 /// Preserves structured error data for proper error handling in Dart
 class EnrichedNativeError {
+
   const EnrichedNativeError({
     required this.message,
     required this.code,
@@ -14,6 +15,24 @@ class EnrichedNativeError {
     required this.instanceId,
     required this.queue,
   });
+
+  /// Create from native callback arguments
+  factory EnrichedNativeError.fromNative(Map<String, dynamic> arguments) {
+    return EnrichedNativeError(
+      message: arguments['message'] as String? ?? 'Unknown native error',
+      code: arguments['code'] as String? ?? 'UNKNOWN_ERROR',
+      nativeError: arguments['nativeError'] as String?,
+      nativeErrorCode: arguments['nativeErrorCode'] as int?,
+      nativeErrorDomain: arguments['nativeErrorDomain'] as String?,
+      context: arguments['context'] as Map<String, dynamic>?,
+      timestamp:
+          arguments['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+      nativeStackTrace: arguments['nativeStackTrace'] as String?,
+      operationId: arguments['operationId'] as String? ?? 'unknown',
+      instanceId: arguments['instanceId'] as String? ?? 'unknown',
+      queue: arguments['queue'] as String? ?? 'unknown',
+    );
+  }
 
   final String message;
   final String code;

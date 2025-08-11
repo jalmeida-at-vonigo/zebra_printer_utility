@@ -634,7 +634,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     onPressed: _disconnectFromPrinter,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
-                      side: BorderSide(color: Colors.red),
+                      side: const BorderSide(color: Colors.red),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 8),
                     ),

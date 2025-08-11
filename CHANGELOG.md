@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.58] - 2024-12-20
+
+### Changed
+- **Error System Cleanup**: Removed 45+ unused error codes and improved error categorization
+  - Removed unused error codes: `alreadyConnected`, `authenticationError`, `configurationError`, etc.
+  - Enhanced `ErrorType` enum with proper categorization (hardware, timeout, data, etc.)
+  - Improved error classification extensions for better error handling
+  - Added missing `EnrichedNativeError.fromNative()` factory method
+
+## [2.0.57] - 2024-12-20
+
+### Changed
+- **Naming Consistency**: Standardized all connection-related method and property names
+  - `Zebra.isConnected()` → `Zebra.isPrinterConnected()`
+  - `ZebraPrinterManager.isConnected()` → `ZebraPrinterManager.isPrinterConnected()`
+  - `ZebraPrinter.isConnectedCached` → `ZebraPrinter.isPrinterConnectedCached`
+  - `CommunicationPolicy.getConnectionStatus()` → `CommunicationPolicy.getPrinterConnectionStatus()`
+
 ## [2.0.56] - 2024-12-20
 
 ### Fixed

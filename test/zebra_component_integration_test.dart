@@ -131,12 +131,12 @@ void main() {
       });
 
       test('should handle connection status checks', () async {
-        when(mockManager.isConnected()).thenAnswer((_) async => true);
+        when(mockManager.isPrinterConnected()).thenAnswer((_) async => true);
 
-        final isConnected = await mockManager.isConnected();
+        final isConnected = await mockManager.isPrinterConnected();
         
         expect(isConnected, isTrue);
-        verify(mockManager.isConnected()).called(1);
+        verify(mockManager.isPrinterConnected()).called(1);
       });
     });
 

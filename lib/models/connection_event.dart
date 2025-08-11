@@ -4,12 +4,6 @@ import 'package:flutter/material.dart';
 /// These events provide real-time updates about connection status
 /// for immediate UI feedback and responsiveness
 class ConnectionEvent {
-  final ConnectionEventType type;
-  final DateTime timestamp;
-  final String? printerAddress;
-  final String? message;
-  final Map<String, dynamic> metadata;
-
   const ConnectionEvent({
     required this.type,
     required this.timestamp,
@@ -17,11 +11,6 @@ class ConnectionEvent {
     this.message,
     this.metadata = const {},
   });
-
-  @override
-  String toString() {
-    return 'ConnectionEvent(type: $type, address: $printerAddress, message: $message)';
-  }
 
   /// Create a connection established event
   factory ConnectionEvent.connected({
@@ -81,6 +70,17 @@ class ConnectionEvent {
       message: reason ?? 'Disconnected from printer',
       metadata: metadata ?? {},
     );
+  }
+
+  final ConnectionEventType type;
+  final DateTime timestamp;
+  final String? printerAddress;
+  final String? message;
+  final Map<String, dynamic> metadata;
+
+  @override
+  String toString() {
+    return 'ConnectionEvent(type: $type, address: $printerAddress, message: $message)';
   }
 }
 

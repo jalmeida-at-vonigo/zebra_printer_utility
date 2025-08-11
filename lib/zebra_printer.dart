@@ -407,9 +407,9 @@ class ZebraPrinter {
   Stream<ConnectionEvent> get connectionEvents =>
       _connectionEventController.stream;
 
-  /// Get cached connection status without round-trip to printer
+  /// Get cached printer connection status without round-trip to printer
   /// Returns null if no cached value or value is stale
-  bool? get isConnectedCached {
+  bool? get isPrinterConnectedCached {
     if (_isConnected == null || _lastConnectionVerified == null) {
       return null;
     }

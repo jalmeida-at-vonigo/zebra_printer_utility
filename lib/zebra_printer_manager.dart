@@ -301,7 +301,7 @@ class ZebraPrinterManager {
             'Manager: Performing optimistic connection handling before printing');
         
         // Check cached connection state first (no round-trip)
-        final cachedConnected = _printer.isConnectedCached;
+        final cachedConnected = _printer.isPrinterConnectedCached;
 
         if (cachedConnected == false) {
           // We know we're disconnected, try to reconnect proactively
@@ -651,7 +651,7 @@ class ZebraPrinterManager {
 
 
   /// Primitive: Check if a printer is currently connected
-  Future<bool> isConnected() async {
+  Future<bool> isPrinterConnected() async {
     await _ensureInitialized();
     final result = await _printer.isPrinterConnected();
     return result.success ? (result.data ?? false) : false;

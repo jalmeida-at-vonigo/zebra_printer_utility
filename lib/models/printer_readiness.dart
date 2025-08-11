@@ -321,7 +321,7 @@ class PrinterReadiness {
     
     try {
       // First try cached value if available
-      final cachedStatus = _printer.isConnectedCached;
+      final cachedStatus = _printer.isPrinterConnectedCached;
       if (cachedStatus != null) {
         _logger.info(
             'PrinterReadiness: Using cached connection status: $cachedStatus');

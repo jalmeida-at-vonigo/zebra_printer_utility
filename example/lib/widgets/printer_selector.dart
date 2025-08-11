@@ -43,7 +43,7 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   }
 
   Future<void> _checkConnection() async {
-    final result = await Zebra.global.isConnected();
+    final result = await Zebra.global.isPrinterConnected();
     if (mounted && result.success && result.data == true) {
       setState(() {
         _status = 'Connected';

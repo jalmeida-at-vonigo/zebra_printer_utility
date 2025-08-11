@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:zebrautil/internal/native_models/enriched_native_error.dart';
 import 'package:zebrautil/internal/native_models/method_channel_constants.dart';
 import 'package:zebrautil/internal/zebra_printer_operation_callback_handler.dart';
 import 'package:zebrautil/internal/zebra_printer_operation_manager.dart';
@@ -29,8 +30,21 @@ void main() {
 
       when(mockManager.failOperation(any, any)).thenAnswer((invocation) {
         final id = invocation.positionalArguments[0] as String;
-        final error = invocation.positionalArguments[1] as String;
-        calls.add('fail:$id:$error');
+        final error = invocation.positionalArguments[1];
+        if (error is String) {
+          calls.add('fail:$id:$error');
+        } else if (error is EnrichedNativeError) {
+          // Handle EnrichedNativeError case
+          String errorStr = 'fail:$id:${error.message} | Code: ${error.code}';
+          if (error.context != null) {
+            errorStr += ' | Context: ${error.context}';
+          }
+          errorStr +=
+              ' | Time: ${error.timestamp} | Native Stack: ${error.nativeStackTrace}';
+          calls.add(errorStr);
+        } else {
+          calls.add('fail:$id:$error');
+        }
       });
     });
 
@@ -55,9 +69,7 @@ void main() {
           calls,
           contains(
               'fail:2:fail | Code: CONNECTION_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
-      verify(mockManager.failOperation(
-              '2', argThat(contains('CONNECTION_ERROR'))))
-          .called(1);
+      verify(mockManager.failOperation('2', any)).called(1);
     });
 
     test('routes disconnect callbacks', () async {
@@ -81,9 +93,7 @@ void main() {
           calls,
           contains(
               'fail:2:fail | Code: DISCONNECT_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
-      verify(mockManager.failOperation(
-              '2', argThat(contains('DISCONNECT_ERROR'))))
-          .called(1);
+      verify(mockManager.failOperation('2', any)).called(1);
     });
 
     test('routes print callbacks', () async {
@@ -108,8 +118,7 @@ void main() {
           calls,
           contains(
               'fail:2:fail | Code: PRINT_ERROR | Context: {operation: print, dataLength: 100} | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
-      verify(mockManager.failOperation('2', argThat(contains('PRINT_ERROR'))))
-          .called(1);
+      verify(mockManager.failOperation('2', any)).called(1);
     });
 
     test('routes settings callbacks', () async {
@@ -140,9 +149,7 @@ void main() {
           calls,
           contains(
               'fail:3:fail | Code: SETTINGS_ERROR | Context: {operation: setSettings, command: test=value} | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
-      verify(mockManager.failOperation(
-              '3', argThat(contains('SETTINGS_ERROR'))))
-          .called(1);
+      verify(mockManager.failOperation('3', any)).called(1);
     });
 
     test('routes discovery and permission callbacks', () async {
@@ -181,8 +188,7 @@ void main() {
           calls,
           contains(
               'fail:2:fail | Code: STATUS_ERROR | Time: 2023-01-01T00:00:00Z | Native Stack: stack trace'));
-      verify(mockManager.failOperation('2', argThat(contains('STATUS_ERROR'))))
-          .called(1);
+      verify(mockManager.failOperation('2', any)).called(1);
       
       await handler.handleMethodCall(const MethodCall(
           MethodChannelConstants.isConnectedCallbackOnResult,

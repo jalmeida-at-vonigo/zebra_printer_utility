@@ -28,7 +28,6 @@ enum ErrorType {
   hardwareFailure,
   sensorMalfunction,
   printHeadError,
-  powerError,
 
   // Timeout types
   operationTimeout,
@@ -366,8 +365,7 @@ extension ResultErrorClassification<T> on Result<T> {
     // Hardware types
     if (code.contains('hardware') ||
         code.contains('sensor_error') ||
-        code.contains('temperature_error') ||
-        code.contains('power_error')) {
+        code.contains('temperature_error')) {
       return ErrorType.hardwareFailure;
     }
     if (code.contains('sensor')) {
@@ -375,9 +373,6 @@ extension ResultErrorClassification<T> on Result<T> {
     }
     if (code.contains('print_head')) {
       return ErrorType.printHeadError;
-    }
-    if (code.contains('power')) {
-      return ErrorType.powerError;
     }
 
     // Timeout types
@@ -435,8 +430,7 @@ extension ResultErrorClassification<T> on Result<T> {
   bool get isHardwareError => [
         ErrorType.hardwareFailure,
         ErrorType.sensorMalfunction,
-        ErrorType.printHeadError,
-        ErrorType.powerError
+        ErrorType.printHeadError
       ].contains(errorType);
 
   bool get isRetryableError => [
@@ -453,8 +447,6 @@ extension ResultErrorClassification<T> on Result<T> {
         ErrorType.formatError
       ].contains(errorType);
 }
-
-
 
 /// Structured success code with formatable message template
 class SuccessCode {
@@ -980,15 +972,6 @@ class ErrorCodes {
     recoveryHint: 'Connect to a printer using the connect method.',
   );
 
-  static const alreadyConnected = ErrorCode(
-    code: 'ALREADY_CONNECTED',
-    messageTemplate: 'Already connected to printer at {0}',
-    category: ResultCategory.connection,
-    description: 'Attempt to connect when already connected',
-    recoveryHint:
-        'Disconnect from the current printer before attempting to connect to a new one.',
-  );
-
   static const invalidDeviceAddress = ErrorCode(
     code: 'INVALID_DEVICE_ADDRESS',
     messageTemplate: 'Invalid device address: {0}',
@@ -1055,16 +1038,7 @@ class ErrorCodes {
     recoveryHint: 'Ensure the printer is within range and powered on.',
   );
 
-  static const multiplePrintersFound = ErrorCode(
-    code: 'MULTIPLE_PRINTERS_FOUND',
-    messageTemplate: 'Multiple printers found ({0}), specify device explicitly',
-    category: ResultCategory.discovery,
-    description: 'Ambiguous printer selection',
-    recoveryHint:
-        'Specify the exact printer model or address to avoid ambiguity.',
-  );
-
-  // ===== PRINT ERRORS =====
+// ===== PRINT ERRORS =====
   static const printError = ErrorCode(
     code: 'PRINT_ERROR',
     messageTemplate: 'Print operation failed',
@@ -1123,16 +1097,7 @@ class ErrorCodes {
         'Replace the ribbon or check the printer\'s ribbon alignment.',
   );
 
-  static const printDataError = ErrorCode(
-    code: 'PRINT_DATA_ERROR',
-    messageTemplate: 'Invalid print data: {0}',
-    category: ResultCategory.print,
-    description: 'Print data format or content error',
-    recoveryHint:
-        'Ensure the print data is valid and follows the correct format.',
-  );
-
-  static const printRetryFailed = ErrorCode(
+static const printRetryFailed = ErrorCode(
     code: 'PRINT_RETRY_FAILED',
     messageTemplate: 'Failed to print after {0} attempts',
     category: ResultCategory.print,
@@ -1159,16 +1124,7 @@ class ErrorCodes {
   );
 
   // ===== DATA ERRORS =====
-  static const invalidData = ErrorCode(
-    code: 'INVALID_DATA',
-    messageTemplate: 'Invalid data provided',
-    category: ResultCategory.data,
-    description: 'General data validation failure',
-    recoveryHint:
-        'Ensure the data you are sending is valid and meets the requirements.',
-  );
-
-  static const invalidFormat = ErrorCode(
+static const invalidFormat = ErrorCode(
     code: 'INVALID_FORMAT',
     messageTemplate: 'Invalid format: {0}',
     category: ResultCategory.data,
@@ -1176,16 +1132,7 @@ class ErrorCodes {
     recoveryHint: 'Ensure the data format is compatible with the printer.',
   );
 
-  static const encodingError = ErrorCode(
-    code: 'ENCODING_ERROR',
-    messageTemplate: 'Encoding error: {0}',
-    category: ResultCategory.data,
-    description: 'Character encoding failure',
-    recoveryHint:
-        'Ensure the character encoding of your data matches the printer\'s settings.',
-  );
-
-  static const emptyData = ErrorCode(
+static const emptyData = ErrorCode(
     code: 'EMPTY_DATA',
     messageTemplate: 'No data provided for printing',
     category: ResultCategory.data,
@@ -1227,16 +1174,7 @@ class ErrorCodes {
     recoveryHint: 'Investigate the cause of the operation failure.',
   );
 
-  static const retryLimitExceeded = ErrorCode(
-    code: 'RETRY_LIMIT_EXCEEDED',
-    messageTemplate: 'Retry limit exceeded ({0} attempts)',
-    category: ResultCategory.operation,
-    description: 'Maximum retry attempts reached',
-    recoveryHint:
-        'Review the retry logic and consider increasing the retry limit.',
-  );
-
-  // ===== STATUS ERRORS =====
+// ===== STATUS ERRORS =====
   static const statusCheckFailed = ErrorCode(
     code: 'STATUS_CHECK_FAILED',
     messageTemplate: 'Failed to check printer status: {0}',
@@ -1254,16 +1192,7 @@ class ErrorCodes {
         'Increase the status check timeout or ensure printer is responsive.',
   );
 
-  static const invalidStatusResponse = ErrorCode(
-    code: 'INVALID_STATUS_RESPONSE',
-    messageTemplate: 'Invalid status response from printer',
-    category: ResultCategory.status,
-    description: 'Printer returned invalid status data',
-    recoveryHint:
-        'Review the printer\'s status response and ensure it\'s valid.',
-  );
-
-  static const detailedStatusCheckFailed = ErrorCode(
+static const detailedStatusCheckFailed = ErrorCode(
     code: 'DETAILED_STATUS_CHECK_FAILED',
     messageTemplate: 'Failed to get detailed printer status: {0}',
     category: ResultCategory.status,
@@ -1279,15 +1208,7 @@ class ErrorCodes {
     recoveryHint: 'Re-check the printer\'s basic status or try again later.',
   );
 
-  static const statusResponseFormatError = ErrorCode(
-    code: 'STATUS_RESPONSE_FORMAT_ERROR',
-    messageTemplate: 'Invalid response format for {0} status',
-    category: ResultCategory.status,
-    description: 'Status response format is invalid or unexpected',
-    recoveryHint: 'Check printer firmware version and ensure compatibility.',
-  );
-
-  static const statusConnectionError = ErrorCode(
+static const statusConnectionError = ErrorCode(
     code: 'STATUS_CONNECTION_ERROR',
     messageTemplate: 'Connection error during status check: {0}',
     category: ResultCategory.status,
@@ -1312,33 +1233,10 @@ class ErrorCodes {
     recoveryHint: 'Review the command syntax and ensure it\'s correct.',
   );
 
-  static const commandTimeout = ErrorCode(
-    code: 'COMMAND_TIMEOUT',
-    messageTemplate: 'Command timed out after {0} seconds',
-    category: ResultCategory.command,
-    description: 'Command execution exceeded timeout',
-    recoveryHint: 'Ensure the command completes within the specified time.',
-  );
 
-  static const invalidCommand = ErrorCode(
-    code: 'INVALID_COMMAND',
-    messageTemplate: 'Invalid command: {0}',
-    category: ResultCategory.command,
-    description: 'Command format or syntax error',
-    recoveryHint: 'Check the command syntax and ensure it\'s valid.',
-  );
 
   // ===== PLATFORM ERRORS =====
-  static const platformError = ErrorCode(
-    code: 'PLATFORM_ERROR',
-    messageTemplate: 'Platform error: {0}',
-    category: ResultCategory.platform,
-    description: 'Platform-specific error',
-    recoveryHint:
-        'Investigate the platform-specific error and ensure it\'s handled.',
-  );
-
-  static const notImplemented = ErrorCode(
+static const notImplemented = ErrorCode(
     code: 'NOT_IMPLEMENTED',
     messageTemplate: 'Feature not implemented on this platform',
     category: ResultCategory.platform,
@@ -1346,16 +1244,7 @@ class ErrorCodes {
     recoveryHint: 'This feature is not yet supported on your platform.',
   );
 
-  static const unsupportedPlatform = ErrorCode(
-    code: 'UNSUPPORTED_PLATFORM',
-    messageTemplate: 'Platform not supported: {0}',
-    category: ResultCategory.platform,
-    description: 'Current platform is not supported',
-    recoveryHint:
-        'This plugin only supports the platforms listed in its documentation.',
-  );
-
-  // ===== SYSTEM ERRORS =====
+// ===== SYSTEM ERRORS =====
   static const unknownError = ErrorCode(
     code: 'UNKNOWN_ERROR',
     messageTemplate: 'Unknown error occurred',
@@ -1373,59 +1262,11 @@ class ErrorCodes {
         'This is a bug in the plugin. Please report it to the developer.',
   );
 
-  static const resourceError = ErrorCode(
-    code: 'RESOURCE_ERROR',
-    messageTemplate: 'Resource error: {0}',
-    category: ResultCategory.system,
-    description: 'System resource allocation failure',
-    recoveryHint: 'Check your device\'s memory and storage.',
-  );
+// ===== CONFIGURATION ERRORS =====
 
-  static const memoryError = ErrorCode(
-    code: 'MEMORY_ERROR',
-    messageTemplate: 'Memory allocation failed',
-    category: ResultCategory.system,
-    description: 'Insufficient memory for operation',
-    recoveryHint: 'Free up memory on your device or increase available RAM.',
-  );
-
-  // ===== CONFIGURATION ERRORS =====
-  static const configurationError = ErrorCode(
-    code: 'CONFIGURATION_ERROR',
-    messageTemplate: 'Configuration error: {0}',
-    category: ResultCategory.configuration,
-    description: 'Invalid or missing configuration',
-    recoveryHint:
-        'Review the plugin\'s configuration and ensure it\'s correct.',
-  );
-
-  static const invalidSettings = ErrorCode(
-    code: 'INVALID_SETTINGS',
-    messageTemplate: 'Invalid printer settings: {0}',
-    category: ResultCategory.configuration,
-    description: 'Printer settings are invalid',
-    recoveryHint: 'Check the printer\'s settings and ensure they are valid.',
-  );
 
   // ===== VALIDATION ERRORS =====
-  static const validationError = ErrorCode(
-    code: 'VALIDATION_ERROR',
-    messageTemplate: 'Validation failed: {0}',
-    category: ResultCategory.validation,
-    description: 'Input validation failure',
-    recoveryHint:
-        'Review the input data and ensure it meets the validation requirements.',
-  );
-
-  static const requiredFieldMissing = ErrorCode(
-    code: 'REQUIRED_FIELD_MISSING',
-    messageTemplate: 'Required field missing: {0}',
-    category: ResultCategory.validation,
-    description: 'Required parameter not provided',
-    recoveryHint: 'Ensure all required parameters are provided.',
-  );
-
-  // ===== UTILITY METHODS =====
+// ===== UTILITY METHODS =====
 
   /// Get error code by code string
   static ErrorCode? fromCode(String code) {
@@ -1434,95 +1275,44 @@ class ErrorCodes {
       connectionError,
       connectionTimeout,
       connectionLost,
-      notConnected,
-      alreadyConnected,
-      invalidDeviceAddress,
+      notConnected, invalidDeviceAddress,
       connectionRetryFailed,
       discoveryError,
       discoveryTimeout,
       noPermission,
       bluetoothDisabled,
       networkError,
-      noPrintersFound,
-      multiplePrintersFound,
-      printError,
+      noPrintersFound, printError,
       printTimeout,
       printerNotReady,
       outOfPaper,
       headOpen,
       printerPaused,
-      ribbonError,
-      printDataError,
-      printRetryFailed,
+      ribbonError, printRetryFailed,
       printDataInvalidFormat,
-      printDataTooLarge,
-      invalidData,
-      invalidFormat,
-      encodingError,
-      emptyData,
+      printDataTooLarge, invalidFormat, emptyData,
       operationTimeout,
       operationCancelled,
       invalidArgument,
-      operationError,
-      retryLimitExceeded,
-      statusCheckFailed,
-      statusTimeout,
-      invalidStatusResponse,
-      detailedStatusCheckFailed,
-      basicStatusCheckFailed,
-      statusResponseFormatError,
-      statusConnectionError,
+      operationError, statusCheckFailed,
+      statusTimeout, detailedStatusCheckFailed,
+      basicStatusCheckFailed, statusConnectionError,
       statusTimeoutError,
-      commandError,
-      commandTimeout,
-      invalidCommand,
-      platformError,
-      notImplemented,
-      unsupportedPlatform,
-      unknownError,
+      commandError, notImplemented, unknownError,
       internalError,
-      resourceError,
-      memoryError,
-      configurationError,
-      invalidSettings,
-      validationError,
-      requiredFieldMissing,
       // Custom error scenarios
       connectionFailed,
       disconnectFailed,
-      printFailed,
-      ribbonErrorDetected,
-      printCompletionHardwareError,
-      statusUnknownError,
-      printUnknownError,
-      connectionUnknownError,
-      disconnectUnknownError,
-      statusCheckUnknownError,
-      detailedStatusUnknownError,
-      waitCompletionUnknownError,
-      // Additional error scenarios
-      printerBusy,
-      printerOffline,
-      printerJammed,
+      printFailed, printCompletionHardwareError,
+      statusUnknownError, connectionUnknownError, statusCheckUnknownError,
+      detailedStatusUnknownError, // Additional error scenarios      printerJammed,
       ribbonOut,
       mediaError,
       calibrationRequired,
       bufferFull,
       languageMismatch,
-      settingsConflict,
-      firmwareUpdateRequired,
       temperatureError,
-      sensorError,
       printHeadError,
-      powerError,
-      communicationError,
-      authenticationError,
-      encryptionError,
-      dataCorruptionError,
-      unsupportedFeature,
-      maintenanceRequired,
-      consumableLow,
-      consumableEmpty,
       zebraNoConnection,
       zebraWriteFailure,
       zebraReadFailure,
@@ -1537,15 +1327,6 @@ class ErrorCodes {
       zebraMalformedFormatFieldNumber,
       zebraInvalidFileName,
       zebraInvalidPrinterDriveLetter,
-      printerReadyToPrint,
-      writeFailure,
-      readFailure,
-      discoveryMalformedAddress,
-      discoveryNetworkError,
-      invalidHopCount,
-      malformedFieldNumber,
-      invalidDriveLetter,
-      badDirectoryEntry,
       connectionSpecificTimeout,
       printSpecificTimeout,
       statusSpecificTimeout,
@@ -1581,15 +1362,7 @@ class ErrorCodes {
     description: 'Print failed with error',
     recoveryHint: 'Review print settings and ensure printer is ready.',
   );
-  static const ribbonErrorDetected = ErrorCode(
-    code: 'RIBBON_ERROR_DETECTED',
-    messageTemplate: 'Ribbon error detected: {0}',
-    category: ResultCategory.print,
-    description: 'Ribbon error detected',
-    recoveryHint:
-        'Replace the ribbon or check the printer\'s ribbon alignment.',
-  );
-  static const printCompletionHardwareError = ErrorCode(
+static const printCompletionHardwareError = ErrorCode(
     code: 'PRINT_COMPLETION_HARDWARE_ERROR',
     messageTemplate: 'Print completion failed due to hardware issues',
     category: ResultCategory.print,
@@ -1604,28 +1377,14 @@ class ErrorCodes {
     description: 'Unknown error occurred during status check',
     recoveryHint: 'Re-check the printer\'s status or try again later.',
   );
-  static const printUnknownError = ErrorCode(
-    code: 'PRINT_UNKNOWN_ERROR',
-    messageTemplate: 'Unknown print error: {0}',
-    category: ResultCategory.print,
-    description: 'Unknown error occurred during print',
-    recoveryHint: 'Review the print operation and ensure it\'s valid.',
-  );
-  static const connectionUnknownError = ErrorCode(
+static const connectionUnknownError = ErrorCode(
     code: 'CONNECTION_UNKNOWN_ERROR',
     messageTemplate: 'Unknown connection error: {0}',
     category: ResultCategory.connection,
     description: 'Unknown error occurred during connection',
     recoveryHint: 'Re-establish connection by attempting to connect again.',
   );
-  static const disconnectUnknownError = ErrorCode(
-    code: 'DISCONNECT_UNKNOWN_ERROR',
-    messageTemplate: 'Unknown disconnect error: {0}',
-    category: ResultCategory.connection,
-    description: 'Unknown error occurred during disconnect',
-    recoveryHint: 'Re-establish connection by attempting to connect again.',
-  );
-  static const statusCheckUnknownError = ErrorCode(
+static const statusCheckUnknownError = ErrorCode(
     code: 'STATUS_CHECK_UNKNOWN_ERROR',
     messageTemplate: 'Unknown status check error: {0}',
     category: ResultCategory.status,
@@ -1639,31 +1398,8 @@ class ErrorCodes {
     description: 'Unknown error occurred during detailed status check',
     recoveryHint: 'Re-check the printer\'s status or try again later.',
   );
-  static const waitCompletionUnknownError = ErrorCode(
-    code: 'WAIT_COMPLETION_UNKNOWN_ERROR',
-    messageTemplate: 'Unknown error while waiting for print completion: {0}',
-    category: ResultCategory.print,
-    description: 'Unknown error while waiting for print completion',
-    recoveryHint: 'Ensure the printer is ready for the next print job.',
-  );
+// ===== ADDITIONAL ERROR SCENARIOS WITH RECOVERY HINTS =====
 
-  // ===== ADDITIONAL ERROR SCENARIOS WITH RECOVERY HINTS =====
-  static const printerBusy = ErrorCode(
-    code: 'PRINTER_BUSY',
-    messageTemplate: 'Printer is busy processing another job',
-    category: ResultCategory.print,
-    description: 'Printer cannot accept new print jobs',
-    recoveryHint: 'Wait for the current print job to complete, then try again.',
-  );
-
-  static const printerOffline = ErrorCode(
-    code: 'PRINTER_OFFLINE',
-    messageTemplate: 'Printer is offline',
-    category: ResultCategory.print,
-    description: 'Printer is not available for printing',
-    recoveryHint:
-        'Check if the printer is powered on and connected to the network.',
-  );
 
   static const printerJammed = ErrorCode(
     code: 'PRINTER_JAMMED',
@@ -1715,22 +1451,6 @@ class ErrorCodes {
         'Set the printer language to match your print data format (ZPL/CPCL).',
   );
 
-  static const settingsConflict = ErrorCode(
-    code: 'SETTINGS_CONFLICT',
-    messageTemplate: 'Printer settings conflict: {0}',
-    category: ResultCategory.configuration,
-    description: 'Conflicting printer settings detected',
-    recoveryHint: 'Review and adjust conflicting printer settings.',
-  );
-
-  static const firmwareUpdateRequired = ErrorCode(
-    code: 'FIRMWARE_UPDATE_REQUIRED',
-    messageTemplate: 'Printer firmware update required',
-    category: ResultCategory.system,
-    description: 'Printer firmware is outdated',
-    recoveryHint: 'Update the printer firmware to the latest version.',
-  );
-
   static const temperatureError = ErrorCode(
     code: 'TEMPERATURE_ERROR',
     messageTemplate: 'Printer temperature error: {0}',
@@ -1740,13 +1460,7 @@ class ErrorCodes {
         'Allow the printer to cool down or warm up to operating temperature.',
   );
 
-  static const sensorError = ErrorCode(
-    code: 'SENSOR_ERROR',
-    messageTemplate: 'Printer sensor error: {0}',
-    category: ResultCategory.print,
-    description: 'Printer sensor malfunction',
-    recoveryHint: 'Check and clean the printer sensors, or contact support.',
-  );
+
 
   static const printHeadError = ErrorCode(
     code: 'PRINT_HEAD_ERROR',
@@ -1756,83 +1470,9 @@ class ErrorCodes {
     recoveryHint: 'Clean the print head or replace it if damaged.',
   );
 
-  static const powerError = ErrorCode(
-    code: 'POWER_ERROR',
-    messageTemplate: 'Power error: {0}',
-    category: ResultCategory.system,
-    description: 'Power-related printer error',
-    recoveryHint: 'Check power supply and ensure stable power connection.',
-  );
 
-  static const communicationError = ErrorCode(
-    code: 'COMMUNICATION_ERROR',
-    messageTemplate: 'Communication error: {0}',
-    category: ResultCategory.connection,
-    description: 'Communication protocol error',
-    recoveryHint:
-        'Check connection settings and ensure proper communication protocol.',
-  );
 
-  static const authenticationError = ErrorCode(
-    code: 'AUTHENTICATION_ERROR',
-    messageTemplate: 'Authentication failed: {0}',
-    category: ResultCategory.connection,
-    description: 'Printer authentication failed',
-    recoveryHint:
-        'Check authentication credentials and network security settings.',
-  );
-
-  static const encryptionError = ErrorCode(
-    code: 'ENCRYPTION_ERROR',
-    messageTemplate: 'Encryption error: {0}',
-    category: ResultCategory.connection,
-    description: 'Data encryption/decryption failure',
-    recoveryHint:
-        'Check encryption settings and ensure compatible security protocols.',
-  );
-
-  static const dataCorruptionError = ErrorCode(
-    code: 'DATA_CORRUPTION_ERROR',
-    messageTemplate: 'Data corruption detected: {0}',
-    category: ResultCategory.data,
-    description: 'Print data is corrupted or incomplete',
-    recoveryHint: 'Regenerate the print data and ensure data integrity.',
-  );
-
-  static const unsupportedFeature = ErrorCode(
-    code: 'UNSUPPORTED_FEATURE',
-    messageTemplate: 'Unsupported feature: {0}',
-    category: ResultCategory.platform,
-    description: 'Feature not supported by this printer model',
-    recoveryHint: 'Use a printer model that supports this feature.',
-  );
-
-  static const maintenanceRequired = ErrorCode(
-    code: 'MAINTENANCE_REQUIRED',
-    messageTemplate: 'Printer maintenance required: {0}',
-    category: ResultCategory.system,
-    description: 'Printer requires maintenance',
-    recoveryHint:
-        'Perform the required maintenance or contact service technician.',
-  );
-
-  static const consumableLow = ErrorCode(
-    code: 'CONSUMABLE_LOW',
-    messageTemplate: 'Consumable running low: {0}',
-    category: ResultCategory.print,
-    description: 'Printer consumable (ribbon, media) is running low',
-    recoveryHint: 'Replace the consumable soon to avoid print quality issues.',
-  );
-
-  static const consumableEmpty = ErrorCode(
-    code: 'CONSUMABLE_EMPTY',
-    messageTemplate: 'Consumable empty: {0}',
-    category: ResultCategory.print,
-    description: 'Printer consumable is completely empty',
-    recoveryHint: 'Replace the empty consumable to continue printing.',
-  );
-
-  // ===== ZEBRA SDK SPECIFIC ERRORS =====
+// ===== ZEBRA SDK SPECIFIC ERRORS =====
   // Based on official Zebra Link-OS SDK v1.6.1158 error codes
 
   static const zebraNoConnection = ErrorCode(
@@ -1954,83 +1594,13 @@ class ErrorCodes {
   // ===== ENHANCED ERROR CLASSIFICATIONS =====
   // More specific error codes for better hardware mapping
 
-  static const printerReadyToPrint = ErrorCode(
-    code: 'PRINTER_READY_TO_PRINT',
-    messageTemplate: 'Printer is ready to print',
-    category: ResultCategory.status,
-    description: 'Printer status indicates ready state',
-    recoveryHint: 'Printer is ready for print operations.',
-  );
 
-  static const writeFailure = ErrorCode(
-    code: 'WRITE_FAILURE',
-    messageTemplate: 'Failed to write data to printer',
-    category: ResultCategory.connection,
-    description: 'Data transmission to printer failed',
-    recoveryHint: 'Check connection stability and retry the write operation.',
-  );
 
-  static const readFailure = ErrorCode(
-    code: 'READ_FAILURE',
-    messageTemplate: 'Failed to read data from printer',
-    category: ResultCategory.connection,
-    description: 'Data reception from printer failed',
-    recoveryHint: 'Check connection stability and retry the read operation.',
-  );
 
-  static const discoveryMalformedAddress = ErrorCode(
-    code: 'DISCOVERY_MALFORMED_ADDRESS',
-    messageTemplate: 'Malformed discovery address: {0}',
-    category: ResultCategory.discovery,
-    description: 'Discovery address format is invalid',
-    recoveryHint:
-        'Verify the address format and ensure it matches the expected pattern.',
-  );
 
-  static const discoveryNetworkError = ErrorCode(
-    code: 'DISCOVERY_NETWORK_ERROR',
-    messageTemplate: 'Network error during printer discovery: {0}',
-    category: ResultCategory.discovery,
-    description: 'Network-related error during discovery process',
-    recoveryHint: 'Check network connectivity and try discovery again.',
-  );
 
-  static const invalidHopCount = ErrorCode(
-    code: 'INVALID_HOP_COUNT',
-    messageTemplate: 'Invalid multicast hop count: {0}',
-    category: ResultCategory.discovery,
-    description: 'Multicast hop count parameter is out of valid range',
-    recoveryHint:
-        'Use a hop count value appropriate for your network topology.',
-  );
 
-  static const malformedFieldNumber = ErrorCode(
-    code: 'MALFORMED_FIELD_NUMBER',
-    messageTemplate: 'Format field number must be between 1 and 9999',
-    category: ResultCategory.data,
-    description: 'ZPL format field number is outside valid range',
-    recoveryHint:
-        'Ensure field numbers in ZPL commands are between 1 and 9999.',
-  );
-
-  static const invalidDriveLetter = ErrorCode(
-    code: 'INVALID_DRIVE_LETTER',
-    messageTemplate: 'Invalid printer drive letter: {0}',
-    category: ResultCategory.data,
-    description: 'Specified printer drive letter is not valid',
-    recoveryHint: 'Use a valid drive letter supported by the printer model.',
-  );
-
-  static const badDirectoryEntry = ErrorCode(
-    code: 'BAD_DIRECTORY_ENTRY',
-    messageTemplate: 'Bad file directory entry on printer',
-    category: ResultCategory.data,
-    description: 'Printer file system directory entry is corrupted',
-    recoveryHint:
-        'Check printer file system integrity or reformat if necessary.',
-  );
-
-  // ===== TIMEOUT CLASSIFICATION ERRORS =====
+// ===== TIMEOUT CLASSIFICATION ERRORS =====
   // More specific timeout errors for better classification
 
   static const connectionSpecificTimeout = ErrorCode(

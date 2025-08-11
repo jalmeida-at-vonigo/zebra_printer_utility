@@ -410,7 +410,7 @@ void main() {
       expect(ErrorCodes.connectionTimeout.code, equals('CONNECTION_TIMEOUT'));
       expect(ErrorCodes.connectionLost.code, equals('CONNECTION_LOST'));
       expect(ErrorCodes.notConnected.code, equals('NOT_CONNECTED'));
-      expect(ErrorCodes.alreadyConnected.code, equals('ALREADY_CONNECTED'));
+
 
       // Discovery errors
       expect(ErrorCodes.discoveryError.code, equals('DISCOVERY_ERROR'));
@@ -418,8 +418,7 @@ void main() {
       expect(ErrorCodes.bluetoothDisabled.code, equals('BLUETOOTH_DISABLED'));
       expect(ErrorCodes.networkError.code, equals('NETWORK_ERROR'));
       expect(ErrorCodes.noPrintersFound.code, equals('NO_PRINTERS_FOUND'));
-      expect(ErrorCodes.multiplePrintersFound.code,
-          equals('MULTIPLE_PRINTERS_FOUND'));
+
 
       // Print errors
       expect(ErrorCodes.printError.code, equals('PRINT_ERROR'));
@@ -429,9 +428,9 @@ void main() {
       expect(ErrorCodes.printerPaused.code, equals('PRINTER_PAUSED'));
 
       // Data errors
-      expect(ErrorCodes.invalidData.code, equals('INVALID_DATA'));
+
       expect(ErrorCodes.invalidFormat.code, equals('INVALID_FORMAT'));
-      expect(ErrorCodes.encodingError.code, equals('ENCODING_ERROR'));
+
 
       // Operation errors
       expect(ErrorCodes.operationTimeout.code, equals('OPERATION_TIMEOUT'));
@@ -440,7 +439,7 @@ void main() {
       expect(ErrorCodes.operationError.code, equals('OPERATION_ERROR'));
 
       // Platform errors
-      expect(ErrorCodes.platformError.code, equals('PLATFORM_ERROR'));
+
       expect(ErrorCodes.notImplemented.code, equals('NOT_IMPLEMENTED'));
       expect(ErrorCodes.unknownError.code, equals('UNKNOWN_ERROR'));
     });

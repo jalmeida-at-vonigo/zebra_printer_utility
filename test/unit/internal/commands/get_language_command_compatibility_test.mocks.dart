@@ -5,13 +5,14 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
 
-import 'package:flutter/services.dart' as _i9;
+import 'package:flutter/services.dart' as _i10;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
-import 'package:zebrautil/models/print_enums.dart' as _i8;
-import 'package:zebrautil/models/print_operation_tracker.dart' as _i7;
+import 'package:zebrautil/models/connection_event.dart' as _i6;
+import 'package:zebrautil/models/print_enums.dart' as _i9;
+import 'package:zebrautil/models/print_operation_tracker.dart' as _i8;
 import 'package:zebrautil/models/result.dart' as _i3;
-import 'package:zebrautil/models/zebra_device.dart' as _i6;
+import 'package:zebrautil/models/zebra_device.dart' as _i7;
 import 'package:zebrautil/zebra_printer.dart' as _i2;
 
 // ignore_for_file: type=lint
@@ -94,6 +95,12 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as bool);
 
   @override
+  _i5.Stream<_i6.ConnectionEvent> get connectionEvents => (super.noSuchMethod(
+        Invocation.getter(#connectionEvents),
+        returnValue: _i5.Stream<_i6.ConnectionEvent>.empty(),
+      ) as _i5.Stream<_i6.ConnectionEvent>);
+
+  @override
   set isRotated(bool? _isRotated) => super.noSuchMethod(
         Invocation.setter(
           #isRotated,
@@ -121,7 +128,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverBTClassicStream({
+  _i5.Stream<_i7.ZebraDevice> discoverBTClassicStream({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -134,11 +141,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverLocalBroadcastStream({
+  _i5.Stream<_i7.ZebraDevice> discoverLocalBroadcastStream({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -151,11 +158,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverSubnetStream({
+  _i5.Stream<_i7.ZebraDevice> discoverSubnetStream({
     String? subnet = '192.168.1',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -170,11 +177,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverDirectedBroadcastStream({
+  _i5.Stream<_i7.ZebraDevice> discoverDirectedBroadcastStream({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -189,11 +196,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverMulticastStream({
+  _i5.Stream<_i7.ZebraDevice> discoverMulticastStream({
     int? hops = 5,
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -208,11 +215,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverBTClassic({
+  _i5.Stream<_i7.ZebraDevice> discoverBTClassic({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -225,11 +232,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverLocalBroadcast({
+  _i5.Stream<_i7.ZebraDevice> discoverLocalBroadcast({
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
   }) =>
@@ -242,11 +249,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverSubnet({
+  _i5.Stream<_i7.ZebraDevice> discoverSubnet({
     String? subnet = '192.168.1',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -261,11 +268,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverDirectedBroadcast({
+  _i5.Stream<_i7.ZebraDevice> discoverDirectedBroadcast({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -280,11 +287,11 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i6.ZebraDevice> discoverMulticast({
+  _i5.Stream<_i7.ZebraDevice> discoverMulticast({
     int? hops = 5,
     int? timeout = 5000,
     _i2.DiscoveryWarningCallback? onWarning,
@@ -299,8 +306,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #onWarning: onWarning,
           },
         ),
-        returnValue: _i5.Stream<_i6.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i6.ZebraDevice>);
+        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
+      ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
   _i5.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
@@ -349,9 +356,9 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<_i7.PrintOperationTracker>> print({
+  _i5.Future<_i3.Result<_i8.PrintOperationTracker>> print({
     required String? data,
-    _i8.PrintFormat? format = _i8.PrintFormat.zpl,
+    _i9.PrintFormat? format = _i9.PrintFormat.zpl,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -362,8 +369,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #format: format,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<_i7.PrintOperationTracker>>.value(
-            _FakeResult_1<_i7.PrintOperationTracker>(
+        returnValue: _i5.Future<_i3.Result<_i8.PrintOperationTracker>>.value(
+            _FakeResult_1<_i8.PrintOperationTracker>(
           this,
           Invocation.method(
             #print,
@@ -374,7 +381,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             },
           ),
         )),
-      ) as _i5.Future<_i3.Result<_i7.PrintOperationTracker>>);
+      ) as _i5.Future<_i3.Result<_i8.PrintOperationTracker>>);
 
   @override
   _i5.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
@@ -437,19 +444,38 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i5.Future<_i3.Result<bool>> isPrinterConnected() => (super.noSuchMethod(
+  _i5.Future<_i3.Result<bool>> isPrinterConnected({bool? forceCheck = false}) =>
+      (super.noSuchMethod(
         Invocation.method(
           #isPrinterConnected,
           [],
+          {#forceCheck: forceCheck},
         ),
         returnValue: _i5.Future<_i3.Result<bool>>.value(_FakeResult_1<bool>(
           this,
           Invocation.method(
             #isPrinterConnected,
             [],
+            {#forceCheck: forceCheck},
           ),
         )),
       ) as _i5.Future<_i3.Result<bool>>);
+
+  @override
+  _i5.Future<_i3.Result<void>> sendCommand(String? command) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #sendCommand,
+          [command],
+        ),
+        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+          this,
+          Invocation.method(
+            #sendCommand,
+            [command],
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<void>>);
 
   @override
   _i5.Future<_i3.Result<String>> getInstanceId() => (super.noSuchMethod(
@@ -467,7 +493,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<String>>);
 
   @override
-  _i5.Future<void> nativeMethodCallHandler(_i9.MethodCall? methodCall) =>
+  _i5.Future<void> nativeMethodCallHandler(_i10.MethodCall? methodCall) =>
       (super.noSuchMethod(
         Invocation.method(
           #nativeMethodCallHandler,
