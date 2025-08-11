@@ -70,27 +70,40 @@ class ErrorInfo {
 - `CONNECTION_TIMEOUT` - Connection attempt timed out
 - `CONNECTION_LOST` - Lost connection during operation
 - `NOT_CONNECTED` - Operation requires connection
-- `ALREADY_CONNECTED` - Already connected to a printer
+- `INVALID_DEVICE_ADDRESS` - Invalid device address format
+- `CONNECTION_RETRY_FAILED` - Connection failed after retries
+- `CONNECTION_FAILED` - Connection attempt failed
+- `DISCONNECT_FAILED` - Disconnection attempt failed
 
 ### Discovery Errors
 - `DISCOVERY_ERROR` - General discovery failure
+- `DISCOVERY_TIMEOUT` - Discovery operation timed out
 - `NO_PERMISSION` - Missing required permissions
 - `BLUETOOTH_DISABLED` - Bluetooth is turned off
 - `NETWORK_ERROR` - Network discovery failed
 - `NO_PRINTERS_FOUND` - No printers were found during discovery
-- `MULTIPLE_PRINTERS_FOUND` - Multiple printers found when expecting one (e.g., in autoPrint)
 
 ### Print Errors
 - `PRINT_ERROR` - General print failure
+- `PRINT_TIMEOUT` - Print operation timed out
 - `PRINTER_NOT_READY` - Printer not ready to print
 - `OUT_OF_PAPER` - No media detected
 - `HEAD_OPEN` - Print head is open
 - `PRINTER_PAUSED` - Printer is paused
+- `RIBBON_ERROR` - Ribbon issue detected
+- `PRINT_RETRY_FAILED` - Print failed after retries
+- `PRINT_FAILED` - Print operation failed
+- `PRINTER_JAMMED` - Printer is jammed
+- `RIBBON_OUT` - Ribbon is out
+- `MEDIA_ERROR` - Media issue detected
+- `PRINT_HEAD_ERROR` - Print head malfunction
 
 ### Data Errors
-- `INVALID_DATA` - Print data is invalid
-- `INVALID_FORMAT` - Unrecognized print format
-- `ENCODING_ERROR` - Data encoding error
+- `PRINT_DATA_INVALID_FORMAT` - Print data format is invalid
+- `PRINT_DATA_TOO_LARGE` - Print data exceeds size limits
+- `INVALID_FORMAT` - Unrecognized data format
+- `EMPTY_DATA` - No data provided
+- `LANGUAGE_MISMATCH` - Printer language mismatch
 
 ### Operation Errors
 - `OPERATION_TIMEOUT` - Operation timed out
@@ -98,10 +111,48 @@ class ErrorInfo {
 - `INVALID_ARGUMENT` - Invalid method argument
 - `OPERATION_ERROR` - General operation failure
 
-### Platform Errors
-- `PLATFORM_ERROR` - Platform-specific error
+### Status Errors
+- `STATUS_CHECK_FAILED` - Status check failed
+- `STATUS_TIMEOUT` - Status check timed out
+- `DETAILED_STATUS_CHECK_FAILED` - Detailed status check failed
+- `BASIC_STATUS_CHECK_FAILED` - Basic status check failed
+- `STATUS_CONNECTION_ERROR` - Connection error during status check
+- `STATUS_TIMEOUT_ERROR` - Timeout during status check
+
+### Command Errors
+- `COMMAND_ERROR` - Command execution failed
+
+### Hardware Errors
+- `CALIBRATION_REQUIRED` - Printer calibration required
+- `BUFFER_FULL` - Printer buffer is full
+- `TEMPERATURE_ERROR` - Temperature issue detected
+
+### System Errors
 - `NOT_IMPLEMENTED` - Feature not implemented
 - `UNKNOWN_ERROR` - Unexpected error
+- `INTERNAL_ERROR` - Internal system error
+
+### ZSDK-Specific Errors
+- `ZEBRA_NO_CONNECTION` - ZSDK connection error
+- `ZEBRA_WRITE_FAILURE` - ZSDK write operation failed
+- `ZEBRA_READ_FAILURE` - ZSDK read operation failed
+- `ZEBRA_UNKNOWN_PRINTER_LANGUAGE` - Unknown printer language
+- `ZEBRA_INVALID_PRINTER_LANGUAGE` - Invalid printer language
+- `ZEBRA_MALFORMED_NETWORK_DISCOVERY_ADDRESS` - Invalid discovery address
+- `ZEBRA_NETWORK_ERROR_DURING_DISCOVERY` - Network error during discovery
+- `ZEBRA_INVALID_DISCOVERY_HOP_COUNT` - Invalid hop count
+- `ZEBRA_MALFORMED_PRINTER_STATUS_RESPONSE` - Invalid status response
+- `ZEBRA_INVALID_FORMAT_NAME` - Invalid format name
+- `ZEBRA_BAD_FILE_DIRECTORY_ENTRY` - Bad file directory entry
+- `ZEBRA_MALFORMED_FORMAT_FIELD_NUMBER` - Invalid format field number
+- `ZEBRA_INVALID_FILE_NAME` - Invalid file name
+- `ZEBRA_INVALID_PRINTER_DRIVE_LETTER` - Invalid drive letter
+
+### Timeout-Specific Errors
+- `CONNECTION_SPECIFIC_TIMEOUT` - Connection-specific timeout
+- `PRINT_SPECIFIC_TIMEOUT` - Print-specific timeout
+- `STATUS_SPECIFIC_TIMEOUT` - Status-specific timeout
+- `COMMAND_SPECIFIC_TIMEOUT` - Command-specific timeout
 
 ## Error Handling Examples
 
@@ -241,29 +292,3 @@ if (error.code == ErrorCodes.bluetoothDisabled) {
    }
    ```
 
-## Migration from Exceptions
-
-If migrating from exception-based code:
-
-```dart
-// Old pattern
-try {
-  await printer.connect(address);
-} catch (e) {
-  print('Error: $e');
-}
-
-// New pattern
-final result = await printer.connect(address);
-if (!result.success) {
-  print('Error: ${result.error!.message}');
-}
-
-// Or use dataOrThrow for compatibility
-// Note: dataOrThrow is available for advanced consumers who want exception-based access, but is never used internally by the library.
-try {
-  await printer.connect(address).dataOrThrow;
-} catch (e) {
-  print('Error: $e');
-}
-```

@@ -63,7 +63,7 @@ A professional Flutter plugin for robust, cross-platform Zebra printer integrati
 
 ```yaml
 dependencies:
-  zebrautil: ^2.0.0
+  zebrautil: ^2.0.58
 ```
 
 ### Basic Usage (Manager-Based API)
@@ -92,6 +92,10 @@ final result = await manager.connect('192.168.1.100');
 if (!result.success) {
   print('Failed to connect: ${result.error?.message}');
 }
+
+// Check connection status
+final connected = await manager.isPrinterConnected();
+print('Printer connected: $connected');
 
 // Print data (primitive)
 final printResult = await manager.print('^XA^FO50,50^FDHello World^FS^XZ');
