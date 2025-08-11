@@ -126,6 +126,7 @@ class Result<T> {
     int? errorNumber,
     dynamic nativeError,
     StackTrace? dartStackTrace,
+    Result? innerResult,
   }) {
     return Result._(
       success: false,
@@ -135,6 +136,7 @@ class Result<T> {
         errorNumber: errorNumber,
         nativeError: nativeError,
         dartStackTrace: dartStackTrace,
+        innerResult: innerResult,
       ),
     );
   }
@@ -171,6 +173,7 @@ class Result<T> {
         nativeStackTrace: sourceError.nativeStackTrace,
         timestamp: sourceError.timestamp,
         originalErrorCode: sourceError.originalErrorCode,
+        innerResult: sourceError.innerResult,
       ),
     );
   }
@@ -267,6 +270,61 @@ class Result<T> {
 
   /// Get data or null
   T? get dataOrNull => success ? data : null;
+
+  /// Convert to map for serialization (includes full context and inner results)
+  Map<String, dynamic> toMap() {
+    return {
+      'success': success,
+      'data': data?.toString(),
+      'error': error?.toMap(),
+      'successInfo': successInfo?.toMap(),
+    };
+  }
+
+  /// Get the root cause (deepest inner result that has an error)
+  Result getRootCause() {
+    Result current = this;
+    while (current.error?.innerResult != null) {
+      current = current.error!.innerResult!;
+    }
+    return current;
+  }
+
+  /// Get error chain as a simple string (for easy logging)
+  String getErrorChain() {
+    if (success) return '';
+
+    final List<String> messages = [];
+    Result current = this;
+
+    while (current.error != null) {
+      final code = current.error!.code ?? 'NO_CODE';
+      messages.add('[$code] ${current.error!.message}');
+      if (current.error!.innerResult != null) {
+        current = current.error!.innerResult!;
+      } else {
+        break;
+      }
+    }
+
+    return messages.join(' -> ');
+  }
+
+  /// Check if this error (or any inner error) has a specific error code
+  bool hasErrorCode(String errorCode) {
+    if (success) return false;
+
+    Result current = this;
+    while (current.error != null) {
+      if (current.error!.code == errorCode) return true;
+      if (current.error!.innerResult != null) {
+        current = current.error!.innerResult!;
+      } else {
+        break;
+      }
+    }
+    return false;
+  }
 }
 
 /// Type-safe error classification extensions for Result
@@ -395,6 +453,8 @@ extension ResultErrorClassification<T> on Result<T> {
         ErrorType.formatError
       ].contains(errorType);
 }
+
+
 
 /// Structured success code with formatable message template
 class SuccessCode {
@@ -574,6 +634,7 @@ class ErrorInfo {
     DateTime? timestamp,
     this.originalErrorCode,
     this.recoveryHint,
+    this.innerResult,
   }) : timestamp = timestamp ?? DateTime.now();
 
   /// Create ErrorInfo from ErrorCode
@@ -585,6 +646,7 @@ class ErrorInfo {
     StackTrace? dartStackTrace,
     String? nativeStackTrace,
     DateTime? timestamp,
+    Result? innerResult,
   }) {
     return ErrorInfo(
       message: errorCode.formatMessage(formatArgs),
@@ -596,6 +658,7 @@ class ErrorInfo {
       timestamp: timestamp,
       originalErrorCode: errorCode,
       recoveryHint: errorCode.recoveryHint,
+      innerResult: innerResult,
     );
   }
 
@@ -626,6 +689,9 @@ class ErrorInfo {
   /// Recovery hint for user intervention
   final String? recoveryHint;
 
+  /// Inner result that caused this error (for wrapped/chained errors)
+  final Result? innerResult;
+
   /// Convert to exception for throwing
   Exception toException() {
     return ZebraPrinterException(this);
@@ -644,6 +710,7 @@ class ErrorInfo {
       'category': originalErrorCode?.category,
       'description': originalErrorCode?.description,
       'recoveryHint': recoveryHint,
+      'innerResult': innerResult?.toMap(),
     };
   }
 
@@ -674,6 +741,14 @@ class ErrorInfo {
     if (dartStackTrace != null) {
       buffer.writeln('  Dart Stack Trace:');
       buffer.writeln(dartStackTrace);
+    }
+    if (innerResult != null) {
+      buffer.writeln('  Inner Result:');
+      if (innerResult!.success) {
+        buffer.writeln('    Success with data: ${innerResult!.data}');
+      } else {
+        buffer.writeln('    Error: ${innerResult!.error?.message}');
+      }
     }
     return buffer.toString();
   }

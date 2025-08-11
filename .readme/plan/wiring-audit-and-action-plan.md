@@ -87,24 +87,62 @@ Overall verdict: Architecture will work as designed. A few consistency and polis
    - ~~Ensure the constants and Swift `MethodChannelConstants` stay mirrored.~~
    **RESOLVED**: All method names now use `MethodChannelConstants` consistently across Dart and Swift.
 
-3) Expand discovery warning coverage
-   - Emit `discovery_logWarning` in native for local broadcast and multicast partial failures (mirroring subnet/directBroadcast behavior).
-   - In Dart, ensure `onWarning` propagates from all discovery primitives.
+3) ~~Expand discovery warning coverage~~
+   - ~~Emit `discovery_logWarning` in native for local broadcast and multicast partial failures (mirroring subnet/directBroadcast behavior).~~
+   - ~~In Dart, ensure `onWarning` propagates from all discovery primitives.~~
+   **RESOLVED**: All discovery primitives now forward onError events as warnings via onWarning callback and status stream.
 
 4) Preserve structured error fields
-   - Extend `ZebraPrinterOperationCallbackHandler` to forward enriched error maps to `ZebraErrorBridge` instead of concatenated strings where possible. Example: attach structured fields via manager.failOperation with a map, or define a lightweight error wrapper to preserve fields.
+   - **Current Issue**: The `_handleEnrichedError` method in `ZebraPrinterOperationCallbackHandler` receives rich error data from native (code, nativeError, nativeErrorCode, nativeErrorDomain, context, timestamp, stackTrace) but concatenates everything into a single string message before passing to `manager.failOperation()`.
+   - **Impact**: `ZebraErrorBridge` loses the ability to make intelligent decisions based on structured error fields. It must parse the concatenated string to extract error codes, which is fragile and loses context.
+   - **Example Scenario**: 
+     - Native sends: `{code: "NETWORK_ERROR", nativeError: "Socket timeout", nativeErrorCode: -1001, context: {ip: "192.168.1.100", port: 9100}}`
+     - Current: Becomes string `"Network error | Code: NETWORK_ERROR | Native: Socket timeout | Native Code: -1001 | Context: {ip: 192.168.1.100, port: 9100}"`
+     - Desired: Pass structured map to `ZebraErrorBridge` which can then check `code` field directly and preserve context for UI
+   - **Solution Options**:
+     a) Modify `manager.failOperation()` to accept a structured error object/map
+     b) Create an `EnrichedError` class to wrap the error data
+     c) Pass the entire `arguments` map to `ZebraErrorBridge.fromError()` and let it extract what it needs
+   - **Benefits**: Better error categorization, preserved context for debugging, ability to show rich error details in UI
 
 ### Low Priority
 5) Emit `connection_lost` when appropriate
-   - In iOS, when connection state transitions to nil or write/read fails irrecoverably, emit `connection_lost` once. Update Dart handler to mark UI red and reset internal state if needed.
+   - **Current Issue**: The iOS native layer doesn't emit `connection_lost` events when the printer connection is unexpectedly terminated (e.g., printer powered off, Bluetooth out of range, network disconnect).
+   - **Impact**: The UI may still show "connected" status even when the printer is no longer reachable, leading to confusing user experience when print operations fail.
+   - **Example Scenarios**:
+     - User connected to Bluetooth printer, then walks out of range
+     - Network printer is powered off while app shows connected status
+     - WiFi connection drops during active session
+   - **Implementation Details**:
+     - iOS: Monitor `printerConnection` state changes and SDK connection callbacks
+     - When connection becomes nil or operations fail with connection errors, emit `connection_lost` event once
+     - Include last known printer info in the event for UI identification
+   - **Dart Side Changes**:
+     - Add handler in `ZebraPrinterOperationCallbackHandler` for `connection_lost` event
+     - Update `ZebraController` to mark printer status as disconnected
+     - Trigger UI update to show red/disconnected status
+   - **Testing**: Simulate connection loss scenarios (airplane mode, printer power off, Bluetooth disable)
 
 6) ~~Simplify discovery result tracking in `ZebraPrinter`~~
    - ~~Remove `_discoveryResults` map unless needed for future aggregation. Rely on per-operation streams only.~~
    **RESOLVED**: Removed unused `_discoveryResults` tracking map and all related assignments/cleanup calls.
 
 7) Minor consistency fixes
-   - Remove unused formatArgs in `print()` failure return or switch to a template that uses `{0}`.
-   - Add a lightweight test ensuring event routing honors operationId isolation under concurrent scans.
+   - **formatArgs Issue**:
+     - **Current**: In `ZebraPrinter.print()`, error returns use `Result.errorCode(ErrorCodes.printError, formatArgs: [message])` but the error template doesn't have `{0}` placeholder
+     - **Impact**: The error message passed is ignored, users don't see the actual failure reason
+     - **Fix Options**: 
+       a) Update `ErrorCodes.printError` template to include `{0}` placeholder for the message
+       b) Remove the unused formatArgs parameter
+       c) Use a different error code that accepts formatted messages
+   - **Operation ID Isolation Test**:
+     - **Need**: Verify that concurrent operations don't receive each other's events
+     - **Test Scenario**: 
+       1. Start 3 concurrent discovery operations with different operationIds
+       2. Simulate events for each operation
+       3. Verify each stream only receives its own events
+       4. Verify event counts match expectations
+     - **Why Important**: Prevents cross-talk bugs where one operation might receive another's results/errors
 
 ---
 
@@ -137,10 +175,45 @@ Overall verdict: Architecture will work as designed. A few consistency and polis
 
 ## Suggested Test Additions
 
-- iOS permission integration test: Ensure permission result callback is received and mapped to `Result<bool>`.
-- Concurrent discovery stream isolation test: Start 3 parallel discovery ops; verify no cross-talk and correct counts.
-- Connection loss signaling test: Simulate connection drop and assert UI status update and `Result` classification.
-- Error mapping snapshot tests: Ensure `ZebraErrorBridge` maps common native error messages to the expected `ErrorCodes`.
+- **iOS permission integration test** (Note: May be N/A since channel-based permission was removed):
+  - Test that `PermissionManager.checkBluetoothPermission()` returns proper Result
+  - Verify permission denied/granted states map correctly
+  - Ensure permission changes trigger appropriate UI updates
+
+- **Concurrent discovery stream isolation test**:
+  - Create test that starts 3 parallel discovery operations simultaneously
+  - Mock native to send interspersed events with different operationIds
+  - Assert each stream receives only its designated events
+  - Verify final counts match per-operation expectations
+  - Example test structure:
+    ```dart
+    test('concurrent discovery streams remain isolated', () async {
+      final results = await Future.wait([
+        printer.discoverBTClassic().toList(),
+        printer.discoverSubnet(subnet: '192.168.1').toList(),
+        printer.discoverMulticast(hops: 5).toList(),
+      ]);
+      // Verify each result list contains only appropriate devices
+    });
+    ```
+
+- **Connection loss signaling test**:
+  - Mock scenario where printer connection is established then lost
+  - Verify `connection_lost` event is emitted exactly once
+  - Assert `ZebraController` updates printer status to disconnected
+  - Ensure subsequent operations return connection error Results
+  - Test recovery: reconnection after loss should work properly
+
+- **Error mapping snapshot tests**:
+  - Create comprehensive test suite for `ZebraErrorBridge`
+  - Test all known ZSDK error messages map to correct ErrorCodes
+  - Include edge cases: null errors, unknown errors, malformed messages
+  - Verify structured error data preservation (when implemented)
+  - Example patterns to test:
+    - "ZEBRA_ERROR_NO_CONNECTION" → ErrorCodes.zebraNoConnection
+    - "Write to a connection failed" → ErrorCodes.zebraWriteFailure
+    - Timeout exceptions → ErrorCodes.zebraOperationTimeout
+    - Platform exceptions → appropriate error codes
 
 ---
 

@@ -12,6 +12,51 @@ globs: lib/**/*.dart,test/**/*.dart
 ## Overview
 The plugin uses a comprehensive Result-based architecture for consistent error and success handling across all operations. **ALL error and success codes MUST be defined in [result.dart](mdc:lib/models/result.dart) and referenced using the centralized constants.** This document defines ZebraErrorBridge usage, thread safety standards, and edge-case error-handling guidance.
 
+## Usage Guide (Public API Consumers)
+
+### Always Return `Result<T>`
+- Every public method in zebra_printer_utility **returns** `Future<Result<T>>` (single-response) or `Stream<E>` emitting `Result` events.
+- **Never** throw exceptions for control-flow; error information is carried inside `Result.error`, success inside `Result.success`.
+
+### Zero-Exception Policy
+All library calls are wrapped so that **no Dart exception escapes**.  Always check the `success` flag:
+
+```dart
+final result = await ZebraPrinterManager().print(data);
+if (result.success) {
+  // proceed with result.data
+} else {
+  log(result.getErrorChain());
+}
+```
+
+### Minimal Helper API
+Only three helpers are usually needed:
+* `getRootCause()` – deepest error.
+* `getErrorChain()` – readable string `[CODE] msg -> ...`.
+* `hasErrorCode(code)` – quick checks.
+
+### Logging & Analytics Patterns
+```dart
+await DiagnosticLogManager().addResult('Connect', connectResult);
+analytics.trackResult(connectResult, 'connection');
+```
+
+### Serialisation
+`result.toMap()` serialises the full context **including** any `innerResult` chains.
+
+### innerResult in a Nutshell
+An error can wrap another `Result` to preserve context:
+```dart
+final inner = Result.errorCode(ErrorCodes.connectionTimeout);
+return Result.errorCode(ErrorCodes.connectionError, innerResult: inner);
+```
+The helpers above automatically traverse this chain.
+
+---
+
+## Implementation Guide (Internal to zebra_printer_utility)
+
 ## Core Principles
 **NO hardcoded error or success strings should exist anywhere in the codebase outside of [result.dart](mdc:lib/models/result.dart).**
 
@@ -19,8 +64,8 @@ The plugin uses a comprehensive Result-based architecture for consistent error a
 
 ### Zero Exception Tolerance (Library Code)
 - Library functions must not throw. All public API and internal operations return `Result<T>` or stream events.
-- Replace any `throw` with `Result.errorCode(...)` or bridge calls.
-- Use `ZebraErrorBridge` for ZSDK/native errors; use `ErrorCodes` directly for pure Dart validation errors.
+- Replace any `throw` with ZebraErrorBridge methods. Do not call `Result.errorCode` directly outside `lib/internal/zebra_error_bridge.dart`.
+- Use `ZebraErrorBridge` for ZSDK/native errors; use `ZebraErrorBridge.fromDartError` for pure Dart validation errors.
 
 ✅ CORRECT
 ```dart
@@ -63,58 +108,57 @@ Future<String> doOperation() async {
   - Utility methods for code lookup
   - **Zebra-specific error codes** for proper ZSDK error mapping
 
-### ZebraErrorBridge Integration
-- **Purpose**: Convert ZSDK/native failures into structured `Result<T>` using centralized `ErrorCodes` with rich context
+### ZebraErrorBridge Central Error Factory
+- **Purpose**: **Central error factory** for converting ALL error types to structured `Result<T>` objects
 - **Location**: [lib/internal/zebra_error_bridge.dart](mdc:lib/internal/zebra_error_bridge.dart)
-- **Mandatory Usage**: All failures from ZSDK/native operations MUST go through the bridge (never `Result.error` directly)
-- **Benefits**: Correct error mapping, consistent context, no false positives
+- **Core Principle**: **NO `Result.errorCode` calls should exist outside of this class** - all errors must go through this bridge
+- **Benefits**: Consistent error classification, proper error context enrichment, centralized error code mapping, unified error handling patterns
+
+#### Error Sources Handled
+1. **Native layer errors** (EnrichedNativeError from iOS/Android)
+2. **Method channel infrastructure errors** (PlatformException, MissingPluginException)
+3. **Dart operation errors** (exceptions from Dart code)
+4. **Operation failures** (from operation manager)
+
+#### Central Factory Methods
+- `fromEnrichedNativeError<T>()` - Handle native layer errors (EnrichedNativeError)
+- `fromDartError<T>()` - Handle Dart exceptions (requires StackTrace)
+- `fromOperationError<T>()` - Handle operation manager failures
+- `executeAndHandle<T>()` - Execute operation and handle any errors
+
+#### Mandatory Usage
+All failures from ZSDK/native operations MUST go through the bridge (never `Result.errorCode` directly)
 
 #### Usage Patterns
 ```dart
-// Command operations
-catch (e) {
-  return ZebraErrorBridge.fromCommandError<String?>(
-    e,
-    command: 'getSetting($setting)',
-    stackTrace: StackTrace.current,
-  );
+// Native layer errors (EnrichedNativeError)
+return ZebraErrorBridge.fromEnrichedNativeError<T>(enrichedError);
+
+// Dart exceptions (always include stack trace)
+catch (e, stack) {
+  return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack);
 }
 
-// Connection operations
-catch (e) {
-  return ZebraErrorBridge.fromConnectionError<bool>(
-    e,
-    deviceAddress: address,
-    stackTrace: StackTrace.current,
-  );
-}
+// Operation failures
+return ZebraErrorBridge.fromOperationError<T>(error, operationId: 'op123');
 
-// Print operations
-catch (e) {
-  return ZebraErrorBridge.fromPrintError<void>(
-    e,
-    printData: data,
-    stackTrace: StackTrace.current,
-  );
-}
-
-// Status operations
-catch (e) {
-  return ZebraErrorBridge.fromStatusError<Map<String, dynamic>>(
-    e,
-    isDetailed: true,
-    stackTrace: StackTrace.current,
-  );
-}
+// Execute and handle any errors
+return await ZebraErrorBridge.executeAndHandle<T>(
+  operation: () async => await someOperation(),
+);
 ```
 
 ❌ WRONG
 ```dart
+catch (e) { return Result.errorCode(ErrorCodes.operationError); }
 catch (e) { return Result.error('ZSDK failed: $e'); }
 ```
 
-#### Bridge Methods
-- `fromError<T>()`, `fromConnectionError<T>()`, `fromPrintError<T>()`, `fromStatusError<T>()`, `fromDiscoveryError<T>()`, `fromCommandError<T>()`
+#### Central Factory Methods
+- `fromEnrichedNativeError<T>()` - Handle native layer errors (EnrichedNativeError)
+- `fromDartError<T>()` - Handle Dart exceptions (requires StackTrace)
+- `fromOperationError<T>()` - Handle operation manager failures
+- `executeAndHandle<T>()` - Execute operation and handle any errors
 
 #### Error Context Enrichment
 Bridge returns:
@@ -140,9 +184,11 @@ return Result.errorCode(
 ```dart
 // OLD
 catch (e) { return Result.error('Operation failed: $e'); }
+catch (e) { return Result.errorCode(ErrorCodes.operationError); }
 
 // NEW
-catch (e) { return ZebraErrorBridge.fromError<T>(e, stackTrace: StackTrace.current); }
+catch (e, stack) { return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack); }
+return ZebraErrorBridge.fromEnrichedNativeError<T>(enrichedError);
 ```
 
 ### ErrorInfo & SuccessInfo Classes
@@ -248,20 +294,21 @@ Result.errorCode(
 ### ZSDK Error Handling (PREFERRED)
 ```dart
 // ✅ CORRECT - Use ZebraErrorBridge for all ZSDK operations
-catch (e) {
-  return ZebraErrorBridge.fromCommandError<String?>(
-    e,
-    command: 'getSetting($setting)',
-    stackTrace: StackTrace.current,
-  );
+catch (e, stack) {
+  return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack);
 }
 
+// ✅ CORRECT - Handle native errors directly
+return ZebraErrorBridge.fromEnrichedNativeError<T>(enrichedError);
+
+// ✅ CORRECT - Execute and handle any errors
+return await ZebraErrorBridge.executeAndHandle<T>(
+  operation: () async => await zsdkOperation(),
+);
+
+// ❌ WRONG - Don't use Result.errorCode directly for ZSDK operations
 catch (e) {
-  return ZebraErrorBridge.fromConnectionError<bool>(
-    e,
-    deviceAddress: address,
-    stackTrace: StackTrace.current,
-  );
+  return Result.errorCode(ErrorCodes.operationError);
 }
 
 // ❌ WRONG - Don't use generic Result.error for ZSDK operations
@@ -270,19 +317,21 @@ catch (e) {
 }
 ```
 
-### Direct ErrorCode Usage (for non-ZSDK errors)
+### Direct ErrorCode Usage (internal to ZebraErrorBridge only)
+
+Do not call `Result.errorCode` directly anywhere except inside `lib/internal/zebra_error_bridge.dart`. For non-ZSDK errors in library code, always use `ZebraErrorBridge.fromDartError`.
+
 ```dart
+// ✅ CORRECT
+catch (e, stack) {
+  return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack);
+}
+
+// ❌ WRONG - Do not use directly
 return Result.errorCode(ErrorCodes.connectionError);
 return Result.errorCode(
   ErrorCodes.connectionTimeout,
   formatArgs: [timeoutSeconds],
-  errorNumber: nativeErrorCode,
-  nativeError: exception,
-);
-return Result.errorCode(
-  ErrorCodes.printError,
-  formatArgs: [errorMessage],
-  dartStackTrace: stackTrace,
 );
 ```
 
@@ -436,12 +485,16 @@ Stream<PrintEvent> smartPrint(String data) async* {
 - **formatArgs must contain only variable values, not entire messages**
 - **Message templates must use {0}, {1}, etc. placeholders**
 - **All constants must be categorized and described**
+- **All errors must go through ZebraErrorBridge (NO Result.errorCode calls outside of it)**
+- **All catch blocks must include stack trace: `catch (e, stack)`**
 
 ### ❌ FORBIDDEN
 - **Hardcoded error/success messages in code**
 - **Passing entire message strings in formatArgs**
 - **Defining error/success constants outside result.dart**
 - **Using generic error messages without specific codes**
+- **Result.errorCode calls outside of ZebraErrorBridge**
+- **Catch blocks without stack trace: `catch (e)`**
 
 ## Centralization Enforcement
 
@@ -518,6 +571,63 @@ test('should return correct error code for connection timeout', () {
 ## Last Updated
 2025-08-07
 
-globs:
-alwaysApply: false
----
+## Simplified `innerResult` Usage
+
+The `Result<T>` class contains an `innerResult` field that preserves the original
+`Result` (success **or** failure) that triggered a new error.  This allows deep
+error-chain inspection _without_ making the public API complex.
+
+### Essential Helper Methods (only three!)
+
+* `getRootCause()` – returns the deepest `Result` in the chain that still has
+  an `error` (i.e. the real root cause).
+* `getErrorChain()` – returns the entire chain as a single, human-readable
+  string in the form `"[CODE1] msg1 -> [CODE2] msg2"`.
+* `hasErrorCode(String code)` – convenience boolean to test if the chain
+  contains a specific error‐code.
+
+These helpers intentionally cover **90 %** of everyday needs – nothing more, so
+there is **no decision paralysis** for library users.
+
+### Full Serialization – one way only
+
+`Result.toMap()` now always serialises the **complete** context including
+`innerResult` (there is no longer a `toFullMap()` / `toMap()` choice).
+
+```dart
+final json = result.toMap();   // always full context
+```
+
+### Typical Patterns
+
+```dart
+// Logging – automatically chooses the correct level
+await DiagnosticLogManager().addResult('Connect', connectResult);
+
+// Analytics – single event containing error-chain when failed
+analytics.trackResult(connectResult, 'connection');
+
+// UI classification – simple and clear
+if (!connectResult.success) {
+  final chain = connectResult.getErrorChain();
+  if (connectResult.hasErrorCode('CONNECTION_TIMEOUT')) {
+    _showTimeoutDialog(chain);
+  } else if (connectResult.hasErrorCode('HARDWARE_ERROR')) {
+    _showHardwareDialog(chain);
+  } else {
+    _showGenericErrorDialog(chain);
+  }
+}
+```
+
+### Key Take-aways
+
+1. **No extra choices** – only the helpers above are needed in normal code.
+2. **Full context preserved** – `innerResult` travels with every error for
+   advanced debugging.
+3. **Same centralization rules still apply** – only
+   `zebra_error_bridge.dart` creates `Result.errorCode`, all callers use the
+   simple helpers described here.
+
+   `zebra_error_bridge.dart` creates `Result.errorCode`, all callers use the
+   simple helpers described here.

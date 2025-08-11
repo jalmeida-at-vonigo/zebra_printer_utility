@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'native_models/enriched_native_error.dart';
 import 'native_models/method_channel_constants.dart';
 import 'zebra_printer_operation_manager.dart';
 
@@ -188,69 +189,15 @@ class ZebraPrinterOperationCallbackHandler {
 
   /// Handle enriched error information from native side
   void _handleEnrichedError(String operationId, Map<String, dynamic>? arguments, String defaultMessage) {
-    final message = arguments?['message'] ?? arguments?['error'] ?? defaultMessage;
-    final code = arguments?['code'] ?? 'UNKNOWN_ERROR';
-    final nativeStackTrace = arguments?['nativeStackTrace'] as String?;
-    final context = arguments?['context'] as Map<String, dynamic>?;
-    final timestamp = arguments?['timestamp'] as String?;
-    final nativeError = arguments?['nativeError'] as String?;
-    final nativeErrorCode = arguments?['nativeErrorCode'] as int?;
-    final nativeErrorDomain = arguments?['nativeErrorDomain'] as String?;
-    
-    // Create enriched error string with context
-    final enrichedError = _createEnrichedErrorString(
-      message, code, nativeStackTrace, context, 
-      timestamp, nativeError, nativeErrorCode, nativeErrorDomain
-    );
-    
-    manager.failOperation(operationId, enrichedError);
+    if (arguments != null) {
+      final enrichedError = EnrichedNativeError.fromNative(arguments);
+      manager.failOperation(operationId, enrichedError);
+    } else {
+      manager.failOperation(operationId, defaultMessage);
+    }
   }
 
-  /// Create enriched error string with all available context
-  String _createEnrichedErrorString(
-    String message,
-    String code,
-    String? nativeStackTrace,
-    Map<String, dynamic>? context,
-    String? timestamp,
-    String? nativeError,
-    int? nativeErrorCode,
-    String? nativeErrorDomain,
-  ) {
-    final parts = <String>[message];
 
-    if (code != 'UNKNOWN_ERROR') {
-      parts.add('Code: $code');
-    }
-
-    if (nativeError != null) {
-      parts.add('Native: $nativeError');
-    }
-
-    if (nativeErrorCode != null) {
-      parts.add('Native Code: $nativeErrorCode');
-    }
-
-    if (nativeErrorDomain != null) {
-      parts.add('Native Domain: $nativeErrorDomain');
-    }
-    
-    if (context != null && context.isNotEmpty) {
-      final contextStr =
-          context.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-      parts.add('Context: {$contextStr}');
-    }
-    
-    if (timestamp != null) {
-      parts.add('Time: $timestamp');
-    }
-    
-    if (nativeStackTrace != null) {
-      parts.add('Native Stack: $nativeStackTrace');
-    }
-    
-    return parts.join(' | ');
-  }
 
   /// Register an event handler for non-operation callbacks
   void registerEventHandler(String method, Function(MethodCall) handler) {

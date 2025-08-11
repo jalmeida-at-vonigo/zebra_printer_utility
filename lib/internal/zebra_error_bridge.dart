@@ -1,27 +1,28 @@
-import 'dart:async'; // Added for TimeoutException
-import 'package:flutter/services.dart'; // Added for PlatformException and MissingPluginException
+import 'dart:async';
+import 'package:flutter/services.dart';
 
 import '../models/result.dart';
+import 'native_models/enriched_native_error.dart';
 
-/// Bridge pattern for converting Zebra SDK operation failures to structured Result objects
+/// Central error factory bridge for converting all error types to structured Result objects
 /// 
-/// This class acts as a bridge between the Zebra Link-OS SDK error system
-/// and our internal Result-based error handling system. It converts ZSDK
-/// operation failures into complete Result.failure() objects with appropriate
-/// ErrorCode constants.
+/// This class serves as the central factory for all error handling in the Zebra Printer Utility.
+/// **NO Result.errorCode calls should exist outside of this class** - all errors must go through
+/// this bridge to ensure consistent error handling and proper error classification.
 /// 
-/// **Based on**: Zebra Link-OS SDK v1.6.1158 iOS Documentation
-/// **Focus**: Operation failures only (not PrinterStatus which is for getStatusDetails)
+/// **Error Sources Handled:**
+/// 1. Native layer errors (EnrichedNativeError from iOS/Android)
+/// 2. Method channel infrastructure errors (PlatformException, MissingPluginException)
+/// 3. Dart operation errors (TimeoutException, FormatException, etc.)
+/// 4. Operation manager errors (both EnrichedNativeError and string errors)
 /// 
 /// **Usage:**
 /// ```dart
-/// // Convert ZSDK operation failure to Result.failure()
-/// final result = ZebraErrorBridge.fromError(exception);
+/// // Handle native errors
+/// final result = ZebraErrorBridge.fromEnrichedNativeError(enrichedError);
 /// 
-/// // Convert specific operation failures
-/// final connectionResult = ZebraErrorBridge.fromConnectionError(error);
-/// final printResult = ZebraErrorBridge.fromPrintError(error);
-/// final statusResult = ZebraErrorBridge.fromStatusError(error);
+/// // Handle Dart exceptions
+/// final result = ZebraErrorBridge.fromDartError(exception);
 /// 
 /// // Execute operations with automatic exception handling
 /// final result = await ZebraErrorBridge.executeAndHandle(
@@ -77,14 +78,37 @@ class ZebraErrorBridge {
     'Invalid drive specified': ErrorCodes.zebraInvalidPrinterDriveLetter,
   };
 
-  /// Bridge method: Convert any ZSDK operation failure to Result.failure()
-  static Result<T> fromError<T>(
-    dynamic error, {
-    int? errorNumber,
+  /// Bridge method: Convert EnrichedNativeError to Result.failure()
+  /// This is the primary method for handling ALL native layer errors
+  static Result<T> fromEnrichedNativeError<T>(
+    EnrichedNativeError error, {
     StackTrace? stackTrace,
+    Map<String, dynamic>? additionalContext,
+  }) {
+    // Determine operation type from context or error code
+    final operationType = _determineOperationTypeFromError(error);
+
+    // Choose appropriate error code based on operation type and error data
+    final errorCode = _classifyEnrichedError(error, operationType);
+
+    return Result.errorCode(
+      errorCode,
+      formatArgs: _extractFormatArgsFromEnrichedError(error),
+      errorNumber: error.nativeErrorCode,
+      nativeError: error.nativeError,
+      dartStackTrace: stackTrace ?? StackTrace.current,
+    );
+  }
+
+  /// Bridge method: Convert Dart exceptions to Result.failure()
+  /// This method handles Dart exceptions (not native errors)
+  static Result<T> fromDartError<T>(
+    dynamic error, {
+    required StackTrace stackTrace,
+    int? errorNumber,
     Map<String, dynamic>? context,
   }) {
-    final errorCode = _classifyError(error);
+    final errorCode = _classifyDartError(error);
     return _createFailureResult<T>(
       errorCode,
       error,
@@ -94,7 +118,25 @@ class ZebraErrorBridge {
     );
   }
 
+  /// Bridge method: Convert an inner Result into a new Result with different error classification
+  /// This method wraps an existing Result (success or failure) into a new Result with a new ErrorCode
+  /// while preserving the inner Result in error.innerResult for context
+  static Result<T> fromInnerResult<T>(
+    Result innerResult,
+    ErrorCode newErrorCode, {
+    List<Object>? formatArgs,
+    Map<String, dynamic>? context,
+  }) {
+    return Result.errorCode(
+      newErrorCode,
+      formatArgs: formatArgs,
+      dartStackTrace: StackTrace.current,
+      innerResult: innerResult,
+    );
+  }
+
   /// Bridge method: Convert ZSDK connection operation failure to Result.failure()
+  /// This method provides connection-specific context enrichment
   static Result<T> fromConnectionError<T>(
     dynamic error, {
     int? errorNumber,
@@ -119,6 +161,7 @@ class ZebraErrorBridge {
   }
 
   /// Bridge method: Convert ZSDK print operation failure to Result.failure()
+  /// This method provides print-specific context enrichment
   static Result<T> fromPrintError<T>(
     dynamic error, {
     int? errorNumber,
@@ -143,6 +186,7 @@ class ZebraErrorBridge {
   }
 
   /// Bridge method: Convert ZSDK status check operation failure to Result.failure()
+  /// This method provides status-specific context enrichment
   static Result<T> fromStatusError<T>(
     dynamic error, {
     int? errorNumber,
@@ -170,6 +214,7 @@ class ZebraErrorBridge {
   }
 
   /// Bridge method: Convert ZSDK discovery operation failure to Result.failure()
+  /// This method provides discovery-specific context enrichment
   static Result<T> fromDiscoveryError<T>(
     dynamic error, {
     int? errorNumber,
@@ -199,6 +244,7 @@ class ZebraErrorBridge {
   }
 
   /// Bridge method: Convert ZSDK command operation failure to Result.failure()
+  /// This method provides command-specific context enrichment
   static Result<T> fromCommandError<T>(
     dynamic error, {
     int? errorNumber,
@@ -432,6 +478,58 @@ class ZebraErrorBridge {
     }
   }
 
+  /// Execute an operation that already returns Result<T> and ensure no exceptions leak
+  /// This method handles operations that return Result<T> and provides additional
+  /// error context enrichment if the result indicates failure
+  ///
+  /// Example usage:
+  /// ```dart
+  /// final result = await ZebraErrorBridge.executeAndHandleResult<String>(
+  ///   operation: () => operationManager.execute(...),
+  ///   operationType: OperationType.command,
+  ///   context: {'setting': 'device.language'},
+  /// );
+  /// ```
+  static Future<Result<T>> executeAndHandleResult<T>({
+    required Future<Result<T>> Function() operation,
+    required OperationType operationType,
+    Map<String, dynamic>? context,
+    String? deviceAddress,
+    String? command,
+    String? printData,
+    bool isDetailed = false,
+    Duration? timeout,
+  }) async {
+    try {
+      final result = await operation();
+
+      // If the result is successful, return it as-is
+      if (result.success) {
+        return result;
+      }
+
+      // For failed results, we can optionally enrich with additional context
+      // but preserve the original error information
+      return result;
+    } catch (error, stackTrace) {
+      // This should rarely happen since operations should return Result<T>
+      // but we handle it as a safety net
+      return _handleOperationError<T>(
+        error,
+        operationType: operationType,
+        stackTrace: stackTrace,
+        context: context,
+        deviceAddress: deviceAddress,
+        command: command,
+        printData: printData,
+        isDetailed: isDetailed,
+        timeout: timeout,
+      );
+    }
+  }
+
+  // ===== PRIVATE IMPLEMENTATION METHODS =====
+
   /// Handle TimeoutException with operation-specific timeout errors
   static Result<T> _handleTimeoutError<T>(
     TimeoutException error, {
@@ -550,7 +648,7 @@ class ZebraErrorBridge {
           context: enrichedContext,
         );
       case OperationType.general:
-        return fromError<T>(
+        return fromDartError<T>(
           error,
           errorNumber: errorNumber,
           stackTrace: stackTrace,
@@ -766,7 +864,7 @@ class ZebraErrorBridge {
         );
 
       case OperationType.general:
-        return fromError<T>(
+        return fromDartError<T>(
           error,
           errorNumber: errorNumber,
           stackTrace: stackTrace,
@@ -774,9 +872,6 @@ class ZebraErrorBridge {
         );
     }
   }
-
-
-  // ===== PRIVATE IMPLEMENTATION METHODS =====
 
   /// Create a structured Result.failure() with complete error context
   static Result<T> _createFailureResult<T>(
@@ -808,8 +903,8 @@ class ZebraErrorBridge {
     return args.isEmpty ? null : args;
   }
 
-  /// Classify ZSDK operation failure using documented error codes
-  static ErrorCode _classifyError(dynamic error) {
+  /// Classify Dart exceptions using documented error codes
+  static ErrorCode _classifyDartError(dynamic error) {
     final message = _normalizeErrorMessage(error);
 
     // Check documented ZSDK error codes first
@@ -918,6 +1013,133 @@ class ZebraErrorBridge {
       }
     }
     return null;
+  }
+
+  /// Determine operation type from enriched error context
+  static OperationType _determineOperationTypeFromError(
+      EnrichedNativeError error) {
+    // Check context first for explicit operation type
+    if (error.context != null) {
+      final operationType = error.context!['operationType'] as String?;
+      if (operationType != null) {
+        switch (operationType.toLowerCase()) {
+          case 'connection':
+            return OperationType.connection;
+          case 'print':
+            return OperationType.print;
+          case 'status':
+            return OperationType.status;
+          case 'command':
+            return OperationType.command;
+          case 'discovery':
+            return OperationType.discovery;
+          case 'general':
+            return OperationType.general;
+        }
+      }
+    }
+
+    // Infer from error code
+    final code = error.code.toLowerCase();
+    if (code.contains('connection') || code.contains('connect')) {
+      return OperationType.connection;
+    } else if (code.contains('print')) {
+      return OperationType.print;
+    } else if (code.contains('status')) {
+      return OperationType.status;
+    } else if (code.contains('discovery')) {
+      return OperationType.discovery;
+    } else if (code.contains('command') || code.contains('setting')) {
+      return OperationType.command;
+    }
+
+    return OperationType.general;
+  }
+
+  /// Classify enriched error based on operation type and error data
+  static ErrorCode _classifyEnrichedError(
+      EnrichedNativeError error, OperationType operationType) {
+    // Check for documented ZSDK error codes first
+    if (error.nativeError != null) {
+      final sdkError =
+          _findErrorInMappings(error.nativeError!, _zebraSDKErrorMappings);
+      if (sdkError != null) return sdkError;
+    }
+
+    // Check error message for patterns
+    final message = error.message.toLowerCase();
+    final sdkError = _findErrorInMappings(message, _zebraSDKErrorMappings);
+    if (sdkError != null) return sdkError;
+
+    // Choose error code based on operation type
+    switch (operationType) {
+      case OperationType.connection:
+        if (message.contains('timeout')) {
+          return ErrorCodes.connectionTimeout;
+        } else if (message.contains('permission')) {
+          return ErrorCodes.noPermission;
+        } else if (message.contains('not found') ||
+            message.contains('unavailable')) {
+          return ErrorCodes.invalidDeviceAddress;
+        }
+        return ErrorCodes.connectionError;
+
+      case OperationType.print:
+        if (message.contains('timeout')) {
+          return ErrorCodes.printTimeout;
+        }
+        return ErrorCodes.printError;
+
+      case OperationType.status:
+        if (message.contains('timeout')) {
+          return ErrorCodes.statusTimeoutError;
+        } else if (message.contains('connection')) {
+          return ErrorCodes.statusConnectionError;
+        }
+        return ErrorCodes.basicStatusCheckFailed;
+
+      case OperationType.discovery:
+        if (message.contains('timeout')) {
+          return ErrorCodes.discoveryTimeout;
+        }
+        return ErrorCodes.discoveryError;
+
+      case OperationType.command:
+        if (message.contains('timeout')) {
+          return ErrorCodes.commandSpecificTimeout;
+        }
+        return ErrorCodes.commandError;
+
+      case OperationType.general:
+        if (message.contains('timeout')) {
+          return ErrorCodes.operationTimeout;
+        }
+        return ErrorCodes.operationError;
+    }
+  }
+
+  /// Extract format arguments from enriched error for message formatting
+  static List<Object>? _extractFormatArgsFromEnrichedError(
+      EnrichedNativeError error) {
+    final args = <Object>[];
+
+    // Extract common format arguments from context
+    if (error.context != null) {
+      if (error.context!['deviceAddress'] != null) {
+        args.add(error.context!['deviceAddress']);
+      }
+      if (error.context!['timeoutSeconds'] != null) {
+        args.add(error.context!['timeoutSeconds']);
+      }
+      if (error.context!['printDataLength'] != null) {
+        args.add(error.context!['printDataLength']);
+      }
+      if (error.context!['command'] != null) {
+        args.add(error.context!['command']);
+      }
+    }
+
+    return args.isEmpty ? null : args;
   }
 } 
 

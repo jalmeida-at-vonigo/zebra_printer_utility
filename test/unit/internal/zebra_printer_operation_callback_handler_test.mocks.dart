@@ -146,7 +146,7 @@ class MockZebraPrinterOperationManager extends _i1.Mock
   @override
   void failOperation(
     String? operationId,
-    String? error,
+    dynamic error,
   ) =>
       super.noSuchMethod(
         Invocation.method(

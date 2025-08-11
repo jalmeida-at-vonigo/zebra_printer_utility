@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
+
 import '../../models/operation_log_entry.dart';
 import '../../models/result.dart';
 import '../../zebra_printer_manager.dart';
+import 'native_models/enriched_native_error.dart';
 import 'native_operation.dart';
 import 'policies/policies.dart' as policies;
+import 'zebra_error_bridge.dart';
 
 /// Result-based ZebraPrinterOperationManager with logging capabilities
 class ZebraPrinterOperationManager {
@@ -159,7 +162,7 @@ class ZebraPrinterOperationManager {
         formatArgs: [timeout.inSeconds],
         dartStackTrace: StackTrace.current,
       );
-    } catch (e) {
+    } catch (e, stack) {
       final duration = DateTime.now().difference(startTime);
       final errorEntry = OperationLogEntry(
         operationId: operationId,
@@ -170,16 +173,20 @@ class ZebraPrinterOperationManager {
         error: e.toString(),
         duration: duration,
         channelName: channel.name,
-        stackTrace: StackTrace.current,
+        stackTrace: stack,
       );
       _addLogEntry(errorEntry);
       
       onLog?.call('Operation $operationId failed: $e');
       _closeEventStream(operationId);
-      return Result.errorCode(
-        ErrorCodes.operationError,
-        formatArgs: [e.toString()],
-        dartStackTrace: StackTrace.current,
+      return ZebraErrorBridge.fromDartError<T>(
+        e,
+        stackTrace: stack,
+        context: {
+          'operationId': operationId,
+          'method': method,
+          'channelName': channel.name,
+        },
       );
     } finally {
       _activeOperations.remove(operationId);
@@ -198,11 +205,16 @@ class ZebraPrinterOperationManager {
     }
   }
 
-  /// Fail an operation with an error
-  void failOperation(String operationId, String error) {
+  /// Fail an operation with an error (supports both string and structured errors)
+  void failOperation(String operationId, dynamic error) {
     final operation = _activeOperations[operationId];
     if (operation != null) {
-      onLog?.call('Failing operation $operationId with error: $error');
+      if (error is EnrichedNativeError) {
+        onLog?.call(
+            'Failing operation $operationId with structured error: ${error.message}');
+      } else {
+        onLog?.call('Failing operation $operationId with error: $error');
+      }
       operation.completeError(error);
       _closeEventStream(operationId);
     } else {

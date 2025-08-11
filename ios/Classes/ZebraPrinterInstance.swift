@@ -1005,32 +1005,25 @@ class ZebraPrinterInstance: NSObject {
         nativeError: Error? = nil,
         context: [String: Any]? = nil,
         arguments: [String: Any]? = nil) {
-        // Create arguments if null and add operationId (thread-safe operation)
-        var errorArguments = arguments ?? [:]
-    
-        // Build error info (thread-safe operations)
-        errorArguments["operationId"] = operationId
-        errorArguments["instanceId"] = self.instanceId
-        errorArguments["queue"] = Thread.isMainThread ? "main" : "background"
-        errorArguments["message"] = message
-        errorArguments["code"] = code
-        errorArguments["timestamp"] = ISO8601DateFormatter().string(from: Date())
-        errorArguments["nativeStackTrace"] = Thread.callStackSymbols.joined(separator: "\n")
         
-        if let nativeError = nativeError {
-            errorArguments["nativeError"] = nativeError.localizedDescription
-            errorArguments["nativeErrorCode"] = (nativeError as NSError).code
-            errorArguments["nativeErrorDomain"] = (nativeError as NSError).domain
-            errorArguments["nativeErrorUserInfo"] = (nativeError as NSError).userInfo
-        }
-        
-        if let context = context {
-            errorArguments["context"] = context
-        }
+        // Create enriched error object
+        let enrichedError = EnrichedNativeError(
+            message: message,
+            code: code,
+            nativeError: nativeError?.localizedDescription,
+            nativeErrorCode: nativeError != nil ? (nativeError as NSError).code : nil,
+            nativeErrorDomain: nativeError != nil ? (nativeError as NSError).domain : nil,
+            context: context,
+            timestamp: ISO8601DateFormatter().string(from: Date()),
+            nativeStackTrace: Thread.callStackSymbols.joined(separator: "\n"),
+            operationId: operationId,
+            instanceId: self.instanceId,
+            queue: Thread.isMainThread ? "main" : "background"
+        )
         
         DispatchQueue.main.async {
-            // Send the error callback - error arguments are passed directly as arguments
-            self.channel.invokeMethod(callbackMethod, arguments: errorArguments)
+            // Send the error callback with enriched error data
+            self.channel.invokeMethod(callbackMethod, arguments: enrichedError.toDictionary())
             
             // Always return false for errors
             result(false)

@@ -70,7 +70,7 @@ class CommunicationPolicy {
       try {
         return await operation(); // Simple execution, no retry logic
       } catch (e, stack) {
-        return ZebraErrorBridge.fromError<T>(e, stackTrace: stack);
+        return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack);
       }
     }
 
@@ -181,12 +181,12 @@ class CommunicationPolicy {
 
       // Convert T back to Result<T>
       return Result.success(result);
-    } catch (e) {
+    } catch (e, stack) {
       _logger.error('Unexpected error in $operationName: $e');
       onStatusUpdate?.call('Unexpected error: $e');
       
       // Use centralized error bridge for better error handling
-      return ZebraErrorBridge.fromError<T>(e);
+      return ZebraErrorBridge.fromDartError<T>(e, stackTrace: stack);
     }
   }
 
@@ -268,7 +268,8 @@ class CommunicationPolicy {
         message: '$operationName failed with exception: $e',
         error: e,
       ));
-      return ZebraErrorBridge.fromError<T>(e, stackTrace: StackTrace.current);
+      return ZebraErrorBridge.fromDartError<T>(e,
+          stackTrace: StackTrace.current);
     }
   }
   

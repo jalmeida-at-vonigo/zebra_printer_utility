@@ -54,7 +54,13 @@ class ZebraPrinter {
         final hasPermission =
             await PermissionManager.checkBluetoothPermission();
         if (!hasPermission) {
-          throw Exception('Bluetooth permission denied');
+          if (!controller.isClosed) {
+            controller.addError(ZebraErrorBridge.fromDartError<void>(
+              Exception('Bluetooth permission denied'),
+              stackTrace: StackTrace.current,
+            ));
+          }
+          return;
         }
         await _operationManager.execute<Map<String, dynamic>>(
           method: MethodChannelConstants.discoverBTClassicMethod,
@@ -402,7 +408,7 @@ class ZebraPrinter {
     isScanning = false;
     shouldSync = true;
     
-    return await ZebraErrorBridge.executeAndHandle<void>(
+    return await ZebraErrorBridge.executeAndHandleResult<void>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.stopScanMethod,
@@ -412,9 +418,13 @@ class ZebraPrinter {
 
         if (result.success) {
           _logger.info('All discovery operations stopped successfully');
-          return;
+          return Result.success();
         } else {
-          throw Exception(result.error?.message ?? 'Failed to stop discovery');
+          return ZebraErrorBridge.fromInnerResult<void>(
+            result,
+            ErrorCodes.discoveryError,
+            formatArgs: [result.error?.message ?? 'Failed to stop discovery'],
+          );
         }
       },
       operationType: OperationType.discovery,
@@ -426,20 +436,27 @@ class ZebraPrinter {
   Future<Result<void>> connectToPrinter(String address) async {
     _logger.info('Initiating connection to printer: $address');
     
-    return await ZebraErrorBridge.executeAndHandle<void>(
+    return await ZebraErrorBridge.executeAndHandleResult<void>(
       operation: () async {
         // Check if already connected to the same printer
         if (controller.selectedAddress == address) {
           _logger.info(
               'Already connected to printer: $address, skipping reconnection');
-          return;
+          return Result.success();
         }
 
         // Only disconnect if connecting to a different printer
         if (controller.selectedAddress != null) {
           _logger.info(
               'Disconnecting from previous printer before connecting to: $address');
-          await disconnect();
+          final disconnectResult = await disconnect();
+          if (!disconnectResult.success) {
+            return ZebraErrorBridge.fromInnerResult<void>(
+              disconnectResult,
+              ErrorCodes.connectionError,
+              formatArgs: ['Failed to disconnect before reconnecting'],
+            );
+          }
         }
 
         controller.selectedAddress = address;
@@ -463,11 +480,15 @@ class ZebraPrinter {
             controller.addPrinter(existingPrinter);
           }
           controller.updatePrinterStatus('Connected', 'G');
-          return;
+          return Result.success();
         } else {
           _logger.error('Failed to establish connection to printer: $address');
           controller.selectedAddress = null;
-          throw Exception(result.error?.message ?? 'Connection failed');
+          return ZebraErrorBridge.fromInnerResult<void>(
+            result,
+            ErrorCodes.connectionError,
+            formatArgs: [result.error?.message ?? 'Connection failed'],
+          );
         }
       },
       operationType: OperationType.connection,
@@ -479,7 +500,7 @@ class ZebraPrinter {
   Future<Result<void>> disconnect() async {
     _logger.info('Initiating printer disconnection');
     
-    return await ZebraErrorBridge.executeAndHandle<void>(
+    return await ZebraErrorBridge.executeAndHandleResult<void>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.disconnectMethod,
@@ -492,11 +513,15 @@ class ZebraPrinter {
         }
         if (result.success) {
           _logger.info('Printer disconnected successfully');
-          return;
+          return Result.success();
         } else {
           _logger
               .error('Disconnect operation failed: ${result.error?.message}');
-          throw Exception(result.error?.message ?? 'Disconnect failed');
+          return ZebraErrorBridge.fromInnerResult<void>(
+            result,
+            ErrorCodes.disconnectFailed,
+            formatArgs: [result.error?.message ?? 'Disconnect failed'],
+          );
         }
       },
       operationType: OperationType.connection,
@@ -519,7 +544,7 @@ class ZebraPrinter {
     _logger.info(
         'Started tracking print operation: ${tracker.operationId} (format: ${format.name})');
 
-    final result = await ZebraErrorBridge.executeAndHandle<void>(
+    return await ZebraErrorBridge.executeAndHandleResult<PrintOperationTracker>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.printMethod,
@@ -527,34 +552,29 @@ class ZebraPrinter {
           timeout: const Duration(seconds: 30),
         );
         if (result.success) {
-          _logger.info('Print operation completed successfully');
-          return;
+          _logger.info('Print data sent successfully');
+          tracker.stopPrint();
+          return Result.success(tracker);
         } else {
           _logger.error('Print operation failed: ${result.error?.message}');
-          throw Exception(result.error?.message ?? 'Print operation failed');
+          tracker.stopPrint();
+          return ZebraErrorBridge.fromInnerResult<PrintOperationTracker>(
+            result,
+            ErrorCodes.printError,
+            formatArgs: [result.error?.message ?? 'Print failed'],
+          );
         }
       },
       operationType: OperationType.print,
       printData: data,
     );
-
-    if (result.success) {
-      return Result.success(tracker);
-    } else {
-      // Stop tracking if the operation failed
-      tracker.stopPrint();
-      return Result.errorCode(
-        ErrorCodes.printError,
-        formatArgs: [result.error?.message ?? 'Print operation failed'],
-      );
-    }
   }
 
   // Primitive: Get printer status
   Future<Result<Map<String, dynamic>>> getPrinterStatus() async {
     _logger.info('Getting printer status');
     
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
+    return await ZebraErrorBridge.executeAndHandleResult<Map<String, dynamic>>(
       operation: () async {
         final result = await _operationManager.execute<Map<String, dynamic>>(
           method: MethodChannelConstants.getPrinterStatusMethod,
@@ -563,15 +583,20 @@ class ZebraPrinter {
         );
         if (result.success && result.data != null) {
           _logger.info('Printer status retrieved successfully');
-          return result.data!;
+          return Result.success(result.data!);
         } else {
           _logger
               .error('Failed to get printer status: ${result.error?.message}');
-          throw Exception(result.error?.message ?? 'Status retrieval failed');
+          return ZebraErrorBridge.fromInnerResult<Map<String, dynamic>>(
+            result,
+            ErrorCodes.statusCheckFailed,
+            formatArgs: [
+              result.error?.message ?? 'Failed to get printer status'
+            ],
+          );
         }
       },
       operationType: OperationType.status,
-      isDetailed: false,
     );
   }
 
@@ -579,21 +604,26 @@ class ZebraPrinter {
   Future<Result<Map<String, dynamic>>> getDetailedPrinterStatus() async {
     _logger.info('Getting detailed printer status');
     
-    return await ZebraErrorBridge.executeAndHandle<Map<String, dynamic>>(
+    return await ZebraErrorBridge.executeAndHandleResult<Map<String, dynamic>>(
       operation: () async {
         final result = await _operationManager.execute<Map<String, dynamic>>(
           method: MethodChannelConstants.getDetailedPrinterStatusMethod,
           arguments: {},
-          timeout: const Duration(seconds: 5),
+          timeout: const Duration(seconds: 10),
         );
         if (result.success && result.data != null) {
           _logger.info('Detailed printer status retrieved successfully');
-          return result.data!;
+          return Result.success(result.data!);
         } else {
           _logger.error(
               'Failed to get detailed printer status: ${result.error?.message}');
-          throw Exception(
-              result.error?.message ?? 'Detailed status retrieval failed');
+          return ZebraErrorBridge.fromInnerResult<Map<String, dynamic>>(
+            result,
+            ErrorCodes.detailedStatusCheckFailed,
+            formatArgs: [
+              result.error?.message ?? 'Failed to get detailed printer status'
+            ],
+          );
         }
       },
       operationType: OperationType.status,
@@ -603,22 +633,34 @@ class ZebraPrinter {
 
   // Primitive: Get setting
   Future<Result<String?>> getSetting(String setting) async {
-    return await ZebraErrorBridge.executeAndHandle<String?>(
+    _logger.info('Getting printer setting: $setting');
+
+    return await ZebraErrorBridge.executeAndHandleResult<String?>(
       operation: () async {
-        final result = await _operationManager.execute<String>(
+        final result = await _operationManager.execute<String?>(
           method: MethodChannelConstants.getSettingMethod,
           arguments: {'setting': setting},
-          timeout: const Duration(seconds: 7),
+          timeout: const Duration(seconds: 5),
         );
         if (result.success) {
-          final data = result.data?.isNotEmpty == true ? result.data : null;
-          return data;
+          _logger.info(
+              'Setting retrieved successfully: $setting = ${result.data}');
+          return Result.success(result.data);
         } else {
-          throw Exception(result.error?.message ?? 'Setting retrieval failed');
+          _logger.error(
+              'Failed to get setting $setting: ${result.error?.message}');
+          return ZebraErrorBridge.fromInnerResult<String?>(
+            result,
+            ErrorCodes.commandError,
+            formatArgs: [
+              setting,
+              result.error?.message ?? 'Failed to get setting'
+            ],
+          );
         }
       },
       operationType: OperationType.command,
-      command: 'getSetting($setting)',
+      command: setting,
     );
   }
 
@@ -629,30 +671,73 @@ class ZebraPrinter {
 
   // Primitive: Check if printer is connected
   Future<Result<bool>> isPrinterConnected() async {
-    return await ZebraErrorBridge.executeAndHandle<bool>(
+    _logger.info('Checking printer connection status');
+
+    return await ZebraErrorBridge.executeAndHandleResult<bool>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.isConnectedMethod,
           arguments: {},
-          timeout: const Duration(seconds: 7),
+          timeout: const Duration(seconds: 3),
         );
         if (result.success) {
-          return result.data ?? false;
+          final isConnected = result.data ?? false;
+          _logger.info(
+              'Connection status: ${isConnected ? 'Connected' : 'Disconnected'}');
+          return Result.success(isConnected);
         } else {
-          throw Exception(result.error?.message ?? 'Connection check failed');
+          _logger.error(
+              'Failed to check connection status: ${result.error?.message}');
+          return ZebraErrorBridge.fromInnerResult<bool>(
+            result,
+            ErrorCodes.connectionError,
+            formatArgs: [
+              result.error?.message ?? 'Failed to check connection status'
+            ],
+          );
         }
       },
       operationType: OperationType.connection,
     );
   }
 
-
+  // Primitive: Send command
+  Future<Result<void>> sendCommand(String command) async {
+    _logger.info('Sending command to printer: $command');
+    
+    return await ZebraErrorBridge.executeAndHandleResult<void>(
+      operation: () async {
+        final result = await _operationManager.execute<bool>(
+          method: MethodChannelConstants.setSettingsMethod,
+          arguments: {'SettingCommand': command},
+          timeout: const Duration(seconds: 5),
+        );
+        if (result.success) {
+          _logger.info('Command sent successfully: $command');
+          return Result.success();
+        } else {
+          _logger.error(
+              'Failed to send command $command: ${result.error?.message}');
+          return ZebraErrorBridge.fromInnerResult<void>(
+            result,
+            ErrorCodes.commandError,
+            formatArgs: [
+              command,
+              result.error?.message ?? 'Failed to send command'
+            ],
+          );
+        }
+      },
+      operationType: OperationType.command,
+      command: command,
+    );
+  }
 
   // Primitive: Get instance ID
   Future<Result<String>> getInstanceId() async {
     _logger.info('Getting instance ID');
 
-    return await ZebraErrorBridge.executeAndHandle<String>(
+    return await ZebraErrorBridge.executeAndHandleResult<String>(
       operation: () async {
         final result = await _operationManager.execute<String>(
           method: MethodChannelConstants.getInstanceMethod,
@@ -662,10 +747,15 @@ class ZebraPrinter {
 
         if (result.success && result.data != null) {
           _logger.info('Instance ID retrieved successfully');
-          return result.data!;
+          return Result.success(result.data!);
         } else {
-          throw Exception(
-              result.error?.message ?? 'Instance ID retrieval failed');
+          return ZebraErrorBridge.fromInnerResult<String>(
+            result,
+            ErrorCodes.operationError,
+            formatArgs: [
+              result.error?.message ?? 'Instance ID retrieval failed'
+            ],
+          );
         }
       },
       operationType: OperationType.general,
