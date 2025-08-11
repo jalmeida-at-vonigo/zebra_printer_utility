@@ -22,16 +22,76 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   bool _includeBluetooth = true;
   StreamSubscription<List<ZebraDevice>>? _discoverySubscription;
 
+  // Real-time connection state tracking
+  ConnectionEvent? _lastConnectionEvent;
+  ZebraDevice? _connectedDevice;
+  StreamSubscription<ConnectionEvent>? _connectionEventSubscription;
+  StreamSubscription<ZebraDevice?>? _connectionStateSubscription;
+
   @override
   void initState() {
     super.initState();
     _addLog('Discovery screen initialized', 'info');
+    
+    // Subscribe to real-time connection events
+    _subscribeToConnectionEvents();
+  }
+
+  void _subscribeToConnectionEvents() {
+    // Listen to connection events for real-time updates
+    _connectionEventSubscription = Zebra.global.connectionEvents.listen(
+      (event) {
+        if (!mounted) return;
+
+        setState(() {
+          _lastConnectionEvent = event;
+        });
+
+        // Log connection events with rich details
+        switch (event.type) {
+          case ConnectionEventType.connected:
+            _addLog('Printer connected', 'success',
+                details:
+                    '${event.printerAddress}: ${event.message}\nSource: ${event.metadata['context'] ?? 'unknown'}');
+            break;
+          case ConnectionEventType.lost:
+            _addLog('Connection lost', 'warning',
+                details:
+                    '${event.printerAddress}: ${event.message}\nSource: ${event.metadata['context'] ?? 'unknown'}');
+            break;
+          case ConnectionEventType.failed:
+            _addLog('Connection failed', 'error',
+                details: '${event.printerAddress}: ${event.message}');
+            break;
+          case ConnectionEventType.disconnected:
+            _addLog('Printer disconnected', 'info',
+                details: '${event.printerAddress}: ${event.message}');
+            break;
+        }
+      },
+      onError: (error) {
+        _addLog('Connection event error', 'error', details: error.toString());
+      },
+    );
+
+    // Listen to connection state changes to track the currently connected device
+    _connectionStateSubscription = Zebra.global.connection.listen(
+      (device) {
+        if (!mounted) return;
+        setState(() {
+          _connectedDevice = device;
+        });
+      },
+    );
   }
 
   @override
   void dispose() {
-    // Cancel any active discovery subscription
+    // Cancel all subscriptions
     _discoverySubscription?.cancel();
+    _connectionEventSubscription?.cancel();
+    _connectionStateSubscription?.cancel();
+    
     // Stop discovery if still running
     if (_isDiscovering) {
       Zebra.global.stopDiscovery();
@@ -201,6 +261,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Widget _buildMobileLayout() {
     return Column(
       children: [
+        // Real-time connection status
+        _buildConnectionStatusCard(),
+        const SizedBox(height: 16),
         // Discovery controls
         _buildDiscoveryControls(),
         const SizedBox(height: 16),
@@ -222,31 +285,41 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   Widget _buildTabletLayout() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        // Left side - Discovery controls and logs
-        SizedBox(
-          width: 400,
-          child: Column(
+        // Real-time connection status (full width)
+        _buildConnectionStatusCard(),
+        const SizedBox(height: 16),
+        // Main content
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Discovery controls
-              _buildDiscoveryControls(),
-              const SizedBox(height: 16),
-              // Log panel
-              Expanded(
-                child: LogPanel(
-                  logs: _logs,
-                  onClear: _clearLogs,
+              // Left side - Discovery controls and logs
+              SizedBox(
+                width: 400,
+                child: Column(
+                  children: [
+                    // Discovery controls
+                    _buildDiscoveryControls(),
+                    const SizedBox(height: 16),
+                    // Log panel
+                    Expanded(
+                      child: LogPanel(
+                        logs: _logs,
+                        onClear: _clearLogs,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 16),
+              // Right side - Device list
+              Expanded(
+                child: _buildDeviceList(),
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 16),
-        // Right side - Device list
-        Expanded(
-          child: _buildDeviceList(),
         ),
       ],
     );
@@ -460,5 +533,188 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         ],
       ),
     );
+  }
+
+  /// Build real-time connection status card showing current connection state
+  Widget _buildConnectionStatusCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(
+                  _lastConnectionEvent?.type.icon ?? Icons.link_off,
+                  size: 20,
+                  color: _getConnectionStatusColor(),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Connection Status',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+                const Spacer(),
+                // Real-time status indicator
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _getConnectionStatusColor().withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _getConnectionStatusColor().withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _getConnectionStatusColor(),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _lastConnectionEvent?.type.displayName ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _getConnectionStatusColor(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Connection details
+            if (_connectedDevice != null) ...[
+              Row(
+                children: [
+                  Icon(
+                    _connectedDevice!.isWifi ? Icons.wifi : Icons.bluetooth,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _connectedDevice!.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          _connectedDevice!.address,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Disconnect button
+                  OutlinedButton(
+                    onPressed: _disconnectFromPrinter,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                    ),
+                    child: const Text('Disconnect'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Last event message
+              if (_lastConnectionEvent?.message != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Text(
+                    _lastConnectionEvent!.message!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+            ] else ...[
+              // No connection
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No printer connected. Discover and connect to a printer below.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Get appropriate color for current connection status
+  Color _getConnectionStatusColor() {
+    if (_lastConnectionEvent == null) {
+      return Colors.grey;
+    }
+    return _lastConnectionEvent!.type.color;
+  }
+
+  /// Disconnect from the currently connected printer
+  Future<void> _disconnectFromPrinter() async {
+    if (_connectedDevice == null) return;
+
+    _addLog('Disconnecting from ${_connectedDevice!.name}...', 'info');
+
+    try {
+      final result = await Zebra.global.disconnect();
+
+      if (result.success) {
+        _addLog('Disconnected successfully', 'success');
+      } else {
+        _addLog('Failed to disconnect', 'error',
+            details: result.error?.message);
+      }
+    } catch (e) {
+      _addLog('Disconnect error', 'error', details: '$e');
+    }
   }
 } 

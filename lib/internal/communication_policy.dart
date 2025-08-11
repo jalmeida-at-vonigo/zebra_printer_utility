@@ -346,7 +346,18 @@ class CommunicationPolicy {
   }
   
   /// Get connection status (for external use)
+  /// Uses cached value when available for faster response
   Future<Result<bool>> getConnectionStatus() async {
+    // Try cached value first for quick response
+    final cached = _printer.isConnectedCached;
+    if (cached == true) {
+      _logger.debug('Using cached connection status: connected');
+      return Result.success(true);
+    }
+
+    // If disconnected or unknown, do real check
+    _logger.debug(
+        'Cached connection unavailable or shows disconnected, performing real check');
     return await _checkConnection();
   }
   

@@ -10,6 +10,7 @@ import 'internal/permission_manager.dart';
 import 'internal/zebra_error_bridge.dart';
 import 'internal/zebra_printer_operation_callback_handler.dart';
 import 'internal/zebra_printer_operation_manager.dart';
+import 'models/connection_event.dart';
 import 'models/print_enums.dart';
 import 'models/print_operation_tracker.dart';
 import 'models/result.dart';
@@ -39,6 +40,31 @@ class ZebraPrinter {
       final status = call.arguments?['Status'] ?? '';
       final color = call.arguments?['Color'] ?? 'R';
       this.controller.updatePrinterStatus(status, color);
+    });
+
+    // Register handler for connection_lost events from native layer
+    _callbackHandler.registerEventHandler(
+        MethodChannelConstants.connectionEventLost, (call) {
+      final printerAddress = call.arguments?['printerAddress'] as String?;
+      final reason = call.arguments?['reason'] as String?;
+
+      _logger.warning(
+          'Native connection_lost event received for $printerAddress: $reason');
+
+      // Update cached state immediately
+      _updateConnectionState(false, context: 'native connection_lost');
+
+      // Additional event for native-detected connection loss
+      if (printerAddress != null) {
+        _emitConnectionEvent(ConnectionEvent.lost(
+          printerAddress: printerAddress,
+          reason: reason ?? 'Connection lost (detected by native layer)',
+          metadata: {
+            'source': 'native_event',
+            'reason': reason ?? 'unknown',
+          },
+        ));
+      }
     });
 
   }
@@ -362,10 +388,98 @@ class ZebraPrinter {
   bool isScanning = false;
   bool shouldSync = false;
 
+  // Connection state tracking for round-trip optimization
+  bool? _isConnected;
+  DateTime? _lastConnectionVerified;
+  static const _connectionValidityDuration = Duration(seconds: 30);
+
 
   // Per-operation discovery event subscriptions
   final Map<String, StreamSubscription<Map<String, dynamic>>>
       _discoveryEventSubs = {};
+
+  // Connection event stream for real-time UI updates
+  final StreamController<ConnectionEvent> _connectionEventController =
+      StreamController<ConnectionEvent>.broadcast();
+
+  /// Stream of real-time connection events
+  /// Subscribe to this for immediate UI updates when connection status changes
+  Stream<ConnectionEvent> get connectionEvents =>
+      _connectionEventController.stream;
+
+  /// Get cached connection status without round-trip to printer
+  /// Returns null if no cached value or value is stale
+  bool? get isConnectedCached {
+    if (_isConnected == null || _lastConnectionVerified == null) {
+      return null;
+    }
+
+    final now = DateTime.now();
+    final timeSinceVerified = now.difference(_lastConnectionVerified!);
+
+    if (timeSinceVerified > _connectionValidityDuration) {
+      _logger.debug(
+          'Cached connection status expired (${timeSinceVerified.inSeconds}s old)');
+      return null;
+    }
+
+    return _isConnected;
+  }
+
+  /// Update connection state based on operation results
+  /// Called internally when operations succeed or fail with connection errors
+  void _updateConnectionState(bool connected, {String? context}) {
+    final wasConnected = _isConnected;
+    _isConnected = connected;
+
+    if (connected) {
+      _lastConnectionVerified = DateTime.now();
+      if (wasConnected != true) {
+        _logger.info(
+            'Connection state updated: CONNECTED${context != null ? ' ($context)' : ''}');
+        // Emit connection established event
+        if (controller.selectedAddress != null) {
+          _emitConnectionEvent(ConnectionEvent.connected(
+            printerAddress: controller.selectedAddress!,
+            message: 'Connected${context != null ? ' ($context)' : ''}',
+            metadata: {'context': context ?? 'unknown'},
+          ));
+        }
+      }
+    } else {
+      _lastConnectionVerified = null;
+      if (wasConnected != false) {
+        _logger.info(
+            'Connection state updated: DISCONNECTED${context != null ? ' ($context)' : ''}');
+        // Emit connection lost event
+        if (controller.selectedAddress != null) {
+          _emitConnectionEvent(ConnectionEvent.lost(
+            printerAddress: controller.selectedAddress!,
+            reason: 'Connection lost${context != null ? ' ($context)' : ''}',
+            metadata: {'context': context ?? 'unknown'},
+          ));
+        }
+      }
+    }
+  }
+
+  /// Emit a connection event to all listeners
+  void _emitConnectionEvent(ConnectionEvent event) {
+    if (!_connectionEventController.isClosed) {
+      _connectionEventController.add(event);
+      _logger.debug('Emitted connection event: ${event.type.displayName}');
+    }
+  }
+
+  /// Check if cached connection value is still valid
+  bool _isCachedConnectionValid() {
+    return _isConnected != null &&
+        _lastConnectionVerified != null &&
+        DateTime.now().difference(_lastConnectionVerified!) <
+            _connectionValidityDuration;
+  }
+
+
 
   // Primitive: Discover MFi Bluetooth printers (BT Classic on iOS)
   // Returns a per-operation stream of devices
@@ -466,6 +580,7 @@ class ZebraPrinter {
           timeout: const Duration(seconds: 7),
         );
         if (result.success && (result.data ?? false)) {
+          _updateConnectionState(true, context: 'connectToPrinter success');
           _logger.info('Successfully connected to printer: $address');
           final existingPrinter = controller.printers.firstWhere(
             (p) => p.address == address,
@@ -482,6 +597,7 @@ class ZebraPrinter {
           controller.updatePrinterStatus('Connected', 'G');
           return Result.success();
         } else {
+          _updateConnectionState(false, context: 'connectToPrinter failed');
           _logger.error('Failed to establish connection to printer: $address');
           controller.selectedAddress = null;
           return ZebraErrorBridge.fromInnerResult<void>(
@@ -512,11 +628,13 @@ class ZebraPrinter {
           _logger.info('Updated printer status to disconnected');
         }
         if (result.success) {
+          _updateConnectionState(false, context: 'disconnect success');
           _logger.info('Printer disconnected successfully');
           return Result.success();
         } else {
           _logger
               .error('Disconnect operation failed: ${result.error?.message}');
+          // Don't update connection state on disconnect failure - might still be connected
           return ZebraErrorBridge.fromInnerResult<void>(
             result,
             ErrorCodes.disconnectFailed,
@@ -552,17 +670,27 @@ class ZebraPrinter {
           timeout: const Duration(seconds: 30),
         );
         if (result.success) {
+          _updateConnectionState(true, context: 'print success');
           _logger.info('Print data sent successfully');
           tracker.stopPrint();
           return Result.success(tracker);
         } else {
           _logger.error('Print operation failed: ${result.error?.message}');
           tracker.stopPrint();
-          return ZebraErrorBridge.fromInnerResult<PrintOperationTracker>(
+          
+          // Check if this is a connection error and update state
+          final errorResult =
+              ZebraErrorBridge.fromInnerResult<PrintOperationTracker>(
             result,
             ErrorCodes.printError,
             formatArgs: [result.error?.message ?? 'Print failed'],
           );
+          
+          if (ZebraErrorBridge.isConnectionRelatedError(errorResult)) {
+            _updateConnectionState(false, context: 'print connection error');
+          }
+
+          return errorResult;
         }
       },
       operationType: OperationType.print,
@@ -582,18 +710,28 @@ class ZebraPrinter {
           timeout: const Duration(seconds: 5),
         );
         if (result.success && result.data != null) {
+          _updateConnectionState(true, context: 'getPrinterStatus success');
           _logger.info('Printer status retrieved successfully');
           return Result.success(result.data!);
         } else {
           _logger
               .error('Failed to get printer status: ${result.error?.message}');
-          return ZebraErrorBridge.fromInnerResult<Map<String, dynamic>>(
+          
+          final errorResult =
+              ZebraErrorBridge.fromInnerResult<Map<String, dynamic>>(
             result,
             ErrorCodes.statusCheckFailed,
             formatArgs: [
               result.error?.message ?? 'Failed to get printer status'
             ],
           );
+          
+          if (ZebraErrorBridge.isConnectionRelatedError(errorResult)) {
+            _updateConnectionState(false,
+                context: 'getPrinterStatus connection error');
+          }
+
+          return errorResult;
         }
       },
       operationType: OperationType.status,
@@ -670,8 +808,15 @@ class ZebraPrinter {
   }
 
   // Primitive: Check if printer is connected
-  Future<Result<bool>> isPrinterConnected() async {
-    _logger.info('Checking printer connection status');
+  Future<Result<bool>> isPrinterConnected({bool forceCheck = false}) async {
+    // Use cached value if valid and not forcing check
+    if (!forceCheck && _isCachedConnectionValid()) {
+      _logger.debug('Using cached connection status: $_isConnected');
+      return Result.success(_isConnected!);
+    }
+
+    _logger.info(
+        'Checking printer connection status${forceCheck ? ' (forced)' : ''}');
 
     return await ZebraErrorBridge.executeAndHandleResult<bool>(
       operation: () async {
@@ -682,12 +827,14 @@ class ZebraPrinter {
         );
         if (result.success) {
           final isConnected = result.data ?? false;
+          _updateConnectionState(isConnected, context: 'isPrinterConnected');
           _logger.info(
               'Connection status: ${isConnected ? 'Connected' : 'Disconnected'}');
           return Result.success(isConnected);
         } else {
           _logger.error(
               'Failed to check connection status: ${result.error?.message}');
+          // Don't update state on check failure - might be temporary
           return ZebraErrorBridge.fromInnerResult<bool>(
             result,
             ErrorCodes.connectionError,
@@ -713,12 +860,14 @@ class ZebraPrinter {
           timeout: const Duration(seconds: 5),
         );
         if (result.success) {
+          _updateConnectionState(true, context: 'sendCommand success');
           _logger.info('Command sent successfully: $command');
           return Result.success();
         } else {
           _logger.error(
               'Failed to send command $command: ${result.error?.message}');
-          return ZebraErrorBridge.fromInnerResult<void>(
+          
+          final errorResult = ZebraErrorBridge.fromInnerResult<void>(
             result,
             ErrorCodes.commandError,
             formatArgs: [
@@ -726,6 +875,13 @@ class ZebraPrinter {
               result.error?.message ?? 'Failed to send command'
             ],
           );
+          
+          if (ZebraErrorBridge.isConnectionRelatedError(errorResult)) {
+            _updateConnectionState(false,
+                context: 'sendCommand connection error');
+          }
+
+          return errorResult;
         }
       },
       operationType: OperationType.command,
@@ -786,6 +942,7 @@ class ZebraPrinter {
 
   // Primitive: Dispose
   void dispose() {
+    _connectionEventController.close();
     _operationManager.dispose();
   }
 }

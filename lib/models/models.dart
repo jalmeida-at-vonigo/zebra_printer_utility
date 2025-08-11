@@ -2,6 +2,7 @@
 
 export 'communication_policy_event.dart';
 export 'communication_policy_options.dart';
+export 'connection_event.dart';
 export 'host_status_info.dart';
 export 'operation_log_entry.dart';
 export 'print_enums.dart';

@@ -311,7 +311,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with status icon, title, step badge, and cancel button
+            // Header with status icon, title, connection status, step badge, and cancel button
             Row(
               children: [
                 Icon(
@@ -538,6 +538,8 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     }
     return '${seconds}s';
   }
+
+
 
 
 } 

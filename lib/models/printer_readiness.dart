@@ -320,9 +320,20 @@ class PrinterReadiness {
     _logger.info('PrinterReadiness: Reading connection status');
     
     try {
-      // Use timeout policy directly for connection check
-      final result =
-          await _timeoutPolicy.execute(() => _printer.isPrinterConnected());
+      // First try cached value if available
+      final cachedStatus = _printer.isConnectedCached;
+      if (cachedStatus != null) {
+        _logger.info(
+            'PrinterReadiness: Using cached connection status: $cachedStatus');
+        _lastConnectionError = null;
+        return cachedStatus;
+      }
+
+      // Fall back to actual check with forceCheck=true to ensure fresh value
+      _logger.debug(
+          'PrinterReadiness: No cached value available, performing fresh connection check');
+      final result = await _timeoutPolicy
+          .execute(() => _printer.isPrinterConnected(forceCheck: true));
       final connected = result.success && (result.data ?? false);
       _lastConnectionError = null;
       _logger.info('PrinterReadiness: Connection status read: $connected');

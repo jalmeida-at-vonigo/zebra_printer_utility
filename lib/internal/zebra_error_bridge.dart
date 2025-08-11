@@ -34,6 +34,51 @@ class ZebraErrorBridge {
   /// Private constructor to prevent instantiation
   ZebraErrorBridge._();
 
+  /// Centralized helper to determine if an error indicates connection loss/failure
+  /// This method provides a single source of truth for connection error detection
+  /// across the entire codebase.
+  static bool isConnectionRelatedError(Result result) {
+    if (result.success) return false;
+
+    final error = result.error;
+    if (error == null) return false;
+
+    // Check error codes - definitive connection-related errors
+    final connectionErrorCodes = [
+      ErrorCodes.connectionError,
+      ErrorCodes.connectionTimeout,
+      ErrorCodes.connectionLost,
+      ErrorCodes.notConnected,
+      ErrorCodes.zebraNoConnection,
+      ErrorCodes.connectionRetryFailed,
+      ErrorCodes.statusConnectionError,
+      ErrorCodes.connectionFailed,
+      ErrorCodes.connectionUnknownError,
+      ErrorCodes.connectionSpecificTimeout,
+      ErrorCodes.zebraWriteFailure,
+      ErrorCodes.zebraReadFailure,
+    ];
+
+    if (connectionErrorCodes.contains(error.originalErrorCode)) {
+      return true;
+    }
+
+    // Check error message patterns as fallback
+    final message = error.message.toLowerCase();
+    return message.contains('connection') ||
+        message.contains('disconnect') ||
+        message.contains('timeout') ||
+        message.contains('not connected') ||
+        message.contains('network') ||
+        message.contains('bluetooth') ||
+        message.contains('wifi') ||
+        message.contains('socket') ||
+        message.contains('communication') ||
+        message.contains('unable to create a connection') ||
+        message.contains('write to a connection failed') ||
+        message.contains('read from a connection failed');
+  }
+
   /// Official Zebra SDK Error Code mappings (from ZebraErrorCodeI interface)
   /// Maps exact SDK error codes to our ErrorCode constants
   static const _zebraSDKErrorMappings = {

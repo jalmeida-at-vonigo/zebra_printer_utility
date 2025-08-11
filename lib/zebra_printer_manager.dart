@@ -5,7 +5,9 @@ import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
 import 'internal/printer_preferences.dart';
 import 'internal/smart_device_selector.dart';
+import 'internal/zebra_error_bridge.dart';
 import 'models/communication_policy_options.dart';
+import 'models/connection_event.dart';
 import 'models/print_enums.dart';
 import 'models/print_operation_tracker.dart';
 import 'models/print_options.dart';
@@ -72,6 +74,9 @@ class ZebraPrinterManager {
   /// Stream of status messages
   Stream<String> get status =>
       _statusStreamController?.stream ?? const Stream.empty();
+
+  /// Stream of real-time connection events for immediate UI updates
+  Stream<ConnectionEvent> get connectionEvents => _printer.connectionEvents;
 
   /// Currently connected printer
   ZebraDevice? get connectedPrinter {
@@ -289,17 +294,19 @@ class ZebraPrinterManager {
     }
 
     try {
-      // Step 1: Ensure connection health before printing (skip if called from SmartPrintManager)
+      // Step 1: Optimistic connection handling (skip if called from SmartPrintManager)
       final skipConnectionCheck = options?.skipConnectionHealthCheck ?? false;
       if (!skipConnectionCheck) {
-        _logger.info('Manager: Ensuring connection health before printing');
-        _logger.debug(
-            'Manager: Connection health check triggered by ZebraPrinterManager.print() - this may be redundant if called from SmartPrintManager');
+        _logger.info(
+            'Manager: Performing optimistic connection handling before printing');
         
-        final healthResult = await _communicationPolicy!.getConnectionStatus();
-        if (!healthResult.success || !healthResult.data!) {
-          _logger.warning(
-              'Manager: Connection health check failed, attempting reconnection');
+        // Check cached connection state first (no round-trip)
+        final cachedConnected = _printer.isConnectedCached;
+
+        if (cachedConnected == false) {
+          // We know we're disconnected, try to reconnect proactively
+          _logger.info(
+              'Manager: Cached state shows disconnected, attempting proactive reconnection');
           final reconnectResult = await connect(
             connectedPrinter!,
             options: CommunicationPolicyOptions(
@@ -310,16 +317,21 @@ class ZebraPrinterManager {
 
           if (!reconnectResult.success) {
             _logger.error(
-                'Manager: Failed to reconnect after connection health failure');
+                'Manager: Failed to reconnect after detecting disconnected state');
             return Result.error('Failed to establish connection for printing');
           }
+        } else if (cachedConnected == null) {
+          // Unknown state, proceed optimistically and handle errors if they occur
+          _logger.info(
+              'Manager: Connection state unknown, proceeding optimistically');
         } else {
+          // cachedConnected == true, proceed optimistically
           _logger.debug(
-              'Manager: Connection health check passed - printer is ready for printing');
+              'Manager: Cached state shows connected, proceeding optimistically');
         }
       } else {
         _logger.debug(
-            'Manager: Skipping connection health check (already handled by SmartPrintManager)');
+            'Manager: Skipping connection handling (already handled by SmartPrintManager)');
       }
 
       // Step 2: Detect data format
@@ -391,7 +403,8 @@ class ZebraPrinterManager {
         );
       }
 
-      final printResult = await _communicationPolicy!.execute(
+      // Attempt the print operation optimistically
+      var printResult = await _communicationPolicy!.execute(
         () => _printer.print(data: preparedData, format: detectedFormat),
         'Send Print Data',
         options: CommunicationPolicyOptions(
@@ -405,6 +418,48 @@ class ZebraPrinterManager {
           },
         ),
       );
+      
+      // Handle connection errors with automatic reconnection and retry
+      if (!printResult.success &&
+          ZebraErrorBridge.isConnectionRelatedError(printResult)) {
+        _logger.info(
+            'Manager: Print failed due to connection error, attempting reconnection and retry');
+        _statusStreamController
+            ?.add('Connection lost, attempting to reconnect...');
+
+        // Try to reconnect once
+        final reconnectResult = await connect(
+          connectedPrinter!,
+          options: CommunicationPolicyOptions(
+            skipConnectionRetry: true,
+            cancellationToken: options.cancellationToken,
+          ),
+        );
+
+        if (reconnectResult.success) {
+          _logger.info(
+              'Manager: Reconnection successful, retrying print operation');
+          _statusStreamController?.add('Reconnected, retrying print...');
+
+          // Retry the print operation once
+          printResult = await _communicationPolicy!.execute(
+            () => _printer.print(data: preparedData, format: detectedFormat),
+            'Retry Print Data After Reconnect',
+            options: CommunicationPolicyOptions(
+              maxAttempts: 1, // Single retry after reconnect
+              skipConnectionCheck: true, // We just reconnected
+              skipConnectionRetry: true, // Don't retry connection again
+              cancellationToken: options.cancellationToken,
+              onEvent: (event) {
+                _statusStreamController?.add(event.message);
+              },
+            ),
+          );
+        } else {
+          _logger.error('Manager: Failed to reconnect for print retry');
+          _statusStreamController?.add('Failed to reconnect');
+        }
+      }
       
       if (!printResult.success) {
         _logger.error(

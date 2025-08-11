@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'models/connection_event.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
 import 'models/result.dart';
@@ -97,6 +98,9 @@ class Zebra {
 
   /// Stream of status messages
   Stream<String> get status => manager.status;
+
+  /// Stream of real-time connection events for immediate UI updates
+  Stream<ConnectionEvent> get connectionEvents => manager.connectionEvents;
 
   /// Currently connected printer
   ZebraDevice? get connectedPrinter => manager.connectedPrinter;
