@@ -15,6 +15,9 @@
 // Core functionality
 export 'internal/commands/command_factory.dart';
 export 'internal/communication_policy.dart';
+export 'internal/print_data_detector.dart';
+export 'internal/print_data_formatter.dart';
+export 'internal/print_data_validator.dart';
 export 'models/models.dart';
 export 'smart_print_manager.dart';
 export 'zebra.dart';
@@ -22,4 +25,3 @@ export 'zebra_printer.dart';
 export 'zebra_printer_discovery.dart';
 export 'zebra_printer_manager.dart';
 export 'zebra_printer_readiness_manager.dart';
-export 'zebra_sgd_commands.dart';

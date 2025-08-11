@@ -3,6 +3,47 @@ import 'package:zebrautil/internal/parser_util.dart';
 import 'package:zebrautil/models/host_status_info.dart';
 
 void main() {
+  group('ParserUtil - SGD Response Parsing', () {
+    group('parseResponse', () {
+      test('extracts value from standard SGD response format', () {
+        expect(ParserUtil.parseResponse('"device.languages" : "zpl"'),
+            equals('zpl'));
+        expect(ParserUtil.parseResponse('"media.type" : "continuous"'),
+            equals('continuous'));
+      });
+
+      test('extracts value from quoted value only', () {
+        expect(ParserUtil.parseResponse('"zpl"'), equals('zpl'));
+        expect(ParserUtil.parseResponse('"203 dpi"'), equals('203 dpi'));
+      });
+
+      test('returns trimmed value for plain text', () {
+        expect(ParserUtil.parseResponse('zpl'), equals('zpl'));
+        expect(ParserUtil.parseResponse('  203 dpi  '), equals('203 dpi'));
+      });
+
+      test('returns null for empty response', () {
+        expect(ParserUtil.parseResponse(''), isNull);
+        expect(ParserUtil.parseResponse('   '), isNull);
+      });
+
+      test('handles complex SGD responses', () {
+        expect(
+            ParserUtil.parseResponse(
+                '"device.languages" : "zpl,cpcl,line_print"'),
+            equals('zpl,cpcl,line_print'));
+        expect(ParserUtil.parseResponse('"print.tone" : "30"'), equals('30'));
+      });
+
+      test('handles malformed responses gracefully', () {
+        expect(ParserUtil.parseResponse('device.languages : zpl'),
+            equals('device.languages : zpl'));
+        expect(ParserUtil.parseResponse('"incomplete quote'),
+            equals('"incomplete quote'));
+      });
+    });
+  });
+
   group('ParserUtil - Host Status Parsing', () {
     group('parseHostStatus', () {
       test('should handle null status', () {

@@ -688,6 +688,24 @@ class ParserUtil {
     return cleaned;
   }
 
+  /// Parse SGD response to extract value
+  /// Handles various SGD response formats and extracts the actual value
+  static String? parseResponse(String response) {
+    // SGD responses typically come in format: "setting_name" : "value"
+    final match = RegExp(r'"[^"]*"\s*:\s*"([^"]*)"').firstMatch(response);
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1);
+    }
+
+    // Sometimes just the value is returned
+    final trimmed = response.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return trimmed.substring(1, trimmed.length - 1);
+    }
+
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   /// Parse address with optional port
   /// Returns a map with 'address' and 'port' keys
   /// Default port is 9100 for network printers

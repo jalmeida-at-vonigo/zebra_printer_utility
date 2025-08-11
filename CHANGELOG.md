@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.59] - 2024-12-20
+
+### Changed
+- **Print Data Formatter Refactor**: Extracted mixed responsibilities into focused single-responsibility classes
+  - **NEW**: `PrintDataValidator` - Dedicated validation logic (data size, format validation, empty checks)
+  - **NEW**: `PrintDataFormatter` - Pure formatting logic (CPCL line endings, PRINT commands, buffer flush)
+  - **NEW**: `PrintDataDetector` - Format detection with confidence levels and detailed analysis
+  - **MOVED**: `parseResponse()` method moved from `ZebraSGDCommands` to `ParserUtil` for better organization
+  - **REMOVED**: `ZebraSGDCommands` class entirely - all methods moved to appropriate focused classes
+  - **IMPROVED**: Format detection is now more robust with confidence levels and edge case handling
+  - **SIMPLIFIED**: Code organization follows SRP (Single Responsibility Principle) and KISS principles
+  - All callers updated to use new focused classes directly (no pass-through methods)
+  - Comprehensive test coverage added for all new classes
+
 ## [2.0.58] - 2024-12-20
 
 ### Changed

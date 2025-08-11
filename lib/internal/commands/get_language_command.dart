@@ -1,6 +1,6 @@
 import '../../models/print_enums.dart';
 import '../../models/result.dart';
-import '../../zebra_sgd_commands.dart';
+import '../parser_util.dart';
 import 'printer_command.dart';
 
 /// Command to get printer language setting
@@ -23,7 +23,7 @@ class GetLanguageCommand extends PrinterCommand<PrintFormat?> {
       final value = result.data;
       if (value != null && value.isNotEmpty) {
         // Parse the SGD response (handles formats like '"device.languages" : "zpl"')
-        final parsedValue = ZebraSGDCommands.parseResponse(value);
+        final parsedValue = ParserUtil.parseResponse(value);
         logger.debug('SGD response: $value -> parsed: $parsedValue');
 
         if (parsedValue != null) {

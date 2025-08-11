@@ -1,5 +1,5 @@
 import '../../models/result.dart';
-import '../../zebra_sgd_commands.dart';
+import '../parser_util.dart';
 import 'printer_command.dart';
 
 /// Command to get a printer setting using SGD protocol
@@ -23,7 +23,7 @@ class GetSettingCommand extends PrinterCommand<String?> {
     if (result.success) {
       // Add business logic (SGD response parsing)
       final parsed = result.data != null
-          ? ZebraSGDCommands.parseResponse(result.data!)
+          ? ParserUtil.parseResponse(result.data!)
           : null;
       logger.debug('Setting $setting = $parsed');
       return Result.success(parsed);

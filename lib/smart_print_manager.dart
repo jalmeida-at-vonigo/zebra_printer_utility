@@ -106,7 +106,8 @@ class SmartPrintManager {
       // Check for cancellation before format detection
       if (_checkCancellationAndEmit()) return;
 
-      final PrintFormat? format = options?.formatOrDefault ?? ZebraSGDCommands.detectDataLanguage(data);
+      final PrintFormat? format =
+          options?.formatOrDefault ?? PrintDataDetector.detectFormat(data);
       if (format == null) {
         _emitEvent(PrintEvent(
           type: PrintEventType.errorOccurred,
@@ -387,7 +388,7 @@ class SmartPrintManager {
     );
   }
 
-  /// Validate print data before sending
+  /// Validate print data using the focused validator
   Future<Result<void>> _validatePrintData(String data) async {
     await _updateStep(PrintStep.validating, 'Validating print data');
 
@@ -396,50 +397,8 @@ class SmartPrintManager {
       return Result.errorCode(ErrorCodes.operationCancelled);
     }
 
-    // Check for empty data
-    if (data.isEmpty) {
-      return Result.errorCode(
-        ErrorCodes.emptyData,
-      );
-    }
-
-    // Check for basic format validation
-    if (!_isValidPrintData(data)) {
-      return Result.errorCode(
-        ErrorCodes.printDataInvalidFormat,
-      );
-    }
-
-    // Check data size (basic validation)
-    if (data.length > 1000000) {
-      // 1MB limit
-      return Result.errorCode(
-        ErrorCodes.printDataTooLarge,
-        formatArgs: [data.length],
-      );
-    }
-
-    return Result.success();
-  }
-
-  /// Basic print data validation
-  bool _isValidPrintData(String data) {
-    // Check for common print formats
-    final trimmed = data.trim();
-
-    // ZPL format check
-    if (trimmed.startsWith('^XA') && trimmed.endsWith('^XZ')) {
-      return true;
-    }
-
-    // CPCL format check
-    if (trimmed.startsWith('!') &&
-        (trimmed.contains('TEXT') || trimmed.contains('FORM'))) {
-      return true;
-    }
-
-    // Raw data (allow any non-empty data)
-    return trimmed.isNotEmpty;
+    // Use the focused validator
+    return PrintDataValidator.validatePrintData(data);
   }
 
   /// Connect to printer with retry logic (delegated to CommunicationPolicy)

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'internal/commands/command_factory.dart';
 import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
+import 'internal/print_data_detector.dart';
+import 'internal/print_data_formatter.dart';
 import 'internal/printer_preferences.dart';
 import 'internal/smart_device_selector.dart';
 import 'internal/zebra_error_bridge.dart';
@@ -16,7 +18,6 @@ import 'models/zebra_device.dart';
 import 'zebra_printer.dart';
 import 'zebra_printer_discovery.dart';
 import 'zebra_printer_readiness_manager.dart';
-import 'zebra_sgd_commands.dart';
 
 /// Simple cancellation token for status polling
 class CancellationToken {
@@ -238,44 +239,16 @@ class ZebraPrinterManager {
     return Result.success();
   }
 
-  /// Prepare print data based on format detection
-  /// This handles CPCL line endings, PRINT command addition, and other format-specific preparation
+  /// Prepare print data using the focused PrintDataFormatter
   String _preparePrintData(String data, PrintFormat? format) {
-    // Use provided format or detect from data
-    final detectedFormat = format ?? ZebraSGDCommands.detectDataLanguage(data);
-    final isCPCL = detectedFormat == PrintFormat.cpcl;
-
-    _logger.info(
-        'Preparing print data - detected format: ${detectedFormat?.name ?? 'unknown'}, isCPCL: $isCPCL');
-
-    if (isCPCL) {
-      _logger.info('Preparing CPCL data with proper line endings and commands');
-
-      // 1. For CPCL, ensure proper line endings - convert any \n to \r\n for CPCL
-      String preparedData = data.replaceAll(RegExp(r'(?<!\r)\n'), '\r\n');
-
-      // 2. Check if CPCL data ends with FORM but missing PRINT
-      if (preparedData.trim().endsWith('FORM') &&
-          !preparedData.contains('PRINT')) {
-        _logger.warning('CPCL data missing PRINT command, adding it');
-        preparedData = '${preparedData.trim()}\r\nPRINT\r\n';
-      }
-
-      // 3. Ensure CPCL ends with proper line endings for buffer flush
-      if (!preparedData.endsWith('\r\n')) {
-        preparedData += '\r\n';
-      }
-
-      // 4. Add extra line feeds to ensure complete transmission
-      preparedData += '\r\n\r\n';
-
-      _logger.info(
-          'CPCL data prepared - original: ${data.length} chars, prepared: ${preparedData.length} chars');
-      return preparedData;
-    } else {
-      _logger.info('Using ZPL or other format, data prepared as-is');
-      return data;
-    }
+    final formattedData = PrintDataFormatter.formatPrintData(data, format);
+    
+    // Log formatting details for debugging
+    final info =
+        PrintDataFormatter.getFormattingInfo(data, formattedData, format);
+    _logger.info('Print data formatting - $info');
+    
+    return formattedData;
   }
 
   /// Robust print method with integrated workflow - as robust as the old ZebraPrinterService
@@ -337,7 +310,7 @@ class ZebraPrinterManager {
       // Step 2: Detect data format
       options = PrintOptions.defaults().copyWith(options);
       final detectedFormat = options.formatOrDefault ??
-          ZebraSGDCommands.detectDataLanguage(data) ??
+          PrintDataDetector.detectFormat(data) ??
           PrintFormat.zpl;
       _logger.info('Manager: Detected print format: ${detectedFormat.name}');
 
