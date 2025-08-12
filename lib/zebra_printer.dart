@@ -7,6 +7,7 @@ import 'internal/logger.dart';
 import 'internal/native_models/method_channel_constants.dart';
 import 'internal/native_models/printer_info.dart';
 import 'internal/permission_manager.dart';
+import 'internal/print_data_processor.dart';
 import 'internal/zebra_error_bridge.dart';
 import 'internal/zebra_printer_operation_callback_handler.dart';
 import 'internal/zebra_printer_operation_manager.dart';
@@ -647,37 +648,59 @@ class ZebraPrinter {
     );
   }
 
-  // Primitive: Print (send data)
+  // Primitive: Print (send data) - processes data then calls main implementation
   Future<Result<PrintOperationTracker>> print({
     required String data,
     PrintFormat format = PrintFormat.zpl,
   }) async {
-    _logger.info('Sending print data to printer');
-    
+    _logger.info('Processing and sending print data to printer');
+
+    // Process the data first
+    final processResult = PrintDataProcessor.process(data, format);
+    if (!processResult.success) {
+      _logger.error(
+          'Print data processing failed: ${processResult.error?.message}');
+      return ZebraErrorBridge.fromInnerResult<PrintOperationTracker>(
+        processResult,
+        ErrorCodes.printDataInvalidFormat,
+        formatArgs: [processResult.error?.message ?? 'Data processing failed'],
+      );
+    }
+
+    // Call the main implementation with processed data
+    return await printWithProcessedData(processResult.data!);
+  }
+
+  // Primitive: Print (send processed data)
+  Future<Result<PrintOperationTracker>> printWithProcessedData(
+    ProcessedPrintData processedData,
+  ) async {
+    _logger.info('Sending processed print data to printer');
+
     // Create tracker for this print operation
     final tracker = PrintOperationTracker();
 
     // Start tracking BEFORE the native operation
-    tracker.startPrint(data, format);
+    tracker.startPrint(processedData.data, processedData.format);
     _logger.info(
-        'Started tracking print operation: ${tracker.operationId} (format: ${format.name})');
+        'Started tracking print operation: ${tracker.operationId} (format: ${processedData.format.name})');
 
     return await ZebraErrorBridge.executeAndHandleResult<PrintOperationTracker>(
       operation: () async {
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.printMethod,
-          arguments: {'Data': data},
+          arguments: {'Data': processedData.data},
           timeout: const Duration(seconds: 30),
         );
         if (result.success) {
           _updateConnectionState(true, context: 'print success');
-          _logger.info('Print data sent successfully');
+          _logger.info('Processed print data sent successfully');
           tracker.stopPrint();
           return Result.success(tracker);
         } else {
           _logger.error('Print operation failed: ${result.error?.message}');
           tracker.stopPrint();
-          
+
           // Check if this is a connection error and update state
           final errorResult =
               ZebraErrorBridge.fromInnerResult<PrintOperationTracker>(
@@ -685,7 +708,7 @@ class ZebraPrinter {
             ErrorCodes.printError,
             formatArgs: [result.error?.message ?? 'Print failed'],
           );
-          
+
           if (ZebraErrorBridge.isConnectionRelatedError(errorResult)) {
             _updateConnectionState(false, context: 'print connection error');
           }
@@ -694,7 +717,7 @@ class ZebraPrinter {
         }
       },
       operationType: OperationType.print,
-      printData: data,
+      printData: processedData.data,
     );
   }
 

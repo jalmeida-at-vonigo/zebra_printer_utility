@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'internal/print_data_processor.dart';
 import 'models/connection_event.dart';
 import 'models/print_event.dart';
 import 'models/print_options.dart';
@@ -210,6 +211,21 @@ class Zebra {
     return await manager.print(data, options: options);
   }
 
+  /// Print processed data to the connected printer (primitive operation)
+  ///
+  /// This is a primitive operation that sends already processed data to the printer.
+  /// The data has already been validated, formatted, and prepared for printing.
+  ///
+  /// For complex workflows with status checking, retries, and error handling,
+  /// use [smartPrintProcessed] instead.
+  ///
+  /// Returns Result indicating success or failure.
+  Future<Result<void>> printWithProcessedData(ProcessedPrintData processedData,
+      {PrintOptions? options}) async {
+    return await manager.printWithProcessedData(processedData,
+        options: options);
+  }
+
   /// Smart print with comprehensive event system and automatic recovery
   ///
   /// This method provides a complete print workflow with:
@@ -260,6 +276,50 @@ class Zebra {
       options: options,
     );
     
+    // Stream events from the manager's event stream
+    yield* smartManager.eventStream;
+  }
+
+  /// Smart print with processed data (avoids redundant processing)
+  ///
+  /// This method provides the same comprehensive workflow as smartPrint but
+  /// accepts already processed print data, avoiding redundant format detection,
+  /// validation, and formatting operations.
+  ///
+  /// Returns a Stream of [PrintEvent] objects for monitoring progress.
+  ///
+  /// Example usage:
+  /// ```dart
+  /// // Process data first
+  /// final processResult = PrintDataProcessor.process(rawData, PrintFormat.zpl);
+  /// if (processResult.success) {
+  ///   final eventStream = zebra.smartPrintProcessed(
+  ///     processResult.data!,
+  ///     maxAttempts: 3,
+  ///   );
+  ///
+  ///   eventStream.listen((event) {
+  ///     print('Event: ${event.type}');
+  ///   });
+  /// }
+  /// ```
+  Stream<PrintEvent> smartPrintWithProcessedData(
+    ProcessedPrintData processedData, {
+    ZebraDevice? device,
+    int maxAttempts = 3,
+    PrintOptions? options,
+  }) async* {
+    // Convert null options to empty instance to avoid ?? operators throughout
+    options ??= const PrintOptions();
+
+    // Start the smart print operation with processed data
+    await smartManager.smartPrintWithProcessedData(
+      processedData: processedData,
+      device: device,
+      maxAttempts: maxAttempts,
+      options: options,
+    );
+
     // Stream events from the manager's event stream
     yield* smartManager.eventStream;
   }

@@ -3,8 +3,7 @@ import 'dart:async';
 import 'internal/commands/command_factory.dart';
 import 'internal/communication_policy.dart';
 import 'internal/logger.dart';
-import 'internal/print_data_detector.dart';
-import 'internal/print_data_formatter.dart';
+import 'internal/print_data_processor.dart';
 import 'internal/printer_preferences.dart';
 import 'internal/smart_device_selector.dart';
 import 'internal/zebra_error_bridge.dart';
@@ -29,8 +28,6 @@ class CancellationToken {
     _isCancelled = true;
   }
 }
-
-
 
 /// Manager for Zebra printer instances and state
 ///
@@ -60,7 +57,7 @@ class ZebraPrinterManager {
 
   /// Public getter for the underlying ZebraPrinter instance
   ZebraPrinter get printer => _printer;
-  
+
   /// Public getter for the communication policy
   CommunicationPolicy? get communicationPolicy => _communicationPolicy;
 
@@ -99,7 +96,7 @@ class ZebraPrinterManager {
   Future<Result<bool>> initialize() async {
     try {
       _logger.info('Initializing ZebraPrinterManager');
-      
+
       // Initialize controller and streams
       _controller = ZebraController();
       _connectionStreamController = StreamController<ZebraDevice?>.broadcast();
@@ -128,7 +125,7 @@ class ZebraPrinterManager {
         printer: _printer,
         communicationPolicy: _communicationPolicy!,
       );
-      
+
       _logger.info('ZebraPrinterManager initialization completed');
       return Result.success(true);
     } catch (e) {
@@ -239,40 +236,57 @@ class ZebraPrinterManager {
     return Result.success();
   }
 
-  /// Prepare print data using the focused PrintDataFormatter
-  String _preparePrintData(String data, PrintFormat? format) {
-    final formattedData = PrintDataFormatter.formatPrintData(data, format);
-    
-    // Log formatting details for debugging
-    final info =
-        PrintDataFormatter.getFormattingInfo(data, formattedData, format);
-    _logger.info('Print data formatting - $info');
-    
-    return formattedData;
-  }
-
-  /// Robust print method with integrated workflow - as robust as the old ZebraPrinterService
+  /// Robust print method - processes data and calls main implementation
   /// This combines pre-print preparation, print execution, and post-print verification
   Future<Result<PrintOperationTracker>> print(String data,
       {PrintOptions? options}) async {
-    _logger.info('Manager: Starting robust print operation');
+    _logger.info('Manager: Processing data and starting print operation');
+
+    // Process the data first
+    final processResult = PrintDataProcessor.process(data, options?.format);
+    if (!processResult.success) {
+      _logger.error(
+          'Manager: Print data processing failed: ${processResult.error?.message}');
+      return Result.errorCode(
+        ErrorCodes.printDataInvalidFormat,
+        formatArgs: [processResult.error?.message ?? 'Data processing failed'],
+      );
+    }
+
+    final processedData = processResult.data!;
+    _logger.info(
+        'Manager: Print data processed successfully (format: ${processedData.format.name})');
+    // Call the main implementation with processed data
+    return await printWithProcessedData(processedData, options: options);
+  }
+
+  /// Robust print method with processed data (avoids redundant processing) - MAIN IMPLEMENTATION
+  /// This combines pre-print preparation, print execution, and post-print verification
+  Future<Result<PrintOperationTracker>> printWithProcessedData(
+    ProcessedPrintData processedData, {
+    PrintOptions? options,
+  }) async {
+    _logger
+        .info('Manager: Starting robust print operation with processed data');
     await _ensureInitialized();
+    options = PrintOptions.defaults().copyWith(options);
+    if (options.format == null) {
+      options = options.copyWith(PrintOptions(format: processedData.format));
+    }
 
     if (connectedPrinter == null) {
       _logger.error('Manager: Print operation failed - No printer connected');
       _statusStreamController?.add('No printer connected');
-      return Result.errorCode(
-        ErrorCodes.notConnected,
-      );
+      return Result.errorCode(ErrorCodes.notConnected);
     }
 
     try {
       // Step 1: Optimistic connection handling (skip if called from SmartPrintManager)
-      final skipConnectionCheck = options?.skipConnectionHealthCheck ?? false;
+      final skipConnectionCheck = options.skipConnectionHealthCheck ?? false;
       if (!skipConnectionCheck) {
         _logger.info(
             'Manager: Performing optimistic connection handling before printing');
-        
+
         // Check cached connection state first (no round-trip)
         final cachedConnected = _printer.isPrinterConnectedCached;
 
@@ -284,7 +298,7 @@ class ZebraPrinterManager {
             connectedPrinter!,
             options: CommunicationPolicyOptions(
               skipConnectionRetry: true,
-              cancellationToken: options?.cancellationToken,
+              cancellationToken: options.cancellationToken,
             ),
           );
 
@@ -307,22 +321,16 @@ class ZebraPrinterManager {
             'Manager: Skipping connection handling (already handled by SmartPrintManager)');
       }
 
-      // Step 2: Detect data format
-      options = PrintOptions.defaults().copyWith(options);
-      final detectedFormat = options.formatOrDefault ??
-          PrintDataDetector.detectFormat(data) ??
-          PrintFormat.zpl;
-      _logger.info('Manager: Detected print format: ${detectedFormat.name}');
 
-      // Step 3: Prepare printer for printing (integrated prepareForPrint)
+      // Step 2: Prepare printer for printing (integrated prepareForPrint)
       _logger.info(
-          'Manager: Preparing printer for ${detectedFormat.name} printing');
+          'Manager: Preparing printer for ${processedData.format.name} printing');
       _statusStreamController?.add('Preparing printer...');
 
       final readinessOptions = options.readinessOptionsOrDefault;
 
       final prepareResult = await _readinessManager!.prepareForPrint(
-        detectedFormat,
+        processedData.format,
         readinessOptions,
         cancellationToken: options.cancellationToken,
       );
@@ -360,11 +368,8 @@ class ZebraPrinterManager {
         _statusStreamController?.add('Printer ready for printing');
       }
 
-      // Step 4: Prepare data based on format
-      final preparedData = _preparePrintData(data, detectedFormat);
-
-      // Step 5: Send print data with connection failure handling
-      _logger.info('Manager: Sending print data to printer');
+      // Step 3: Send print data with connection failure handling
+      _logger.info('Manager: Sending processed print data to printer');
       _statusStreamController?.add('Sending print data...');
 
       // Check for cancellation before sending print data
@@ -378,7 +383,7 @@ class ZebraPrinterManager {
 
       // Attempt the print operation optimistically
       var printResult = await _communicationPolicy!.execute(
-        () => _printer.print(data: preparedData, format: detectedFormat),
+        () => _printer.printWithProcessedData(processedData),
         'Send Print Data',
         options: CommunicationPolicyOptions(
           maxAttempts: 3,
@@ -391,7 +396,7 @@ class ZebraPrinterManager {
           },
         ),
       );
-      
+
       // Handle connection errors with automatic reconnection and retry
       if (!printResult.success &&
           ZebraErrorBridge.isConnectionRelatedError(printResult)) {
@@ -416,7 +421,7 @@ class ZebraPrinterManager {
 
           // Retry the print operation once
           printResult = await _communicationPolicy!.execute(
-            () => _printer.print(data: preparedData, format: detectedFormat),
+            () => _printer.printWithProcessedData(processedData),
             'Retry Print Data After Reconnect',
             options: CommunicationPolicyOptions(
               maxAttempts: 1, // Single retry after reconnect
@@ -433,7 +438,7 @@ class ZebraPrinterManager {
           _statusStreamController?.add('Failed to reconnect');
         }
       }
-      
+
       if (!printResult.success) {
         _logger.error(
             'Manager: Print operation failed: ${printResult.error?.message}');
@@ -455,8 +460,8 @@ class ZebraPrinterManager {
       _logger.info('Manager: Print data sent successfully');
       _statusStreamController?.add('Print data sent successfully');
 
-      // Step 6: Post-print buffer operations (format-specific)
-      if (detectedFormat == PrintFormat.cpcl) {
+      // Step 4: Post-print buffer operations (format-specific using processed format)
+      if (processedData.format == PrintFormat.cpcl) {
         // Check for cancellation before buffer operations
         if (options.cancellationToken?.isCancelled ?? false) {
           _logger.info(
@@ -466,7 +471,7 @@ class ZebraPrinterManager {
             formatArgs: ['Print operation cancelled'],
           );
         }
-        
+
         _logger.info('Manager: Sending CPCL flush command');
         try {
           final flushCommand =
@@ -493,7 +498,7 @@ class ZebraPrinterManager {
         }
       }
 
-      // Step 7: Wait for print completion with format-specific delays (if enabled)
+      // Step 5: Wait for print completion with format-specific delays (if enabled)
       if (options.waitForPrintCompletionOrDefault && tracker != null) {
         // Check for cancellation before waiting for completion
         if (options.cancellationToken?.isCancelled ?? false) {
@@ -504,10 +509,10 @@ class ZebraPrinterManager {
             formatArgs: ['Print operation cancelled'],
           );
         }
-        
+
         final completionResult = await tracker.waitForCompletion(
-          data: preparedData,
-          format: detectedFormat,
+          data: processedData.data,
+          format: processedData.format,
           onStatusUpdate: (status) => _statusStreamController?.add(status),
         );
         if (!completionResult.success) {
@@ -587,8 +592,6 @@ class ZebraPrinterManager {
     await _ensureInitialized();
 
     try {
-
-
       final statusCommand =
           CommandFactory.createGetDetailedPrinterStatusCommand(_printer);
       final result = await _communicationPolicy!.execute(
@@ -619,10 +622,6 @@ class ZebraPrinterManager {
     }
   }
 
-
-
-
-
   /// Primitive: Check if a printer is currently connected
   Future<bool> isPrinterConnected() async {
     await _ensureInitialized();
@@ -644,8 +643,6 @@ class ZebraPrinterManager {
     }
   }
 
-
-
   /// Dispose of resources
   void dispose() {
     _printer.dispose();
@@ -653,7 +650,7 @@ class ZebraPrinterManager {
     _readinessManager = null;
     _controller?.removeListener(_onControllerChanged);
     _controller?.dispose();
-    
+
     // Close stream controllers safely
     _connectionStreamController?.close();
     _connectionStreamController = null;

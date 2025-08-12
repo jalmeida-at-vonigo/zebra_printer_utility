@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.61] - 2025-01-11
+
+### Changed
+- **DRY Refactoring**: Applied Don't Repeat Yourself principle to print methods across all layers
+  - **MAIN IMPLEMENTATION**: `printWithProcessedData` is now the main implementation with full workflow logic
+  - **SIMPLIFIED OVERLOAD**: `print` methods now just process data and call `printWithProcessedData` 
+  - **ELIMINATED DUPLICATION**: Removed redundant workflow logic from `print` methods at all layers (ZebraPrinter, ZebraPrinterManager, SmartPrintManager)
+  - **PRESERVED FUNCTIONALITY**: All original workflow features maintained (readiness preparation, reconnection, retry logic, format-specific operations)
+  - **MADE PRIVATE**: `PrintDataProcessor.detectFormat()` is now private since format is available in `ProcessedPrintData`
+  - **CLEANUP**: Removed obsolete print data processor files and updated exports
+  - All tests passing (304 tests) with no lint issues
+
+## [2.0.60] - 2024-12-20
+
+### Changed
+- **Migration Completed**: Removed all deprecated and legacy code with full migration to new architecture
+  - **REMOVED**: All `@Deprecated` methods and migration code - no backward compatibility remains
+  - **CONSOLIDATED**: `PrintDataValidator`, `PrintDataFormatter`, and `PrintDataDetector` merged into single `PrintDataProcessor` class for simplicity
+  - **SIMPLIFIED**: `PrintDataProcessor.process()` is now the single entry point for all print data processing (detection + validation + formatting)
+  - **ENHANCED**: `ProcessedPrintData` now uses `Result<T>` pattern for cleaner success/failure handling
+  - **IMPROVED**: Dual capability added - all print methods accept both `String` and `ProcessedPrintData` for flexibility
+  - **CORRECTED**: Fixed `SmartPrintManager` to use proper event-driven validation steps instead of single processing call
+  - All lint and analysis issues resolved
+
 ## [2.0.59] - 2024-12-20
 
 ### Changed

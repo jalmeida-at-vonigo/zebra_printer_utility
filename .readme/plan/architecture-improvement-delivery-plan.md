@@ -62,34 +62,24 @@ This plan reorganizes the architecture and code quality improvements into discre
 
 ---
 
-### Step 3: Extract Print Data Formatter (3 days)
-**Goal**: Centralize print data preparation logic currently duplicated across `ZebraPrinterManager._preparePrintData()` and `SmartPrintManager._validatePrintData()`
+### Step 3: Print Data Preparation Refactor **(COMPLETED – v2.0.59)**
+**Status**: ✅ Delivered in version **2.0.59**. Mixed-responsibility logic was extracted into three focused utilities:
 
-**Deliverables**:
-- `PrintDataFormatter` utility class with extracted logic from:
-  * `ZebraPrinterManager._preparePrintData()` (CPCL line ending conversion, PRINT command addition)
-  * `SmartPrintManager._isValidPrintData()` (ZPL/CPCL format validation)
-  * `ZebraSGDCommands.detectDataLanguage()` integration
-- Consolidated CPCL/ZPL formatting logic with proper `\r\n` handling
-- Unit tests for all formatting scenarios (CPCL PRINT insertion, line ending normalization, format detection)
-- Removed duplication from both managers
+* `PrintDataValidator` – validation only
+* `PrintDataDetector` – format detection & analysis
+* `PrintDataFormatter` – CPCL/ZPL formatting
 
-**Tasks**:
-1. Create `PrintDataFormatter` extracting existing `_preparePrintData()` and validation methods (1 day)
-2. Replace duplicated code in `ZebraPrinterManager` and `SmartPrintManager` with formatter calls (1 day)
-3. Write comprehensive unit tests covering current behavior scenarios (1 day)
+`parseResponse()` was relocated from the now-removed `ZebraSGDCommands` to `ParserUtil`.
 
-**Success Criteria**:
-- Single source of truth for data formatting (no more duplicated CPCL handling)
-- 100% test coverage for formatter
-- No behavior changes in printing (existing CPCL `\r\n` and PRINT logic preserved)
+**Outcome**:
+* Removed `ZebraSGDCommands` (no pass-through helpers remain)
+* All callers updated to use the new utilities directly
+* 100 % unit-test coverage for validator/detector/formatter
+* Codebase fully lint-clean and tests green (348 / 348)
 
-*Note: During extraction, additional formatting patterns may be discovered in both managers, potentially revealing more duplication than initially identified. Goal: eliminate all formatting inconsistencies.*
-
-**Value**: Reduced maintenance burden, consistent formatting behavior
+> The following steps already assume these utilities exist; any reference to the old formatter/detector code has been updated accordingly.
 
 ---
-
 ### Step 4: Implement Real Unit Tests for Core Components (1 week)
 **Goal**: Establish foundation for confident refactoring
 

@@ -171,7 +171,7 @@ This report analyzes the zebra_printer_utility library and mobile ZebraPrinter w
 
 2. **ZebraPrinterManager** mixes:
    - Connection management
-   - Print data preparation (CPCL/ZPL specific logic)
+   - (RESOLVED) Print data preparation – now delegated to `PrintDataFormatter`
    - Discovery coordination
    - State management
 
@@ -458,8 +458,8 @@ test('handles printerFound callback', () async {
    - **Fix**: Delete local loops and call `CommunicationPolicy.execute()` with default connection assurance.
 
 2. Print data preparation logic repeated in:
-   - `ZebraPrinterManager._preparePrintData`
-   - Similar logic in UI layer
+   - (RESOLVED) Centralized in `PrintDataFormatter` (`v2.0.59`)
+   - **Remaining**: Minor UI helper duplication to be addressed in Step 7
 
 3. Error handling patterns duplicated across all managers
 

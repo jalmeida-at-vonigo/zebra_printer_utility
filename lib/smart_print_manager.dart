@@ -5,7 +5,7 @@ import 'internal/logger.dart';
 import 'zebrautil.dart';
 
 /// Smart print manager for handling complex print workflows
-/// 
+///
 /// This manager provides:
 /// - Comprehensive print workflow with automatic retry logic
 /// - Real-time progress events and status updates
@@ -24,7 +24,7 @@ import 'zebrautil.dart';
 class SmartPrintManager {
   SmartPrintManager({required ZebraPrinterManager manager})
       : _printerManager = manager;
-  
+
   // Private fields
   final ZebraPrinterManager _printerManager;
   final Logger _logger = Logger.withPrefix('SmartPrintManager');
@@ -34,7 +34,7 @@ class SmartPrintManager {
 
   // Immutable state management
   PrintState _currentState = PrintState.initial();
-  
+
   // Cancellation management
   CancellationToken? _cancellationToken;
 
@@ -64,18 +64,76 @@ class SmartPrintManager {
     int maxAttempts = 3,
     PrintOptions? options,
   }) async {
-    if (_currentState.isRunning) {
-      _emitEvent(PrintEvent(
-        type: PrintEventType.errorOccurred,
-        timestamp: DateTime.now(),
-        errorInfo: const PrintErrorInfo(
-          message: 'Another print operation is already in progress',
-          recoverability: ErrorRecoverability.nonRecoverable,
-          errorCode: 'OPERATION_ERROR',
-        ),
-        printState: _currentState,
-      ));
-      return;
+    return await _smartPrintInternal(
+      processedData: null,
+      data: data,
+      device: device,
+      maxAttempts: maxAttempts,
+      options: options,
+    );
+  }
+
+  /// Smart print operation with processed data (avoids redundant processing)
+  ///
+  /// This method provides the same comprehensive workflow as smartPrint but
+  /// accepts already processed print data, avoiding redundant format detection,
+  /// validation, and formatting operations.
+  ///
+  /// All events go through eventStream for monitoring progress.
+  Future<void> smartPrintWithProcessedData({
+    required ProcessedPrintData processedData,
+    ZebraDevice? device,
+    int maxAttempts = 3,
+    PrintOptions? options,
+  }) async {
+    return await _smartPrintInternal(
+      processedData: processedData,
+      data: null,
+      device: device,
+      maxAttempts: maxAttempts,
+      options: options,
+    );
+  }
+
+  Future<void> _smartPrintInternal({
+    required String? data,
+    required ProcessedPrintData? processedData,
+    ZebraDevice? device,
+    int maxAttempts = 3,
+    PrintOptions? options,
+  }) async {
+    if (data == null && processedData == null) {
+      throw ArgumentError('Either data or processedData must be provided');
+    }
+    if (data != null && processedData != null) {
+      throw ArgumentError('Only one of data or processedData must be provided');
+    }
+
+    if (data != null) {
+      final processResult =
+          PrintDataProcessor.process(data, options?.formatOrDefault);
+      if (!processResult.success) {
+        _emitEvent(PrintEvent(
+          type: PrintEventType.errorOccurred,
+          timestamp: DateTime.now(),
+          errorInfo: PrintErrorInfo(
+            message: processResult.error?.message ?? 'Processing failed',
+            recoverability: ErrorRecoverability.nonRecoverable,
+            errorCode: processResult.error?.code,
+          ),
+          printState: _currentState,
+        ));
+        return;
+      }
+      processedData = processResult.data!;
+    } else {
+      processedData = processedData!;
+    }
+    _logger.info('Smart print format: ${processedData.format.name}');
+
+    options = PrintOptions.defaults().copyWith(options);
+    if (options.format == null) {
+      options = options.copyWith(PrintOptions(format: processedData.format));
     }
 
     // Initialize state for new operation - ensure clean start
@@ -93,10 +151,10 @@ class SmartPrintManager {
       startTime: DateTime.now(),
       elapsedTime: Duration.zero,
     );
-    
+
     // Create and store cancellation token for this operation
     _cancellationToken = CancellationToken();
-    
+
     // Ensure event controller is initialized
     _eventController ??= StreamController<PrintEvent>.broadcast();
 
@@ -106,46 +164,15 @@ class SmartPrintManager {
       // Check for cancellation before format detection
       if (_checkCancellationAndEmit()) return;
 
-      final PrintFormat? format =
-          options?.formatOrDefault ?? PrintDataDetector.detectFormat(data);
-      if (format == null) {
-        _emitEvent(PrintEvent(
-          type: PrintEventType.errorOccurred,
-          timestamp: DateTime.now(),
-          errorInfo: const PrintErrorInfo(
-            message: 'Unknown or unsupported print format',
-            recoverability: ErrorRecoverability.nonRecoverable,
-            errorCode: 'PRINT_DATA_INVALID_FORMAT',
-          ),
-          stepInfo: _createStepInfo(PrintStep.failed, 'Invalid print format'),
-          printState: _currentState,
-        ));
-        return;
-      }
-      _logger.info('Smart print format: ${format.name}');
+      _logger.info('Smart print format: ${processedData.format.name}');
 
-      // Ensure options is always set
-      options = options?.copyWith(PrintOptions(format: format)) ??
-          PrintOptions(format: format);
+      await _updateStep(PrintStep.initializing,
+          'Initializing print operation with processed data');
 
-      // Check for cancellation before validation
+      // Check for cancellation before proceeding
       if (_checkCancellationAndEmit()) return;
 
-      final validationResult = await _validatePrintData(data);
-      if (!validationResult.success) {
-        _emitEvent(PrintEvent(
-          type: PrintEventType.errorOccurred,
-          timestamp: DateTime.now(),
-          errorInfo: PrintErrorInfo(
-            message: validationResult.error?.message ?? 'Validation failed',
-            recoverability: ErrorRecoverability.nonRecoverable,
-            errorCode: validationResult.error?.code,
-          ),
-          stepInfo: _createStepInfo(PrintStep.failed, 'Validation failed'),
-          printState: _currentState,
-        ));
-        return;
-      }
+      _logger.info('Smart print with format: ${processedData.format.name}');
 
       // Check for cancellation before connection attempt
       if (_checkCancellationAndEmit()) return;
@@ -163,7 +190,7 @@ class SmartPrintManager {
           ));
           return;
         }
-        
+
         _emitEvent(PrintEvent(
           type: PrintEventType.errorOccurred,
           timestamp: DateTime.now(),
@@ -177,12 +204,13 @@ class SmartPrintManager {
         ));
         return;
       }
-      
+
       // Check for cancellation before readiness preparation
       if (_checkCancellationAndEmit()) return;
-      
+
       // Use readiness manager for comprehensive status checking and preparation
-      final readinessResult = await _preparePrinterForPrint(format, options);
+      final readinessResult =
+          await _preparePrinterForPrint(processedData.format, options);
       if (!readinessResult.success) {
         _emitEvent(PrintEvent(
           type: PrintEventType.errorOccurred,
@@ -210,7 +238,7 @@ class SmartPrintManager {
       // Check for cancellation before sending print data
       if (_checkCancellationAndEmit()) return;
 
-      final printResult = await _sendPrintData(data);
+      final printResult = await _sendPrintData(processedData);
       if (!printResult.success) {
         // Check if failure was due to cancellation
         if (printResult.error?.code == 'OPERATION_CANCELLED' || isCancelled) {
@@ -223,7 +251,7 @@ class SmartPrintManager {
           ));
           return;
         }
-        
+
         _emitEvent(PrintEvent(
           type: PrintEventType.errorOccurred,
           timestamp: DateTime.now(),
@@ -237,20 +265,20 @@ class SmartPrintManager {
         ));
         return;
       }
-      
+
       // Get the tracker from the print result
       final tracker = printResult.data;
 
       if (options.waitForPrintCompletionOrDefault && tracker != null) {
         // Check for cancellation before waiting for completion
         if (_checkCancellationAndEmit()) return;
-        
+
         await _updateStep(
             PrintStep.waitingForCompletion, 'Waiting for print completion');
 
         final completionResult = await tracker.waitForCompletion(
-          data: data,
-          format: options.formatOrDefault ?? PrintFormat.zpl,
+          data: processedData.data,
+          format: processedData.format,
           onStatusUpdate: (status) {
             _emitEvent(PrintEvent(
               type: PrintEventType.statusUpdate,
@@ -266,7 +294,7 @@ class SmartPrintManager {
             ));
           },
         );
-        
+
         if (!completionResult.success) {
           // Check if failure was due to cancellation
           if (completionResult.error?.code == 'OPERATION_CANCELLED' ||
@@ -280,7 +308,7 @@ class SmartPrintManager {
             ));
             return;
           }
-          
+
           _emitEvent(PrintEvent(
             type: PrintEventType.errorOccurred,
             timestamp: DateTime.now(),
@@ -316,7 +344,7 @@ class SmartPrintManager {
   }
 
   /// Cancel the current print operation
-  /// 
+  ///
   /// This will:
   /// - Stop any stoppable operations immediately (communication, polling, retries)
   /// - Prevent non-stoppable operations from starting the next step
@@ -330,7 +358,7 @@ class SmartPrintManager {
 
     _logger.info(
         'Cancelling print operation at step: ${_currentState.currentStep}');
-    
+
     // Cancel the cancellation token - this immediately makes isCancelled return true
     // and stops all ongoing operations (CommunicationPolicy, status polling, etc.)
     _cancellationToken?.cancel();
@@ -363,7 +391,7 @@ class SmartPrintManager {
             .inMilliseconds,
       },
     ));
-    
+
     // Perform cleanup but don't clear the error state
     _cleanupWithoutStepUpdate();
   }
@@ -388,35 +416,22 @@ class SmartPrintManager {
     );
   }
 
-  /// Validate print data using the focused validator
-  Future<Result<void>> _validatePrintData(String data) async {
-    await _updateStep(PrintStep.validating, 'Validating print data');
-
-    // Check for cancellation before validation
-    if (_checkCancellationAndEmit()) {
-      return Result.errorCode(ErrorCodes.operationCancelled);
-    }
-
-    // Use the focused validator
-    return PrintDataValidator.validatePrintData(data);
-  }
-
   /// Connect to printer with retry logic (delegated to CommunicationPolicy)
   Future<Result<void>> _connectToPrinter(ZebraDevice? device) async {
     while (_currentState.currentAttempt <= _currentState.maxAttempts &&
         !isCancelled) {
       // Start connection with progress indicator
       await _updateStep(PrintStep.connecting, 'Connecting to printer');
-      
+
       // Emit progress event for UI animation
       _emitEvent(PrintEvent(
         type: PrintEventType.stepChanged,
         timestamp: DateTime.now(),
         stepInfo: _createStepInfo(PrintStep.connecting,
-            'Connecting to printer'),
+          'Connecting to printer'),
         printState: _currentState,
       ));
-      
+
       try {
         // Simulate connection progress for better UX
         await _emitConnectionProgress('Initializing connection...');
@@ -429,20 +444,20 @@ class SmartPrintManager {
             cancellationToken: _cancellationToken,
           ),
         );
-        
+
         if (result.success) {
           await _emitConnectionProgress('Connection established successfully');
           await Future.delayed(const Duration(milliseconds: 300));
 
           // Mark connecting step as completed
           await _updateStep(PrintStep.connected, 'Successfully connected to printer');
-          
+
           // Emit completion event for the connecting step
           _emitEvent(PrintEvent(
             type: PrintEventType.progressUpdate,
             timestamp: DateTime.now(),
             stepInfo: _createStepInfo(
-                PrintStep.connecting, 'Connection completed'),
+              PrintStep.connecting, 'Connection completed'),
             printState: _currentState,
           ));
 
@@ -454,7 +469,7 @@ class SmartPrintManager {
                 PrintStep.connected, 'Successfully connected to printer'),
             printState: _currentState,
           ));
-          
+
           return Result.success();
         } else {
           await _handleError(
@@ -470,7 +485,7 @@ class SmartPrintManager {
           stackTrace: stack,
         );
       }
-      
+
       if (_currentState.currentAttempt < _currentState.maxAttempts &&
           !isCancelled) {
         await _retryDelay();
@@ -481,7 +496,7 @@ class SmartPrintManager {
         break;
       }
     }
-    
+
     return Result.errorCode(
       ErrorCodes.connectionRetryFailed,
       formatArgs: [_currentState.maxAttempts],
@@ -560,7 +575,7 @@ class SmartPrintManager {
 
           // Update state with details
           _currentState = _currentState.copyWith(details: details);
-          
+
           // Forward readiness events to our event stream
           _emitEvent(PrintEvent(
             type: PrintEventType.statusUpdate,
@@ -625,7 +640,7 @@ class SmartPrintManager {
             : 'Printer prepared with warnings',
         currentError: readinessError,
       );
-      
+
       // Emit final readiness status
       _emitEvent(PrintEvent(
         type: PrintEventType.statusUpdate,
@@ -652,14 +667,15 @@ class SmartPrintManager {
   }
 
   /// Send print data with retry logic and return tracker
-  Future<Result<PrintOperationTracker>> _sendPrintData(String data) async {
+  Future<Result<PrintOperationTracker>> _sendPrintData(
+      ProcessedPrintData processedData) async {
     while (_currentState.currentAttempt <= _currentState.maxAttempts &&
         !isCancelled) {
       await _updateStep(PrintStep.sending, 'Sending print data');
-      
+
       try {
-        final result = await _printerManager.print(
-          data,
+        final result = await _printerManager.printWithProcessedData(
+          processedData,
           options: PrintOptions(
             readinessOptions: const ReadinessOptions(),
             cancellationToken: _cancellationToken,
@@ -696,7 +712,7 @@ class SmartPrintManager {
           stackTrace: stack,
         );
       }
-      
+
       if (_currentState.currentAttempt < _currentState.maxAttempts &&
           !isCancelled) {
         await _retryDelay();
@@ -707,7 +723,7 @@ class SmartPrintManager {
         break;
       }
     }
-    
+
     return Result.errorCode(
       ErrorCodes.printRetryFailed,
       formatArgs: [_currentState.maxAttempts],
@@ -834,9 +850,9 @@ class SmartPrintManager {
           DateTime.now().difference(_currentState.startTime ?? DateTime.now()),
       details: null, // Clear details when step changes
     );
-    
+
     _logger.info('Print step: $step - $message');
-    
+
     _emitEvent(PrintEvent(
       type: PrintEventType.stepChanged,
       timestamp: DateTime.now(),
@@ -855,7 +871,7 @@ class SmartPrintManager {
     final shouldRemoveHint = _shouldRemoveRecoveryHint(errorCode);
     final effectiveRecoveryHint =
         shouldRemoveHint ? null : errorCode.recoveryHint;
-    
+
     final errorInfo = PrintErrorInfo(
       message: errorCode.formatMessage(formatArgs),
       recoverability: _determineRecoverability(errorCode),
@@ -863,7 +879,7 @@ class SmartPrintManager {
       stackTrace: stackTrace,
       recoveryHint: effectiveRecoveryHint,
     );
-    
+
     _logger.error('Print error: ${errorInfo.message}', null, stackTrace);
 
     // Update state with error
@@ -884,13 +900,12 @@ class SmartPrintManager {
   /// Create step info for current state
   PrintStepInfo _createStepInfo(PrintStep step, String message) {
     return PrintStepInfo(
-      step: step,
-      message: message,
+        step: step,
+        message: message,
         attempt: _currentState.currentAttempt,
         maxAttempts: _currentState.maxAttempts,
         elapsed: DateTime.now()
-            .difference(_currentState.startTime ?? DateTime.now())
-    );
+            .difference(_currentState.startTime ?? DateTime.now()));
   }
 
   /// Determine error recoverability
@@ -918,12 +933,11 @@ class SmartPrintManager {
   Future<void> _retryDelay() async {
     const baseDelay = 2;
     const maxDelay = 30;
-    final delay =
-        Duration(
+    final delay = Duration(
         seconds: math.min(baseDelay * _currentState.currentAttempt, maxDelay));
-    
+
     _logger.info('Waiting ${delay.inSeconds} seconds before retry');
-    
+
     _emitEvent(PrintEvent(
       type: PrintEventType.retryAttempt,
       timestamp: DateTime.now(),
@@ -931,7 +945,7 @@ class SmartPrintManager {
           _currentState.currentStep, 'Retrying in ${delay.inSeconds} seconds'),
       printState: _currentState,
     ));
-    
+
     // Break delay into smaller chunks to check for cancellation
     const checkInterval = Duration(milliseconds: 500);
     final totalMs = delay.inMilliseconds;
@@ -958,13 +972,13 @@ class SmartPrintManager {
     // Cancel and clear cancellation token
     _cancellationToken?.cancel();
     _cancellationToken = null;
-    
+
     // Safely close event controller
     if (_eventController != null && !_eventController!.isClosed) {
       _eventController!.close();
     }
     _eventController = null;
-    
+
     // DO NOT reset the current state - preserve it for UI display
     // The final state (success/failure/cancelled) should remain visible
     // Only mark as not running to indicate operation is complete
@@ -1159,4 +1173,4 @@ class SmartPrintManager {
     // Keep recovery hints for errors that require user intervention
     return false;
   }
-} 
+}
