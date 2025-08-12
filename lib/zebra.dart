@@ -114,50 +114,35 @@ class Zebra {
 
   // ===== DISCOVERY OPERATIONS =====
 
-  /// Discover available printers
-  ///
-  /// This will scan for both Bluetooth and Network printers.
-  /// On iOS, Bluetooth printers must be paired in Settings first.
-  ///
-  /// Returns a Result with list of discovered [ZebraDevice] objects.
-  Future<Result<List<ZebraDevice>>> discoverPrinters({
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    return await discovery.discoverPrinters(timeout: timeout);
-  }
-
-  /// Stop printer discovery
-  Future<Result<void>> stopDiscovery() async {
-    await discovery.stopDiscovery();
-    return Result.success();
-  }
-
   /// Discover available printers with streaming approach
   ///
   /// This will scan for both Bluetooth and Network printers and return
   /// a stream of discovered devices as they are found.
   ///
   /// [timeout] specifies how long to scan for printers
-  /// [stopAfterCount] stops discovery after finding this many printers
-  /// [stopOnFirstPrinter] stops discovery after finding the first printer
   /// [includeWifi] whether to include WiFi/Network printers
   /// [includeBluetooth] whether to include Bluetooth printers
+  /// [onWarning] callback for discovery warnings
   ///
   /// Returns a Stream of discovered [ZebraDevice] lists.
   Stream<List<ZebraDevice>> discoverPrintersStream({
     Duration timeout = const Duration(seconds: 10),
-    int? stopAfterCount,
-    bool stopOnFirstPrinter = false,
     bool includeWifi = true,
     bool includeBluetooth = true,
+    void Function({String? phase, String? target, String? message})? onWarning,
   }) {
     return discovery.discoverPrintersStream(
       timeout: timeout,
-      stopAfterCount: stopAfterCount,
-      stopOnFirstPrinter: stopOnFirstPrinter,
       includeWifi: includeWifi,
       includeBluetooth: includeBluetooth,
+      onWarning: onWarning,
     );
+  }
+
+  /// Stop printer discovery
+  Future<Result<void>> stopDiscovery() async {
+    await discovery.stopDiscovery();
+    return Result.success();
   }
 
   // ===== CONNECTION OPERATIONS =====

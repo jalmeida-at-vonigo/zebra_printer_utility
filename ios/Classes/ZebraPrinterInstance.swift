@@ -155,7 +155,11 @@ class ZebraPrinterInstance: NSObject {
                             )
                         }
                         foundCount += 1
+                    } else {
+                        LogUtil.warn("Missing serialNumber in method call: discoverBTClassic")
                     }
+                } else {
+                    LogUtil.debug("Not a Zebra printer: \(accessory.name ?? "Unknown")")
                 }
             }
 

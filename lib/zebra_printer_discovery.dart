@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'internal/logger.dart';
-import 'internal/policies/policies.dart' as policies;
 import 'zebrautil.dart';
 
 /// Service for discovering Zebra printers
@@ -19,10 +18,6 @@ class ZebraPrinterDiscovery {
   ZebraPrinterDiscovery({
     required ZebraPrinter printer,
   }) : _printer = printer;
-  
-  // Timeout policy for all discovery operations
-  static final _timeoutPolicy =
-      policies.TimeoutPolicy.of(const Duration(seconds: 30));
 
   // Private fields
   final ZebraPrinter _printer;
@@ -80,52 +75,10 @@ class ZebraPrinterDiscovery {
     _devicesStreamController?.add(_controller!.printers);
   }
 
-  /// Discover available printers (both Bluetooth and Network)
-  /// Returns Result with list of discovered devices
-  /// Uses enhanced parallel network discovery with iOS HotSpot support
-  /// 
-  /// Discovery errors are handled via:
-  /// - Result.error for method-level failures
-  /// - status stream for real-time error notifications
-  /// - ZebraPrinter event handlers for native discovery errors
-  Future<Result<List<ZebraDevice>>> discoverPrinters({
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    _logger
-        .info('Starting printer discovery with timeout: ${timeout.inSeconds}s');
-    await _ensureInitialized();
-
-    return await _timeoutPolicy.execute(
-      () async {
-        final List<ZebraDevice> allPrinters = [];
-        final Set<String> uniqueAddresses = {};
-
-        _logger.info(
-            'Starting enhanced printer discovery (timeout: ${timeout.inSeconds}s)');
-        _statusStreamController?.add('Discovering printers...');
-
-        // Clear existing list
-        _controller!.printers.clear();
-
-        // Start streaming discovery with real-time results
-        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters);
-
-        _logger.info(
-            'Enhanced discovery completed with ${allPrinters.length} unique printers found');
-        _statusStreamController
-            ?.add('Discovery completed. Found ${allPrinters.length} printers');
-
-        return Result.success(allPrinters);
-      },
-    );
-  }
-
   /// Discover available printers with streaming approach
-  /// Returns a stream of discovered devices and stops when criteria are met
+  /// Returns a stream of discovered devices
   Stream<List<ZebraDevice>> discoverPrintersStream({
     Duration timeout = const Duration(seconds: 10),
-    int? stopAfterCount,
-    bool stopOnFirstPrinter = false,
     bool includeWifi = true,
     bool includeBluetooth = true,
     void Function({String? phase, String? target, String? message})? onWarning,
@@ -171,36 +124,11 @@ class ZebraPrinterDiscovery {
 
       // Only yield if we have new printers
       if (currentCount > lastYieldedCount) {
-        // Filter printers based on criteria
-        final List<ZebraDevice> filteredPrinters =
-            currentPrinters.where((printer) {
-          if (!includeWifi && printer.isWifi) return false;
-          if (!includeBluetooth && !printer.isWifi) return false;
-          return true;
-        }).toList();
-
-        // Check if we should stop
-        bool shouldStop = false;
-        if (stopAfterCount != null && filteredPrinters.length >= stopAfterCount) {
-          shouldStop = true;
-          _statusStreamController?.add('Found ${filteredPrinters.length} printers, stopping discovery');
-        } else if (stopOnFirstPrinter && filteredPrinters.isNotEmpty) {
-          shouldStop = true;
-          _statusStreamController?.add('Found first printer, stopping discovery');
-        }
-
-        // Yield the current list
+        // Mark that we've seen changes
         if (!completer.isCompleted) {
           completer.complete();
         }
         lastYieldedCount = currentCount;
-
-        // Stop if criteria met
-        if (shouldStop) {
-          _discoveryTimer?.cancel();
-          _stopAllDiscovery();
-          _isScanning = false;
-        }
       }
     }
 
@@ -218,15 +146,6 @@ class ZebraPrinterDiscovery {
 
       if (initialPrinters.isNotEmpty) {
         yield initialPrinters;
-        
-        // Check if we should stop immediately
-        if (stopOnFirstPrinter || (stopAfterCount != null && initialPrinters.length >= stopAfterCount)) {
-          _discoveryTimer?.cancel();
-          _stopAllDiscovery();
-          _isScanning = false;
-          _controller!.removeListener(onControllerChanged);
-          return;
-        }
       }
     }
 
@@ -257,122 +176,6 @@ class ZebraPrinterDiscovery {
     }
   }
 
-  /// Discover printers and return immediately when first printer is found
-  /// This is a convenience method for the common use case
-  Future<Result<List<ZebraDevice>>> discoverPrintersUntilFirst({
-    Duration timeout = const Duration(seconds: 10),
-    bool includeWifi = true,
-    bool includeBluetooth = true,
-  }) async {
-    await _ensureInitialized();
-
-    return await _timeoutPolicy.execute(
-      () async {
-        final completer = Completer<List<ZebraDevice>>();
-        List<ZebraDevice>? foundPrinters;
-
-        // Start streaming discovery
-        final subscription = discoverPrintersStream(
-          timeout: timeout,
-          stopOnFirstPrinter: true,
-          includeWifi: includeWifi,
-          includeBluetooth: includeBluetooth,
-        ).listen(
-          (printers) {
-            if (printers.isNotEmpty && !completer.isCompleted) {
-              foundPrinters = printers;
-              completer.complete(printers);
-            }
-          },
-          onError: (error) {
-            if (!completer.isCompleted) {
-              completer.completeError(error);
-            }
-          },
-        );
-
-        // Set up timeout fallback
-        Timer(timeout, () {
-          if (!completer.isCompleted) {
-            subscription.cancel();
-            completer.complete(foundPrinters ?? []);
-          }
-        });
-
-        final devices = await completer.future;
-        subscription.cancel();
-
-        if (devices.isNotEmpty) {
-          _statusStreamController?.add('Found ${devices.length} printer(s)');
-          return Result.success(devices);
-        } else {
-          return Result.errorCode(
-            ErrorCodes.noPrintersFound,
-          );
-        }
-      },
-      operationName: 'Discover Printers Until First',
-    );
-  }
-
-  /// Discover a specific number of printers
-  Future<Result<List<ZebraDevice>>> discoverPrintersCount({
-    required int count,
-    Duration timeout = const Duration(seconds: 10),
-    bool includeWifi = true,
-    bool includeBluetooth = true,
-  }) async {
-    await _ensureInitialized();
-
-    return await _timeoutPolicy.execute(
-      () async {
-        final completer = Completer<List<ZebraDevice>>();
-        List<ZebraDevice>? foundPrinters;
-
-        // Start streaming discovery
-        final subscription = discoverPrintersStream(
-          timeout: timeout,
-          stopAfterCount: count,
-          includeWifi: includeWifi,
-          includeBluetooth: includeBluetooth,
-        ).listen(
-          (printers) {
-            if (printers.length >= count && !completer.isCompleted) {
-              foundPrinters = printers.take(count).toList();
-              completer.complete(foundPrinters!);
-            }
-          },
-          onError: (error) {
-            if (!completer.isCompleted) {
-              completer.completeError(error);
-            }
-          },
-        );
-
-        // Set up timeout fallback
-        Timer(timeout, () {
-          if (!completer.isCompleted) {
-            subscription.cancel();
-            completer.complete(foundPrinters ?? []);
-          }
-        });
-
-        final devices = await completer.future;
-        subscription.cancel();
-
-        if (devices.length >= count) {
-          _statusStreamController?.add('Found ${devices.length} printer(s)');
-          return Result.success(devices);
-        } else {
-          return Result.errorCode(
-            ErrorCodes.noPrintersFound,
-          );
-        }
-      },
-      operationName: 'Discover Printers Count',
-    );
-  }
-
   /// Stop printer discovery
   Future<void> stopDiscovery() async {
     await _ensureInitialized();
@@ -382,57 +185,6 @@ class ZebraPrinterDiscovery {
     _statusStreamController?.add('Discovery stopped');
   }
 
-  /// Find paired Bluetooth printers
-  Future<List<ZebraDevice>> findPairedPrinters() async {
-    await _ensureInitialized();
-    
-    final result = await _timeoutPolicy.execute(
-      () async {
-        List<ZebraDevice> pairedPrinters = [];
-
-        // Check already discovered printers
-        if (_controller!.printers.isNotEmpty) {
-          pairedPrinters =
-              _controller!.printers.where((p) => !p.isWifi).toList();
-        }
-
-        // Quick discovery if needed
-        if (pairedPrinters.isEmpty) {
-          _statusStreamController
-              ?.add('Checking for paired Bluetooth printers...');
-          // Discovery will be started by individual methods
-          await Future.delayed(const Duration(seconds: 2));
-          _stopAllDiscovery();
-          pairedPrinters =
-              _controller!.printers.where((p) => !p.isWifi).toList();
-        }
-        
-        return Result.success(pairedPrinters);
-      },
-      operationName: 'Find Paired Printers',
-    );
-
-    return result.success ? result.data ?? [] : [];
-  }
-
-  /// Get list of paired/discovered printers for selection
-  Future<List<ZebraDevice>> getAvailablePrinters() async {
-    await _ensureInitialized();
-
-    // If we already have printers, return them
-    if (_controller!.printers.isNotEmpty) {
-      return _controller!.printers;
-    }
-
-    // Otherwise discover with retry logic
-    final result = await _timeoutPolicy.execute(
-      () => discoverPrinters(timeout: const Duration(seconds: 5)),
-      operationName: 'Get Available Printers',
-    );
-    
-    return result.success ? result.data ?? [] : [];
-  }
-
   /// Ensure the discovery service is initialized
   Future<void> _ensureInitialized() async {
     if (_controller == null) {
@@ -440,9 +192,54 @@ class ZebraPrinterDiscovery {
     }
   }
 
+  /// Perform streaming discovery that processes devices as they are found
+  Future<void> _performStreamingDiscovery({
+    required DateTime endTime,
+    required Stream<ZebraDevice> Function() discoveryStreamFunction,
+    required void Function(ZebraDevice) onDeviceFound,
+    required String phaseName,
+    void Function({String? phase, String? target, String? message})? onWarning,
+  }) async {
+    final Set<String> discoveredAddresses = {};
+    StreamSubscription<ZebraDevice>? subscription;
+
+    try {
+      // Subscribe to the discovery stream
+      subscription = discoveryStreamFunction().listen(
+        (device) {
+          // Process device as soon as it's discovered
+          if (discoveredAddresses.add(device.address)) {
+            onDeviceFound(device);
+            _logger.info(
+                '$phaseName: Found device ${device.name} (${device.address})');
+          }
+        },
+        onError: (error) {
+          _logger.warning('$phaseName stream error: $error');
+          onWarning?.call(phase: phaseName, target: null, message: '$error');
+        },
+        onDone: () {
+          _logger.info('$phaseName stream completed');
+        },
+      );
+
+      // Wait until timeout or cancellation
+      while (DateTime.now().isBefore(endTime) && _isScanning) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    } catch (e) {
+      _logger.warning('$phaseName discovery error: $e');
+      onWarning?.call(phase: phaseName, target: null, message: '$e');
+    } finally {
+      // Cleanup
+      await subscription?.cancel();
+      _logger.info('$phaseName discovery completed');
+    }
+  }
+
   /// Discover Bluetooth printers with streaming callback
   Future<void> _discoverBluetoothPrintersStream(
-    Duration timeout,
+      DateTime endTime,
     void Function(ZebraDevice) onPrinterFound,
       {void Function({String? phase, String? target, String? message})?
           onWarning}
@@ -450,97 +247,89 @@ class ZebraPrinterDiscovery {
     try {
       _isScanning = true;
       
-      // Use BT Classic discovery (per-operation stream)
-      final subscription = _printer
-          .discoverBTClassic(timeout: timeout.inMilliseconds)
-          .listen(
-            (device) => onPrinterFound(device),
-        onError: (e) {
-          _logger.warning('BT Classic discovery error: $e');
-          onWarning?.call(phase: 'btClassic', target: null, message: '$e');
-          _statusStreamController?.add('BT Classic discovery warning: $e');
-        },
+      // Use streaming discovery for BT Classic
+      await _performStreamingDiscovery(
+        endTime: endTime,
+        discoveryStreamFunction: () => _printer.discoverBTClassicStream(
+          timeout: endTime.difference(DateTime.now()).inMilliseconds,
+          onWarning: onWarning,
+        ),
+        onDeviceFound: onPrinterFound,
+        phaseName: 'btClassic',
+        onWarning: onWarning,
       );
-      await subscription.asFuture<void>();
-      await subscription.cancel();
-      _logger.info('BT Classic discovery stream completed');
     } catch (e) {
       _logger.warning('Bluetooth discovery stream failed: $e');
     }
   }
 
   /// Discover network printers with streaming callback
+  /// Uses multiple discovery methods internally for best coverage:
+  /// - Local broadcast for same subnet
+  /// - Subnet search for common ranges (including iPad hotspot support)
+  /// - Directed broadcast for specific network segments
+  /// - Multicast for cross-subnet discovery
   Future<void> _discoverNetworkPrintersStream(
-    Duration timeout,
+      DateTime endTime,
     void Function(ZebraDevice) onPrinterFound,
       {void Function({String? phase, String? target, String? message})?
           onWarning}
   ) async {
     try {
-      // Run all network discovery streams concurrently
+      // Run all network discovery methods concurrently with streaming
       final futures = <Future<void>>[];
+      final remainingTime = endTime.difference(DateTime.now()).inMilliseconds;
 
-      // Local broadcast
-      futures.add(() async {
-        final sub = _printer
-            .discoverLocalBroadcast(
-                timeout: timeout.inMilliseconds, onWarning: onWarning)
-            .listen(onPrinterFound, onError: (e) {
-          _logger.warning('Local broadcast discovery error: $e');
-          onWarning?.call(phase: 'localBroadcast', target: null, message: '$e');
-          _statusStreamController?.add('Local broadcast discovery warning: $e');
-        });
-        await sub.asFuture<void>();
-        await sub.cancel();
-      }());
+      // Local broadcast streaming
+      futures.add(_performStreamingDiscovery(
+        endTime: endTime,
+        discoveryStreamFunction: () => _printer.discoverLocalBroadcastStream(
+          timeout: remainingTime,
+          onWarning: onWarning,
+        ),
+        onDeviceFound: onPrinterFound,
+        phaseName: 'localBroadcast',
+        onWarning: onWarning,
+      ));
       
-      // Subnet search (including iPad hotspot)
-      futures.add(() async {
-        final sub = _printer
-            .discoverSubnet(
-                subnet: '192.168.1',
-                timeout: timeout.inMilliseconds,
-                onWarning: onWarning)
-            .listen(onPrinterFound, onError: (e) {
-          _logger.warning('Subnet discovery error: $e');
-          onWarning?.call(phase: 'subnet', target: null, message: '$e');
-          _statusStreamController?.add('Subnet discovery warning: $e');
-        });
-        await sub.asFuture<void>();
-        await sub.cancel();
-      }());
+      // Subnet search streaming - covers common network ranges
+      futures.add(_performStreamingDiscovery(
+        endTime: endTime,
+        discoveryStreamFunction: () => _printer.discoverSubnetStream(
+          subnet: '192.168.1',
+          timeout: remainingTime,
+          onWarning: onWarning,
+        ),
+        onDeviceFound: onPrinterFound,
+        phaseName: 'subnet',
+        onWarning: onWarning,
+      ));
       
-      // Directed broadcast
-      futures.add(() async {
-        final sub = _printer
-            .discoverDirectedBroadcast(
-                ipAddress: '192.168.1.255',
-                timeout: timeout.inMilliseconds,
-                onWarning: onWarning)
-            .listen(onPrinterFound, onError: (e) {
-          _logger.warning('Directed broadcast discovery error: $e');
-          onWarning?.call(
-              phase: 'directedBroadcast', target: null, message: '$e');
-          _statusStreamController
-              ?.add('Directed broadcast discovery warning: $e');
-        });
-        await sub.asFuture<void>();
-        await sub.cancel();
-      }());
+      // Directed broadcast streaming - targets specific network segments
+      futures.add(_performStreamingDiscovery(
+        endTime: endTime,
+        discoveryStreamFunction: () => _printer.discoverDirectedBroadcastStream(
+          ipAddress: '192.168.1.255',
+          timeout: remainingTime,
+          onWarning: onWarning,
+        ),
+        onDeviceFound: onPrinterFound,
+        phaseName: 'directedBroadcast',
+        onWarning: onWarning,
+      ));
 
-      // Multicast
-      futures.add(() async {
-        final sub = _printer
-            .discoverMulticast(
-                hops: 5, timeout: timeout.inMilliseconds, onWarning: onWarning)
-            .listen(onPrinterFound, onError: (e) {
-          _logger.warning('Multicast discovery error: $e');
-          onWarning?.call(phase: 'multicast', target: 'hops=5', message: '$e');
-          _statusStreamController?.add('Multicast discovery warning: $e');
-        });
-        await sub.asFuture<void>();
-        await sub.cancel();
-      }());
+      // Multicast streaming - enables cross-subnet discovery
+      futures.add(_performStreamingDiscovery(
+        endTime: endTime,
+        discoveryStreamFunction: () => _printer.discoverMulticastStream(
+          hops: 5,
+          timeout: remainingTime,
+          onWarning: onWarning,
+        ),
+        onDeviceFound: onPrinterFound,
+        phaseName: 'multicast',
+        onWarning: onWarning,
+      ));
 
       // Wait for all network discovery methods
       await Future.wait(futures);
@@ -558,6 +347,8 @@ class ZebraPrinterDiscovery {
       {void Function({String? phase, String? target, String? message})?
           onWarning}
   ) async {
+    // Calculate a single end time for all discovery methods
+    final endTime = DateTime.now().add(timeout);
     final completer = Completer<void>();
     int completedMethods = 0;
     const int totalMethods = 2; // Bluetooth + Network
@@ -581,7 +372,8 @@ class ZebraPrinterDiscovery {
 
     // Start Bluetooth discovery with real-time callback
     _statusStreamController?.add('Starting Bluetooth discovery...');
-    _discoverBluetoothPrintersStream(timeout, addPrinter).then((_) {
+    _discoverBluetoothPrintersStream(endTime, addPrinter, onWarning: onWarning)
+        .then((_) {
       checkCompletion();
     }).catchError((e) {
       _logger.warning('Bluetooth discovery failed: $e');
@@ -590,7 +382,7 @@ class ZebraPrinterDiscovery {
 
     // Start enhanced network discovery with real-time callback
     _statusStreamController?.add('Starting enhanced network discovery...');
-    _discoverNetworkPrintersStream(timeout, addPrinter, onWarning: onWarning)
+    _discoverNetworkPrintersStream(endTime, addPrinter, onWarning: onWarning)
         .then((_) {
       checkCompletion();
     }).catchError((e) {

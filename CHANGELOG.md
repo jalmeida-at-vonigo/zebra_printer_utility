@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.67] - 2025-01-27
+
+### Added
+- **iOS Background Mode**: Added `external-accessory` background mode to Info.plist files
+  - Enables app to communicate with MFi Bluetooth printers even when in background
+  - Required for proper MFi accessory communication as per ZSDK documentation
+  - Added to both example app and mobile app Info.plist files
+
+## [2.0.66] - 2025-01-27
+
+### Fixed
+- **iOS MFi Bluetooth Discovery**: Corrected Swift implementation to use proper EAAccessoryManager API
+  - Removed incorrect `requestAccess()` call that doesn't exist on EAAccessoryManager
+  - MFi accessory permissions are handled automatically by iOS when Info.plist is properly configured
+  - Fixed Swift compiler error that prevented building for iOS devices
+- **Discovery Event Isolation**: Fixed `discoverBTClassicStream` to only listen for its own specific event type
+  - Removed inefficient cross-talk between different discovery methods
+  - Improved per-operation event isolation for better streaming performance
+
+## [2.0.65] - 2025-01-27
+
+### Fixed
+- **iOS MFi Bluetooth Discovery**: Fixed missing `requestAccess()` permission call before accessing `connectedAccessories`
+  - Added proper permission request before accessing MFi Bluetooth accessories
+  - Added error handling for Bluetooth permission denial with descriptive error messages
+  - Fixed issue where `accessoryManager.connectedAccessories` returned empty due to missing permission
+- **Discovery Event Isolation**: Fixed `discoverBTClassicStream` to only listen for its own specific event type
+  - Removed inefficient cross-talk between different discovery methods
+  - Improved per-operation event isolation for better streaming performance
+
+## [2.0.64] - 2025-01-27
+
+### Fixed
+- Fixed `discoverBTClassicStream` to only listen for its own specific event type instead of all network discovery events
+- Removed inefficient cross-talk between different discovery methods
+- Improved per-operation event isolation for better streaming performance
+
+## [2.0.63] - 2025-01-11
+
+### Changed
+- **Removed Pass-Through Methods**: Eliminated unnecessary indirection in discovery API
+  - Removed `discoverBTClassic()`, `discoverLocalBroadcast()`, `discoverSubnet()`, `discoverDirectedBroadcast()`, and `discoverMulticast()` methods
+  - These were just pass-through methods calling their `*Stream` counterparts
+  - Updated internal callers to use `discoverBTClassicStream()`, `discoverLocalBroadcastStream()`, etc. directly
+  - Simplified API by removing redundant method names
+
+### Internal
+- Cleaner codebase with less indirection
+- Direct method calls improve performance slightly
+
+## [2.0.62] - 2025-01-11
+
+### Changed
+- **YAGNI Code Removal**: Removed unused discovery features based on actual usage analysis
+  - Removed `stopAfterCount` and `stopOnFirstPrinter` parameters from discovery API
+  - Removed unused convenience methods `discoverPrintersUntilFirst` and `discoverPrintersCount`
+  - Removed unused methods `findPairedPrinters` and `getAvailablePrinters`
+  - Removed Future-based `discoverPrinters` method - keeping only streaming interface
+  - Simplified public API to only expose `discoverPrintersStream` with `includeWifi` and `includeBluetooth` flags
+- **Discovery Improvements**: Fixed real-time device discovery to show printers as they are found
+  - Replaced periodic discovery with true streaming implementation
+  - Devices now appear immediately upon discovery instead of waiting for completion
+  - Improved user experience with real-time updates
+
+### Internal
+- Network discovery details (subnet, multicast, directedBroadcast) remain hidden implementation details
+- Removed unused TimeoutPolicy import and field
+
 ## [2.0.61] - 2025-01-11
 
 ### Changed

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -80,7 +81,8 @@ class ZebraPrinter {
       try {
         final hasPermission =
             await PermissionManager.checkBluetoothPermission();
-        if (!hasPermission) {
+        if (!hasPermission && !Platform.isIOS) {
+          // On iOS, Bluetooth permission is only required for connection, not discovery
           if (!controller.isClosed) {
             controller.addError(ZebraErrorBridge.fromDartError<void>(
               Exception('Bluetooth permission denied'),
@@ -89,6 +91,8 @@ class ZebraPrinter {
           }
           return;
         }
+        
+        // Start the discovery operation
         await _operationManager.execute<Map<String, dynamic>>(
           method: MethodChannelConstants.discoverBTClassicMethod,
           arguments: {'timeout': timeout},
@@ -100,19 +104,7 @@ class ZebraPrinter {
               final method = evt['method'] as String?;
               final data = (evt['data'] as Map<String, dynamic>?) ?? {};
               if (method ==
-                      MethodChannelConstants
-                          .discoverBTClassicEventPrinterFound ||
-                  method ==
-                      MethodChannelConstants
-                          .discoverLocalBroadcastEventPrinterFound ||
-                  method ==
-                      MethodChannelConstants.discoverSubnetEventPrinterFound ||
-                  method ==
-                      MethodChannelConstants
-                          .discoverDirectedBroadcastEventPrinterFound ||
-                  method ==
-                      MethodChannelConstants
-                          .discoverMulticastEventPrinterFound) {
+                  MethodChannelConstants.discoverBTClassicEventPrinterFound) {
                 final device =
                     NativePrinterInfo.fromNative(data).toZebraDevice();
                 if (!controller.isClosed) controller.add(device);
@@ -128,10 +120,14 @@ class ZebraPrinter {
             isScanning = true;
           },
         );
+        
+        // Operation completed, now close the stream
+        if (!controller.isClosed) controller.close();
       } catch (e) {
         if (!controller.isClosed) controller.addError(e);
-      } finally {
         if (!controller.isClosed) controller.close();
+      } finally {
+        // Clean up subscriptions
         if (operationId != null) {
           await _discoveryEventSubs.remove(operationId)?.cancel();
         }
@@ -140,6 +136,9 @@ class ZebraPrinter {
     }();
 
     controller.onCancel = () async {
+      if (operationId != null) {
+        await _discoveryEventSubs.remove(operationId)?.cancel();
+      }
       await stopDiscovery();
     };
 
@@ -193,6 +192,9 @@ class ZebraPrinter {
     }();
 
     controller.onCancel = () async {
+      if (operationId != null) {
+        await _discoveryEventSubs.remove(operationId)?.cancel();
+      }
       await stopDiscovery();
     };
 
@@ -247,6 +249,9 @@ class ZebraPrinter {
     }();
 
     controller.onCancel = () async {
+      if (operationId != null) {
+        await _discoveryEventSubs.remove(operationId)?.cancel();
+      }
       await stopDiscovery();
     };
 
@@ -302,6 +307,9 @@ class ZebraPrinter {
     }();
 
     controller.onCancel = () async {
+      if (operationId != null) {
+        await _discoveryEventSubs.remove(operationId)?.cancel();
+      }
       await stopDiscovery();
     };
 
@@ -354,6 +362,9 @@ class ZebraPrinter {
     }();
 
     controller.onCancel = () async {
+      if (operationId != null) {
+        await _discoveryEventSubs.remove(operationId)?.cancel();
+      }
       await stopDiscovery();
     };
 
