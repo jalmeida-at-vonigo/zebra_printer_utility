@@ -1104,6 +1104,12 @@ class ZebraErrorBridge {
   /// Classify enriched error based on operation type and error data
   static ErrorCode _classifyEnrichedError(
       EnrichedNativeError error, OperationType operationType) {
+    // Check for cancellation errors first (before other classifications)
+    if (error.code == 'OPERATION_CANCELLED' ||
+        error.message.toLowerCase().contains('cancelled')) {
+      return ErrorCodes.operationCancelled;
+    }
+
     // Check for documented ZSDK error codes first
     if (error.nativeError != null) {
       final sdkError =

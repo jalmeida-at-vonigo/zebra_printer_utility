@@ -30,6 +30,12 @@ void main() {
       mockManager = MockZebraPrinterManager();
       mockSmartPrintManager = MockSmartPrintManager();
       mockDiscovery = MockZebraPrinterDiscovery();
+      
+      // Setup common stubs for the new architecture
+      when(mockPrinter.connectedPrinter).thenReturn(null);
+      when(mockPrinter.connectionEvents)
+          .thenAnswer((_) => const Stream.empty());
+      when(mockManager.connectedPrinter).thenReturn(null);
     });
 
     group('Zebra Component Integration', () {
@@ -329,7 +335,7 @@ void main() {
         verify(mockManager.connectedPrinter).called(1);
       });
 
-      test('should handle discovered printers delegation', () {
+      test('should handle device streaming delegation', () {
         final testDevices = [
           ZebraDevice(
             address: '192.168.1.100',
@@ -345,12 +351,23 @@ void main() {
           ),
         ];
 
-        when(mockManager.discoveredPrinters).thenReturn(testDevices);
+        when(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).thenAnswer((_) => Stream.value(testDevices));
 
-        final discoveredPrinters = mockManager.discoveredPrinters;
+        // Test the stream interface
+        final stream = mockDiscovery.discoverPrintersStream();
         
-        expect(discoveredPrinters, equals(testDevices));
-        verify(mockManager.discoveredPrinters).called(1);
+        expectLater(stream, emits(testDevices));
+        verify(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).called(1);
       });
 
       test('should handle scanning status delegation', () {
@@ -363,17 +380,18 @@ void main() {
       });
     });
 
-    group('Global Instance Integration', () {
-      test('should handle global instance initialization', () async {
-        // Test global instance management
-        expect(() => Zebra.global, throwsStateError);
+    group('Instance Management Integration', () {
+      test('should handle instance creation', () async {
+        // Test instance creation
+        final zebra = await Zebra.create(mockPrinter);
         
-        // Note: In a real integration test, we would test the actual global instance
-        // but since we're using mocks, we can't test the actual initialization
+        expect(zebra, isNotNull);
+        expect(zebra.connectedPrinter, isNull);
       });
 
-      test('should handle global instance disposal', () {
-        Zebra.disposeGlobal();
+      test('should handle instance disposal', () async {
+        final zebra = await Zebra.create(mockPrinter);
+        zebra.dispose();
         // Verify disposal doesn't throw
         expect(true, isTrue);
       });

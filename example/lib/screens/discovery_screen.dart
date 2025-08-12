@@ -35,6 +35,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     
     // Subscribe to real-time connection events
     _subscribeToConnectionEvents();
+    
+    // Register for device connection status updates
+    ZebraPrinter.registerDeviceUpdateCallback(_onDeviceUpdated);
   }
 
   void _subscribeToConnectionEvents() {
@@ -85,8 +88,35 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     );
   }
 
+  /// Handle device updates to show real-time connection status changes
+  void _onDeviceUpdated(ZebraDevice updatedDevice) {
+    if (!mounted) return;
+
+    // Find and update the device in our list
+    final index =
+        _devices.indexWhere((d) => d.address == updatedDevice.address);
+    if (index != -1) {
+      setState(() {
+        _devices[index] = updatedDevice;
+      });
+
+      // Log connection status changes
+      _addLog(
+        'Device status updated',
+        updatedDevice.isConnected ? 'success' : 'info',
+        details: 'Name: ${updatedDevice.name}\n'
+            'Address: ${updatedDevice.address}\n'
+            'Status: ${updatedDevice.isConnected ? "Connected" : "Disconnected"}\n'
+            'Type: ${updatedDevice.isWifi ? "WiFi" : "Bluetooth"}',
+      );
+    }
+  }
+
   @override
   void dispose() {
+    // Unregister device update callback
+    ZebraPrinter.unregisterDeviceUpdateCallback(_onDeviceUpdated);
+    
     // Cancel all subscriptions
     _discoverySubscription?.cancel();
     _connectionEventSubscription?.cancel();
@@ -225,12 +255,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   Future<void> _connectToDevice(ZebraDevice device) async {
-    // Stop discovery when user selects a printer
-    if (_isDiscovering) {
-      await _stopDiscovery();
-    }
-    
-    _addLog('Connecting to ${device.name}...', 'info');
+    _addLog('Connecting to ${device.name}...', 'info',
+        details: 'Discovery will continue running in the background');
 
     try {
       final result = await Zebra.global.connect(device.address);
@@ -522,10 +548,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                               ),
                           ],
                         ),
-                        trailing: OutlinedButton(
-                          onPressed: () => _connectToDevice(device),
-                          child: const Text('Connect'),
-                        ),
+                        trailing: _buildDeviceActionButton(device),
                       );
                     },
                   ),
@@ -715,6 +738,61 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       }
     } catch (e) {
       _addLog('Disconnect error', 'error', details: '$e');
+    }
+  }
+
+  /// Build the action button for each device (Connect/Connected/Disconnect)
+  Widget _buildDeviceActionButton(ZebraDevice device) {
+    final isConnected = device.isConnected;
+    final isCurrentDevice = _connectedDevice?.address == device.address;
+
+    if (isConnected && isCurrentDevice) {
+      // This device is currently connected
+      return ElevatedButton.icon(
+        onPressed: _disconnectFromPrinter,
+        icon: const Icon(Icons.link_off, size: 16),
+        label: const Text('Disconnect'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      );
+    } else if (isConnected) {
+      // This device is connected but not the current one (should not happen, but handle gracefully)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.green),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 16, color: Colors.green),
+            SizedBox(width: 4),
+            Text(
+              'Connected',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // This device is not connected - show connect button
+      return OutlinedButton.icon(
+        onPressed: () => _connectToDevice(device),
+        icon: const Icon(Icons.link, size: 16),
+        label: const Text('Connect'),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      );
     }
   }
 } 

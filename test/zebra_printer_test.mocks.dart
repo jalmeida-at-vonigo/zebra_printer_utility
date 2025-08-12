@@ -12,9 +12,9 @@ import 'package:zebrautil/internal/print_data_processor.dart' as _i10;
 import 'package:zebrautil/models/connection_event.dart' as _i6;
 import 'package:zebrautil/models/print_enums.dart' as _i9;
 import 'package:zebrautil/models/print_operation_tracker.dart' as _i8;
-import 'package:zebrautil/models/result.dart' as _i3;
+import 'package:zebrautil/models/result.dart' as _i2;
 import 'package:zebrautil/models/zebra_device.dart' as _i7;
-import 'package:zebrautil/zebra_printer.dart' as _i2;
+import 'package:zebrautil/zebra_printer.dart' as _i3;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -30,19 +30,8 @@ import 'package:zebrautil/zebra_printer.dart' as _i2;
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
 
-class _FakeZebraController_0 extends _i1.SmartFake
-    implements _i2.ZebraController {
-  _FakeZebraController_0(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
-}
-
-class _FakeResult_1<T> extends _i1.SmartFake implements _i3.Result<T> {
-  _FakeResult_1(
+class _FakeResult_0<T> extends _i1.SmartFake implements _i2.Result<T> {
+  _FakeResult_0(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -54,7 +43,7 @@ class _FakeResult_1<T> extends _i1.SmartFake implements _i3.Result<T> {
 /// A class which mocks [ZebraPrinter].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
+class MockZebraPrinter extends _i1.Mock implements _i3.ZebraPrinter {
   MockZebraPrinter() {
     _i1.throwOnMissingStub(this);
   }
@@ -67,15 +56,6 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
           Invocation.getter(#instanceId),
         ),
       ) as String);
-
-  @override
-  _i2.ZebraController get controller => (super.noSuchMethod(
-        Invocation.getter(#controller),
-        returnValue: _FakeZebraController_0(
-          this,
-          Invocation.getter(#controller),
-        ),
-      ) as _i2.ZebraController);
 
   @override
   bool get isRotated => (super.noSuchMethod(
@@ -131,7 +111,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   @override
   _i5.Stream<_i7.ZebraDevice> discoverBTClassicStream({
     int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
+    _i3.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -148,7 +128,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   @override
   _i5.Stream<_i7.ZebraDevice> discoverLocalBroadcastStream({
     int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
+    _i3.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -166,7 +146,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i5.Stream<_i7.ZebraDevice> discoverSubnetStream({
     String? subnet = '192.168.1',
     int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
+    _i3.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -185,7 +165,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i5.Stream<_i7.ZebraDevice> discoverDirectedBroadcastStream({
     String? ipAddress = '192.168.1.255',
     int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
+    _i3.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -204,7 +184,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
   _i5.Stream<_i7.ZebraDevice> discoverMulticastStream({
     int? hops = 5,
     int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
+    _i3.DiscoveryWarningCallback? onWarning,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -220,53 +200,53 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
+  _i5.Future<_i2.Result<void>> stopDiscovery() => (super.noSuchMethod(
         Invocation.method(
           #stopDiscovery,
           [],
         ),
-        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+        returnValue: _i5.Future<_i2.Result<void>>.value(_FakeResult_0<void>(
           this,
           Invocation.method(
             #stopDiscovery,
             [],
           ),
         )),
-      ) as _i5.Future<_i3.Result<void>>);
+      ) as _i5.Future<_i2.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<void>> connectToPrinter(String? address) =>
+  _i5.Future<_i2.Result<void>> connectToPrinter(String? address) =>
       (super.noSuchMethod(
         Invocation.method(
           #connectToPrinter,
           [address],
         ),
-        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+        returnValue: _i5.Future<_i2.Result<void>>.value(_FakeResult_0<void>(
           this,
           Invocation.method(
             #connectToPrinter,
             [address],
           ),
         )),
-      ) as _i5.Future<_i3.Result<void>>);
+      ) as _i5.Future<_i2.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<void>> disconnect() => (super.noSuchMethod(
+  _i5.Future<_i2.Result<void>> disconnect() => (super.noSuchMethod(
         Invocation.method(
           #disconnect,
           [],
         ),
-        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+        returnValue: _i5.Future<_i2.Result<void>>.value(_FakeResult_0<void>(
           this,
           Invocation.method(
             #disconnect,
             [],
           ),
         )),
-      ) as _i5.Future<_i3.Result<void>>);
+      ) as _i5.Future<_i2.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<_i8.PrintOperationTracker>> print({
+  _i5.Future<_i2.Result<_i8.PrintOperationTracker>> print({
     required String? data,
     _i9.PrintFormat? format = _i9.PrintFormat.zpl,
   }) =>
@@ -279,8 +259,8 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             #format: format,
           },
         ),
-        returnValue: _i5.Future<_i3.Result<_i8.PrintOperationTracker>>.value(
-            _FakeResult_1<_i8.PrintOperationTracker>(
+        returnValue: _i5.Future<_i2.Result<_i8.PrintOperationTracker>>.value(
+            _FakeResult_0<_i8.PrintOperationTracker>(
           this,
           Invocation.method(
             #print,
@@ -291,76 +271,76 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             },
           ),
         )),
-      ) as _i5.Future<_i3.Result<_i8.PrintOperationTracker>>);
+      ) as _i5.Future<_i2.Result<_i8.PrintOperationTracker>>);
 
   @override
-  _i5.Future<_i3.Result<_i8.PrintOperationTracker>> printWithProcessedData(
+  _i5.Future<_i2.Result<_i8.PrintOperationTracker>> printWithProcessedData(
           _i10.ProcessedPrintData? processedData) =>
       (super.noSuchMethod(
         Invocation.method(
           #printWithProcessedData,
           [processedData],
         ),
-        returnValue: _i5.Future<_i3.Result<_i8.PrintOperationTracker>>.value(
-            _FakeResult_1<_i8.PrintOperationTracker>(
+        returnValue: _i5.Future<_i2.Result<_i8.PrintOperationTracker>>.value(
+            _FakeResult_0<_i8.PrintOperationTracker>(
           this,
           Invocation.method(
             #printWithProcessedData,
             [processedData],
           ),
         )),
-      ) as _i5.Future<_i3.Result<_i8.PrintOperationTracker>>);
+      ) as _i5.Future<_i2.Result<_i8.PrintOperationTracker>>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> getPrinterStatus() =>
+  _i5.Future<_i2.Result<Map<String, dynamic>>> getPrinterStatus() =>
       (super.noSuchMethod(
         Invocation.method(
           #getPrinterStatus,
           [],
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
+        returnValue: _i5.Future<_i2.Result<Map<String, dynamic>>>.value(
+            _FakeResult_0<Map<String, dynamic>>(
           this,
           Invocation.method(
             #getPrinterStatus,
             [],
           ),
         )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+      ) as _i5.Future<_i2.Result<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<_i3.Result<Map<String, dynamic>>> getDetailedPrinterStatus() =>
+  _i5.Future<_i2.Result<Map<String, dynamic>>> getDetailedPrinterStatus() =>
       (super.noSuchMethod(
         Invocation.method(
           #getDetailedPrinterStatus,
           [],
         ),
-        returnValue: _i5.Future<_i3.Result<Map<String, dynamic>>>.value(
-            _FakeResult_1<Map<String, dynamic>>(
+        returnValue: _i5.Future<_i2.Result<Map<String, dynamic>>>.value(
+            _FakeResult_0<Map<String, dynamic>>(
           this,
           Invocation.method(
             #getDetailedPrinterStatus,
             [],
           ),
         )),
-      ) as _i5.Future<_i3.Result<Map<String, dynamic>>>);
+      ) as _i5.Future<_i2.Result<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<_i3.Result<String?>> getSetting(String? setting) =>
+  _i5.Future<_i2.Result<String?>> getSetting(String? setting) =>
       (super.noSuchMethod(
         Invocation.method(
           #getSetting,
           [setting],
         ),
         returnValue:
-            _i5.Future<_i3.Result<String?>>.value(_FakeResult_1<String?>(
+            _i5.Future<_i2.Result<String?>>.value(_FakeResult_0<String?>(
           this,
           Invocation.method(
             #getSetting,
             [setting],
           ),
         )),
-      ) as _i5.Future<_i3.Result<String?>>);
+      ) as _i5.Future<_i2.Result<String?>>);
 
   @override
   void rotate() => super.noSuchMethod(
@@ -372,14 +352,14 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       );
 
   @override
-  _i5.Future<_i3.Result<bool>> isPrinterConnected({bool? forceCheck = false}) =>
+  _i5.Future<_i2.Result<bool>> isPrinterConnected({bool? forceCheck = false}) =>
       (super.noSuchMethod(
         Invocation.method(
           #isPrinterConnected,
           [],
           {#forceCheck: forceCheck},
         ),
-        returnValue: _i5.Future<_i3.Result<bool>>.value(_FakeResult_1<bool>(
+        returnValue: _i5.Future<_i2.Result<bool>>.value(_FakeResult_0<bool>(
           this,
           Invocation.method(
             #isPrinterConnected,
@@ -387,38 +367,38 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
             {#forceCheck: forceCheck},
           ),
         )),
-      ) as _i5.Future<_i3.Result<bool>>);
+      ) as _i5.Future<_i2.Result<bool>>);
 
   @override
-  _i5.Future<_i3.Result<void>> sendCommand(String? command) =>
+  _i5.Future<_i2.Result<void>> sendCommand(String? command) =>
       (super.noSuchMethod(
         Invocation.method(
           #sendCommand,
           [command],
         ),
-        returnValue: _i5.Future<_i3.Result<void>>.value(_FakeResult_1<void>(
+        returnValue: _i5.Future<_i2.Result<void>>.value(_FakeResult_0<void>(
           this,
           Invocation.method(
             #sendCommand,
             [command],
           ),
         )),
-      ) as _i5.Future<_i3.Result<void>>);
+      ) as _i5.Future<_i2.Result<void>>);
 
   @override
-  _i5.Future<_i3.Result<String>> getInstanceId() => (super.noSuchMethod(
+  _i5.Future<_i2.Result<String>> getInstanceId() => (super.noSuchMethod(
         Invocation.method(
           #getInstanceId,
           [],
         ),
-        returnValue: _i5.Future<_i3.Result<String>>.value(_FakeResult_1<String>(
+        returnValue: _i5.Future<_i2.Result<String>>.value(_FakeResult_0<String>(
           this,
           Invocation.method(
             #getInstanceId,
             [],
           ),
         )),
-      ) as _i5.Future<_i3.Result<String>>);
+      ) as _i5.Future<_i2.Result<String>>);
 
   @override
   _i5.Future<void> nativeMethodCallHandler(_i11.MethodCall? methodCall) =>

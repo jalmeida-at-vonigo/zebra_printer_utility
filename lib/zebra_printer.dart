@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'internal/logger.dart';
@@ -25,24 +24,14 @@ class ZebraPrinter {
   
   /// Private constructor - use create() factory instead
   ZebraPrinter._(
-    this.instanceId, {
-    ZebraController? controller,
-  })  : controller = controller ?? ZebraController(),
-        _logger = Logger.withPrefix('ZebraPrinter.$instanceId') {
+    this.instanceId,
+  ) : _logger = Logger.withPrefix('ZebraPrinter.$instanceId') {
     _channel = MethodChannel('ZebraPrinterObject$instanceId');
     _channel.setMethodCallHandler(nativeMethodCallHandler);
     
     _operationManager = ZebraPrinterOperationManager(channel: _channel);
     _callbackHandler =
         ZebraPrinterOperationCallbackHandler(manager: _operationManager);
-    
-
-    _callbackHandler.registerEventHandler(
-        MethodChannelConstants.connectionEventStatusChanged, (call) {
-      final status = call.arguments?['Status'] ?? '';
-      final color = call.arguments?['Color'] ?? 'R';
-      this.controller.updatePrinterStatus(status, color);
-    });
 
     // Register handler for connection_lost events from native layer
     _callbackHandler.registerEventHandler(
@@ -68,7 +57,6 @@ class ZebraPrinter {
         ));
       }
     });
-
   }
 
   /// Helper method to execute discovery stream with proper error handling
@@ -152,8 +140,18 @@ class ZebraPrinter {
         }
       } catch (e) {
         if (!controller.isClosed) {
-          controller.addError(e);
-          controller.close();
+          // Check if this is a timeout - log it but don't treat as an error for discovery
+          if (e.toString().contains('timed out') ||
+              e.toString().contains('timeout')) {
+            _logger.info('Discovery: Operation timed out normally: $e');
+            // For timeouts, just close the stream normally - this is expected behavior
+            controller.close();
+          } else {
+            // For other errors, add them to the stream
+            _logger.warning('Discovery: Operation failed with error: $e');
+            controller.addError(e);
+            controller.close();
+          }
         }
       } finally {
         if (operationId != null) {
@@ -288,24 +286,18 @@ class ZebraPrinter {
   }
 
   /// Factory method to create a ZebraPrinter instance
-  static Future<ZebraPrinter> create({
-    ZebraController? controller,
-  }) async {
+  static Future<ZebraPrinter> create() async {
     // Get instance ID from platform
     const platform = MethodChannel(MethodChannelConstants.mainChannel);
     final String instanceId = await platform
             .invokeMethod<String>(MethodChannelConstants.getInstanceMethod) ??
         'default';
 
-    return ZebraPrinter._(
-      instanceId,
-      controller: controller,
-    );
+    return ZebraPrinter._(instanceId);
   }
 
  
   final String instanceId;
-  final ZebraController controller;
 
   late final MethodChannel _channel;
   late final ZebraPrinterOperationManager _operationManager;
@@ -316,10 +308,55 @@ class ZebraPrinter {
   bool isScanning = false;
   bool shouldSync = false;
 
-  // Connection state tracking for round-trip optimization
+  // Direct connection state management
+  ZebraDevice? _connectedPrinter;
   bool? _isConnected;
   DateTime? _lastConnectionVerified;
   static const _connectionValidityDuration = Duration(seconds: 30);
+
+  // Device update callback for syncing with discovery and other components
+  static final List<Function(ZebraDevice)> _deviceUpdateCallbacks = [];
+
+  /// Registry to find existing device instances by address
+  static final Map<String, ZebraDevice> _deviceRegistry = {};
+
+  /// Currently connected printer device
+  ZebraDevice? get connectedPrinter => _connectedPrinter;
+
+  /// Register a device instance for future reference updates
+  static void registerDevice(ZebraDevice device) {
+    _deviceRegistry[device.address] = device;
+  }
+
+  /// Find existing device instance by address
+  ZebraDevice? _findExistingDevice(String address) {
+    return _deviceRegistry[address];
+  }
+
+  /// Notify all components about device updates
+  void _notifyDeviceUpdate(ZebraDevice updatedDevice) {
+    // Update registry with latest instance
+    _deviceRegistry[updatedDevice.address] = updatedDevice;
+
+    // Notify all registered callbacks
+    for (final callback in _deviceUpdateCallbacks) {
+      try {
+        callback(updatedDevice);
+      } catch (e, stack) {
+        _logger.error('Error in device update callback: $e', null, stack);
+      }
+    }
+  }
+
+  /// Register a callback to be notified when device status changes
+  static void registerDeviceUpdateCallback(Function(ZebraDevice) callback) {
+    _deviceUpdateCallbacks.add(callback);
+  }
+
+  /// Unregister a device update callback
+  static void unregisterDeviceUpdateCallback(Function(ZebraDevice) callback) {
+    _deviceUpdateCallbacks.remove(callback);
+  }
 
 
   // Per-operation discovery event subscriptions
@@ -366,9 +403,9 @@ class ZebraPrinter {
         _logger.info(
             'Connection state updated: CONNECTED${context != null ? ' ($context)' : ''}');
         // Emit connection established event
-        if (controller.selectedAddress != null) {
+        if (_connectedPrinter != null) {
           _emitConnectionEvent(ConnectionEvent.connected(
-            printerAddress: controller.selectedAddress!,
+            printerAddress: _connectedPrinter!.address,
             message: 'Connected${context != null ? ' ($context)' : ''}',
             metadata: {'context': context ?? 'unknown'},
           ));
@@ -380,9 +417,9 @@ class ZebraPrinter {
         _logger.info(
             'Connection state updated: DISCONNECTED${context != null ? ' ($context)' : ''}');
         // Emit connection lost event
-        if (controller.selectedAddress != null) {
+        if (_connectedPrinter != null) {
           _emitConnectionEvent(ConnectionEvent.lost(
-            printerAddress: controller.selectedAddress!,
+            printerAddress: _connectedPrinter!.address,
             reason: 'Connection lost${context != null ? ' ($context)' : ''}',
             metadata: {'context': context ?? 'unknown'},
           ));
@@ -444,14 +481,14 @@ class ZebraPrinter {
     return await ZebraErrorBridge.executeAndHandleResult<void>(
       operation: () async {
         // Check if already connected to the same printer
-        if (controller.selectedAddress == address) {
+        if (_connectedPrinter?.address == address) {
           _logger.info(
               'Already connected to printer: $address, skipping reconnection');
           return Result.success();
         }
 
         // Only disconnect if connecting to a different printer
-        if (controller.selectedAddress != null) {
+        if (_connectedPrinter != null) {
           _logger.info(
               'Disconnecting from previous printer before connecting to: $address');
           final disconnectResult = await disconnect();
@@ -464,33 +501,40 @@ class ZebraPrinter {
           }
         }
 
-        controller.selectedAddress = address;
         final result = await _operationManager.execute<bool>(
           method: MethodChannelConstants.connectToPrinterMethod,
           arguments: {'Address': address},
           timeout: const Duration(seconds: 7),
         );
         if (result.success && (result.data ?? false)) {
-          _updateConnectionState(true, context: 'connectToPrinter success');
-          _logger.info('Successfully connected to printer: $address');
-          final existingPrinter = controller.printers.firstWhere(
-            (p) => p.address == address,
-            orElse: () => ZebraDevice(
+          // Try to find existing device instance first
+          final ZebraDevice? existingDevice = _findExistingDevice(address);
+
+          if (existingDevice != null) {
+            // Update existing device instance
+            _connectedPrinter = existingDevice.copyWith(
+              isConnected: true,
+              status: 'Connected',
+            );
+            _notifyDeviceUpdate(_connectedPrinter!);
+          } else {
+            // Create new device if not found in discovery
+            _connectedPrinter = ZebraDevice(
               address: address,
               name: 'Printer $address',
               isWifi: !address.contains(':'),
               status: 'Connected',
-            ),
-          );
-          if (!controller.printers.any((p) => p.address == address)) {
-            controller.addPrinter(existingPrinter);
+              isConnected: true,
+            );
           }
-          controller.updatePrinterStatus('Connected', 'G');
+          
+          _updateConnectionState(true, context: 'connectToPrinter success');
+          _logger.info('Successfully connected to printer: $address');
           return Result.success();
         } else {
           _updateConnectionState(false, context: 'connectToPrinter failed');
           _logger.error('Failed to establish connection to printer: $address');
-          controller.selectedAddress = null;
+          _connectedPrinter = null;
           return ZebraErrorBridge.fromInnerResult<void>(
             result,
             ErrorCodes.connectionError,
@@ -514,12 +558,18 @@ class ZebraPrinter {
           arguments: {},
           timeout: const Duration(seconds: 5),
         );
-        if (controller.selectedAddress != null) {
-          controller.updatePrinterStatus('Disconnected', 'R');
-          _logger.info('Updated printer status to disconnected');
-        }
         if (result.success) {
+          // Update existing device instance before clearing reference
+          if (_connectedPrinter != null) {
+            final disconnectedDevice = _connectedPrinter!.copyWith(
+              isConnected: false,
+              status: 'Disconnected',
+            );
+            _notifyDeviceUpdate(disconnectedDevice);
+          }
+          
           _updateConnectionState(false, context: 'disconnect success');
+          _connectedPrinter = null;
           _logger.info('Printer disconnected successfully');
           return Result.success();
         } else {
@@ -534,7 +584,7 @@ class ZebraPrinter {
         }
       },
       operationType: OperationType.connection,
-      deviceAddress: controller.selectedAddress,
+      deviceAddress: _connectedPrinter?.address,
     );
   }
 
@@ -866,69 +916,4 @@ class ZebraPrinter {
   }
 }
 
-/// Notifier for printers, contains list of printers and methods to add, remove and update printers
-class ZebraController extends ChangeNotifier {
-  final List<ZebraDevice> _printers = [];
-  List<ZebraDevice> get printers => List.unmodifiable(_printers);
-  String? selectedAddress;
 
-  void addPrinter(ZebraDevice printer) {
-    if (_printers.contains(printer)) return;
-    _printers.add(printer);
-    notifyListeners();
-  }
-
-  void removePrinter(String address) {
-    _printers.removeWhere((element) => element.address == address);
-    notifyListeners();
-  }
-
-  void cleanAll() {
-    if(_printers.isEmpty) return;
-    _printers.removeWhere((element) => !element.isConnected);
-  }
-
-  void updatePrinterStatus(String status, String color) {
-    if (selectedAddress != null) {
-      Color newColor = Colors.grey.withValues(alpha: 0.6);
-      switch (color) {
-        case 'R':
-          newColor = Colors.red;
-          break;
-        case 'G':
-          newColor = Colors.green;
-          break;
-        default:
-          newColor = Colors.grey.withValues(alpha: 0.6);
-          break;
-      }
-      final int index =
-          _printers.indexWhere((element) => element.address == selectedAddress);
-      if (index != -1) {
-        _printers[index] = _printers[index].copyWith(
-            status: status, color: newColor, isConnected: color == 'G');
-        notifyListeners();
-      }
-    }
-  }
-
-  void synchronizePrinter(String connectedString) {
-    if (selectedAddress == null) return;
-    final int index =
-        _printers.indexWhere((element) => element.address == selectedAddress);
-    if (index == -1) {
-      selectedAddress = null;
-      return;
-    }
-    if (_printers[index].isConnected) return;
-    _printers[index] = _printers[index].copyWith(
-        status: connectedString, color: Colors.green, isConnected: true);
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _printers.clear();
-    super.dispose();
-  }
-}

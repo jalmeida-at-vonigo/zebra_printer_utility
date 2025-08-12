@@ -106,9 +106,6 @@ class Zebra {
   /// Currently connected printer
   ZebraDevice? get connectedPrinter => manager.connectedPrinter;
 
-  /// List of discovered printers
-  List<ZebraDevice> get discoveredPrinters => manager.discoveredPrinters;
-
   /// Whether discovery is currently active
   bool get isScanning => discovery.isScanning;
 

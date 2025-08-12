@@ -126,12 +126,16 @@ void main() {
       expect(localDevices.first.address, equals('192.168.1.49'));
       expect(subnetDevices.first.address, equals('192.168.1.50'));
 
-      // Cancel subscriptions explicitly should trigger stopScan (onCancel)
+      // Cancel subscriptions explicitly - individual cancellations should NOT trigger stopScan
+      // This prevents premature stopping of concurrent discovery operations
       await localSub.cancel();
       await subnetSub.cancel();
-      // Allow onCancel stopDiscovery to invoke stopScan
+      // Allow onCancel to process
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(stopScanCalls, greaterThanOrEqualTo(1));
+      
+      // Individual stream cancellations should NOT trigger stopScan to prevent interference
+      // with other concurrent discovery operations
+      expect(stopScanCalls, equals(0));
     });
   });
 }

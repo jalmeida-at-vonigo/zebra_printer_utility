@@ -21,7 +21,6 @@ class ZebraPrinterDiscovery {
 
   // Private fields
   final ZebraPrinter _printer;
-  ZebraController? _controller;
   StreamController<List<ZebraDevice>>? _devicesStreamController;
   StreamController<String>? _statusStreamController;
   // No per-operation log subscription here; status stream already provides public messages
@@ -43,37 +42,30 @@ class ZebraPrinterDiscovery {
   Stream<String> get status =>
       _statusStreamController?.stream ?? const Stream.empty();
 
-  /// List of discovered printers
-  List<ZebraDevice> get discoveredPrinters => _controller?.printers ?? [];
 
   /// Initialize the discovery service
   Future<void> initialize({
-    ZebraController? controller,
     Function(String)? statusCallback,
   }) async {
-    if (_controller != null) return;
+    if (_devicesStreamController != null) return;
 
     _logger.info('Initializing ZebraPrinterDiscovery service');
-    _controller = controller ?? ZebraController();
     _devicesStreamController = StreamController<List<ZebraDevice>>.broadcast();
     _statusStreamController = StreamController<String>.broadcast();
 
-    // Listen to controller changes
-    _controller!.addListener(_onControllerChanged);
+    // Hook up status callback if provided
+    if (statusCallback != null) {
+      _statusStreamController!.stream.listen(statusCallback);
+    }
 
     // Communication policy is now managed by ZebraPrinterManager
     // This class primarily manages the discovery flow
-
-    // Forward status messages if callback provided
-    if (statusCallback != null) {
-      _statusStreamController?.stream.listen(statusCallback);
-    }
+    
+    // Pure streaming service - no device collection management
+    
     _logger.info('ZebraPrinterDiscovery initialization completed');
   }
 
-  void _onControllerChanged() {
-    _devicesStreamController?.add(_controller!.printers);
-  }
 
   /// Discover available printers with streaming approach
   /// Returns a stream of discovered devices
@@ -85,19 +77,28 @@ class ZebraPrinterDiscovery {
   }) async* {
     await _ensureInitialized();
 
+    // Pure streaming approach - collect devices as they're discovered
+    final List<ZebraDevice> discoveredDevices = [];
+    final Set<String> uniqueAddresses = {};
+    
     // Start discovery
     _isScanning = true;
-    // Discovery will be started by individual methods
     _statusStreamController?.add('Scanning for printers...');
 
-    // Kick off discovery concurrently so the stream can yield while discovery runs
-    final Set<String> uniqueAddresses = {};
+    // Stream controller for device events
+    final StreamController<ZebraDevice> deviceController =
+        StreamController<ZebraDevice>();
+
+    // Start streaming discovery
     (() async {
       try {
-        await _startStreamingDiscovery(timeout, uniqueAddresses,
+        await _startStreamingDiscovery(
+            timeout, uniqueAddresses, deviceController,
             onWarning: onWarning);
       } catch (e) {
         _logger.warning('Failed to start streaming discovery: $e');
+      } finally {
+        deviceController.close();
       }
     })();
 
@@ -107,68 +108,33 @@ class ZebraPrinterDiscovery {
       _stopAllDiscovery();
       _isScanning = false;
       _statusStreamController?.add('Discovery timeout reached');
+      if (!deviceController.isClosed) {
+        deviceController.close();
+      }
     });
 
-    // Track initial count to detect new printers
-    final int initialCount = _controller!.printers.length;
-    int lastYieldedCount = initialCount;
-
-    // Create a completer to handle the stream completion
-    final completer = Completer<void>();
-    
-    // Listen to controller changes
-    void onControllerChanged() {
-      final currentPrinters = _controller!.printers;
-      final currentCount = currentPrinters.length;
-
-      // Only yield if we have new printers
-      if (currentCount > lastYieldedCount) {
-        // Mark that we've seen changes
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-        lastYieldedCount = currentCount;
+    // Listen to discovered devices and emit filtered lists
+    await for (final device in deviceController.stream) {
+      // Add to local list if not already present
+      if (uniqueAddresses.add(device.address)) {
+        // Register device for connection status updates
+        ZebraPrinter.registerDevice(device);
+        discoveredDevices.add(device);
+        
+        // Filter devices based on type preferences
+        final filteredDevices = discoveredDevices.where((printer) {
+          if (!includeWifi && printer.isWifi) return false;
+          if (!includeBluetooth && !printer.isWifi) return false;
+          return true;
+        }).toList();
+        
+        // Emit the current filtered list
+        yield filteredDevices;
+        _logger.info('Found printer: ${device.name} (${device.address})');
       }
     }
 
-    // Add the listener
-    _controller!.addListener(onControllerChanged);
-
-    // Yield initial state if we already have printers
-    if (initialCount > 0) {
-      final List<ZebraDevice> initialPrinters =
-          _controller!.printers.where((printer) {
-        if (!includeWifi && printer.isWifi) return false;
-        if (!includeBluetooth && !printer.isWifi) return false;
-        return true;
-      }).toList();
-
-      if (initialPrinters.isNotEmpty) {
-        yield initialPrinters;
-      }
-    }
-
-    // Wait for the first controller change or timeout
-    try {
-      await completer.future.timeout(timeout);
-    } catch (e) {
-      // Timeout occurred, continue to yield current state
-    }
-
-    // Yield current state
-    final List<ZebraDevice> currentPrinters =
-        _controller!.printers.where((printer) {
-      if (!includeWifi && printer.isWifi) return false;
-      if (!includeBluetooth && !printer.isWifi) return false;
-      return true;
-    }).toList();
-
-    if (currentPrinters.isNotEmpty) {
-      yield currentPrinters;
-    }
-
-    // Clean up
-    _controller!.removeListener(onControllerChanged);
+    // Final cleanup
     if (_isScanning) {
       _stopAllDiscovery();
       _isScanning = false;
@@ -186,7 +152,7 @@ class ZebraPrinterDiscovery {
 
   /// Ensure the discovery service is initialized
   Future<void> _ensureInitialized() async {
-    if (_controller == null) {
+    if (_devicesStreamController == null) {
       await initialize();
     }
   }
@@ -352,10 +318,11 @@ class ZebraPrinterDiscovery {
   }
 
   /// Start streaming discovery with real-time results
-  /// Printers are added to the UI as soon as they are found
+  /// Devices are emitted to the stream controller as they are found
   Future<void> _startStreamingDiscovery(
     Duration timeout,
     Set<String> uniqueAddresses,
+      StreamController<ZebraDevice> deviceController,
       {void Function({String? phase, String? target, String? message})?
           onWarning}
   ) async {
@@ -373,11 +340,8 @@ class ZebraPrinterDiscovery {
     }
 
     void addPrinter(ZebraDevice printer) {
-      if (uniqueAddresses.add(printer.address)) {
-        _controller!.addPrinter(printer);
-        // Immediately notify UI of new printer
-        _devicesStreamController?.add(_controller!.printers);
-        _logger.info('Found printer: ${printer.name} (${printer.address})');
+      if (!deviceController.isClosed) {
+        deviceController.add(printer);
       }
     }
 
@@ -406,11 +370,6 @@ class ZebraPrinterDiscovery {
       completer.future,
       Future.delayed(timeout),
     ]);
-
-    // Note: per-operation log warnings are emitted via the operation manager.
-    // ZebraPrinterDiscovery already exposes status messages; callers can choose to listen
-    // to status stream for high-level messages. Detailed per-address/range warnings are
-    // available by subscribing directly to ZebraPrinter.operationEvents if needed.
   }
 
   /// Stop all discovery operations
@@ -426,14 +385,10 @@ class ZebraPrinterDiscovery {
     _discoveryTimer?.cancel();
     _discoveryTimer = null;
     // _printer is managed externally and should not be disposed here
-    _controller?.removeListener(_onControllerChanged);
-    _controller?.dispose();
-    _controller = null;
     _devicesStreamController?.close();
     _devicesStreamController = null;
     _statusStreamController?.close();
     _statusStreamController = null;
-    // CommunicationPolicy is no longer managed here,
-    // as it's now handled by ZebraPrinterManager.
+    // Pure streaming service - no collections to clean up
   }
 } 

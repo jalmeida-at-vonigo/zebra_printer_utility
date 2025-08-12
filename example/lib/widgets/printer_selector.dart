@@ -29,10 +29,40 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   void initState() {
     super.initState();
     _checkConnection();
+    
+    // Register for device connection status updates
+    ZebraPrinter.registerDeviceUpdateCallback(_onDeviceUpdated);
+  }
+
+  /// Handle device updates to show real-time connection status changes
+  void _onDeviceUpdated(ZebraDevice updatedDevice) {
+    if (!mounted) return;
+    
+    // Find and update the device in our list
+    final index = _devices.indexWhere((d) => d.address == updatedDevice.address);
+    if (index != -1) {
+      setState(() {
+        _devices[index] = updatedDevice;
+      });
+      
+      // Update status if this is the selected device
+      if (_selectedDevice?.address == updatedDevice.address) {
+        setState(() {
+          _selectedDevice = updatedDevice;
+          _status = updatedDevice.isConnected 
+              ? 'Connected to ${updatedDevice.name}'
+              : 'Disconnected from ${updatedDevice.name}';
+        });
+        widget.onPrinterChanged(updatedDevice.isConnected ? updatedDevice : null);
+      }
+    }
   }
 
   @override
   void dispose() {
+    // Unregister device update callback
+    ZebraPrinter.unregisterDeviceUpdateCallback(_onDeviceUpdated);
+    
     // Cancel any active discovery subscription
     _discoverySubscription?.cancel();
     // Stop discovery if still running
@@ -117,22 +147,13 @@ class _PrinterSelectorState extends State<PrinterSelector> {
   Future<void> _connect(ZebraDevice device) async {
     if (_isConnecting) return;
 
-    // Stop discovery when user selects a printer
-    if (_isDiscovering) {
-      await _discoverySubscription?.cancel();
-      _discoverySubscription = null;
-      await Zebra.global.stopDiscovery();
-      setState(() {
-        _isDiscovering = false;
-      });
-    }
-
     setState(() {
       _isConnecting = true;
       _status = 'Connecting...';
     });
 
-    _log('Connecting to ${device.name}...', 'info');
+    _log('Connecting to ${device.name}... (Discovery continues in background)',
+        'info');
 
     try {
       // Disconnect from current printer if connected
@@ -370,14 +391,7 @@ class _PrinterSelectorState extends State<PrinterSelector> {
           ),
           title: Text(device.name),
           subtitle: Text(device.address),
-          trailing: _isConnecting && !isSelected
-              ? null
-              : TextButton(
-                  onPressed: isSelected || _isConnecting
-                      ? null
-                      : () => _connect(device),
-                  child: Text(isSelected ? 'Connected' : 'Connect'),
-                ),
+          trailing: _buildDeviceActionButton(device, isSelected),
           selected: isSelected,
         );
       },
@@ -443,6 +457,84 @@ class _PrinterSelectorState extends State<PrinterSelector> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Build the action button for each device (Connect/Connected/Connecting)
+  Widget _buildDeviceActionButton(ZebraDevice device, bool isSelected) {
+    if (_isConnecting && !isSelected) {
+      // Currently connecting to a different device
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    if (isSelected) {
+      // This device is currently selected/connected
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.green),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, size: 14, color: Colors.green),
+            SizedBox(width: 4),
+            Text(
+              'Connected',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (device.isConnected) {
+      // This device is connected but not the current one (edge case)
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.orange),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.link, size: 14, color: Colors.orange),
+            SizedBox(width: 4),
+            Text(
+              'Connected',
+              style: TextStyle(
+                color: Colors.orange,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // This device is not connected - show connect button
+    return TextButton.icon(
+      onPressed: _isConnecting ? null : () => _connect(device),
+      icon: const Icon(Icons.link, size: 14),
+      label: const Text('Connect'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }

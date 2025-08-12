@@ -448,7 +448,7 @@ extension ResultErrorClassification<T> on Result<T> {
       ].contains(errorType);
 }
 
-/// Structured success code with formatable message template
+/// Structured success code with formattable message template
 class SuccessCode {
 
   const SuccessCode({

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:zebrautil/zebrautil.dart';
 
@@ -43,6 +45,7 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
   @override
   void dispose() {
     _dataController.dispose();
+    _printEventSubscription?.cancel();
     super.dispose();
   }
 
@@ -65,6 +68,8 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     _addLog('Logs cleared', 'info');
   }
 
+  StreamSubscription<PrintEvent>? _printEventSubscription;
+
   Future<void> _smartPrint() async {
     if (_selectedPrinter == null) {
       _addLog('No printer selected', 'warning');
@@ -74,27 +79,35 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
     try {
       _addLog('Starting smart print workflow...', 'info');
       
-      // Create SmartPrintManager instance for cancellation support
+      // Get SmartPrintManager instance for cancellation support
       _smartPrintManager = Zebra.global.smartManager;
       
-      // Smart print with event stream
-      final eventStream = Zebra.global.smartPrint(
-        _dataController.text,
+      // Cancel any existing subscription before starting a new one
+      _printEventSubscription?.cancel();
+      _printEventSubscription = null;
+
+      // Subscribe to events BEFORE starting the operation
+      _printEventSubscription = _smartPrintManager!.eventStream.listen(
+        _handlePrintEvent,
+        onError: (error) {
+          _addLog('Event stream error', 'error', details: '$error');
+        },
+        onDone: () {
+          _addLog('Print event stream completed', 'info');
+        },
+      );
+
+      // Start the smart print operation AFTER subscribing
+      await _smartPrintManager!.smartPrint(
+        data: _dataController.text,
         device: _selectedPrinter!,
         maxAttempts: 3,
         options: PrintOptions(
           format: _format,
         ),
       );
-
-      await for (final event in eventStream) {
-        if (!mounted) break;
-        
-        _handlePrintEvent(event);
-      }
     } catch (e, stack) {
       _addLog('Smart print error', 'error', details: '$e\n$stack');
-      // No need to manually update state - event stream handles it
     }
   }
 
@@ -220,20 +233,23 @@ class _SmartPrintScreenState extends State<SmartPrintScreen> {
           // Top section - Status card (full width)
           _buildStatusCard(),
           const SizedBox(height: 16),
-          // Middle section - Print data editor (full width)
-          editor.PrintDataEditor(
-            controller: _dataController,
-            format: _format,
-            onFormatChanged: (format) {
-              setState(() {
-                _format = format;
-              });
-            },
-            onPrint:
-                _selectedPrinter != null && !(_printState?.isPrinting ?? false)
-                    ? _smartPrint
-                    : null,
-            isPrinting: _printState?.isPrinting ?? false,
+          // Middle section - Print data editor (constrained height)
+          SizedBox(
+            height: 300, // Fixed height to prevent expansion issues
+            child: editor.PrintDataEditor(
+              controller: _dataController,
+              format: _format,
+              onFormatChanged: (format) {
+                setState(() {
+                  _format = format;
+                });
+              },
+              onPrint: _selectedPrinter != null &&
+                      !(_printState?.isPrinting ?? false)
+                  ? _smartPrint
+                  : null,
+              isPrinting: _printState?.isPrinting ?? false,
+            ),
           ),
           const SizedBox(height: 16),
           // Bottom section - Printer selector and logs

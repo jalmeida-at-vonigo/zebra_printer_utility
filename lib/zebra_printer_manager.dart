@@ -46,7 +46,6 @@ class ZebraPrinterManager {
   }) : _printer = printer;
 
   final ZebraPrinter _printer;
-  ZebraController? _controller;
   ZebraPrinterDiscovery? _discovery;
   ZebraPrinterReadinessManager? _readinessManager;
   CommunicationPolicy? _communicationPolicy;
@@ -77,40 +76,32 @@ class ZebraPrinterManager {
   Stream<ConnectionEvent> get connectionEvents => _printer.connectionEvents;
 
   /// Currently connected printer
-  ZebraDevice? get connectedPrinter {
-    if (_controller == null) return null;
-    final connected =
-        _controller!.printers.where((p) => p.isConnected).firstOrNull;
-    return connected;
-  }
+  ZebraDevice? get connectedPrinter => _printer.connectedPrinter;
 
   /// Discovery service for printer scanning and discovery
   ZebraPrinterDiscovery get discovery => _discovery ??= ZebraPrinterDiscovery(
         printer: _printer,
       );
 
-  /// List of discovered printers
-  List<ZebraDevice> get discoveredPrinters => _controller?.printers ?? [];
+
 
   /// Initialize the printer manager
   Future<Result<bool>> initialize() async {
     try {
       _logger.info('Initializing ZebraPrinterManager');
 
-      // Initialize controller and streams
-      _controller = ZebraController();
+      // Initialize streams
       _connectionStreamController = StreamController<ZebraDevice?>.broadcast();
       _statusStreamController = StreamController<String>.broadcast();
 
       // Initialize discovery service
       _logger.info('Initializing discovery service');
       await discovery.initialize(
-        controller: _controller,
         statusCallback: (msg) => _statusStreamController?.add(msg),
       );
 
-      // Listen to controller changes for connection updates
-      _controller!.addListener(_onControllerChanged);
+      // Listen to printer connection events for updates
+      _printer.connectionEvents.listen(_onConnectionEvent);
 
       // Initialize communication policy with status updates
       _communicationPolicy = CommunicationPolicy(
@@ -134,8 +125,28 @@ class ZebraPrinterManager {
     }
   }
 
-  void _onControllerChanged() {
+  void _onConnectionEvent(ConnectionEvent event) {
+    // Emit current connected printer to connection stream
     _connectionStreamController?.add(connectedPrinter);
+    
+    // Add status updates based on connection events
+    switch (event.type) {
+      case ConnectionEventType.connected:
+        _statusStreamController?.add('Connected to ${event.printerAddress}');
+        break;
+      case ConnectionEventType.lost:
+        _statusStreamController
+            ?.add('Connection lost: ${event.message ?? 'Unknown reason'}');
+        break;
+      case ConnectionEventType.failed:
+        _statusStreamController
+            ?.add('Connection failed: ${event.message ?? 'Unknown reason'}');
+        break;
+      case ConnectionEventType.disconnected:
+        _statusStreamController
+            ?.add('Disconnected from ${event.printerAddress}');
+        break;
+    }
   }
 
   // ===== PRIMITIVE OPERATIONS =====
@@ -178,20 +189,16 @@ class ZebraPrinterManager {
           // Record successful connection for smart selection
           await SmartDeviceSelector.recordSuccessfulConnection(address);
 
-          // Use the provided device or find it in the controller's list
-          final ZebraDevice? deviceToSave = device ??
-              _controller?.printers.firstWhere(
-                (p) => p.address == address,
-                orElse: () => ZebraDevice(
-                    address: address ?? '',
-                    name: 'Unknown Printer',
-                    status: 'Connected',
-                    isWifi: (address ?? '').contains('.')),
-              );
+          // Save the connected device to preferences  
+          final ZebraDevice deviceToSave = device ??
+              connectedPrinter ??
+              ZebraDevice(
+                  address: address,
+                  name: 'Unknown Printer',
+                  status: 'Connected',
+                  isWifi: address.contains('.'));
 
-          if (deviceToSave != null) {
-            await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
-          }
+          await PrinterPreferences.saveLastSelectedPrinter(deviceToSave);
 
           return result;
         } else {
@@ -638,7 +645,7 @@ class ZebraPrinterManager {
 
   /// Ensure the manager is initialized
   Future<void> _ensureInitialized() async {
-    if (_controller == null) {
+    if (_discovery == null) {
       await initialize();
     }
   }
@@ -648,8 +655,6 @@ class ZebraPrinterManager {
     _printer.dispose();
     _discovery?.dispose();
     _readinessManager = null;
-    _controller?.removeListener(_onControllerChanged);
-    _controller?.dispose();
 
     // Close stream controllers safely
     _connectionStreamController?.close();
