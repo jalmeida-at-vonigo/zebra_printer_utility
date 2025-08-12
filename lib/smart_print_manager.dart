@@ -122,6 +122,7 @@ class SmartPrintManager {
             errorCode: processResult.error?.code,
           ),
           printState: _currentState,
+          processedPrintData: null, // Processing failed, no data available
         ));
         return;
       }
@@ -330,6 +331,8 @@ class SmartPrintManager {
         timestamp: DateTime.now(),
         stepInfo: _createStepInfo(PrintStep.completed, 'Print operation completed'),
         printState: _currentState.copyWith(isCompleted: true),
+        processedPrintData:
+            processedData, // Include processed data for analytics
       ));
     } catch (e, stack) {
       _logger.error('Unexpected error in smart print', e, stack);

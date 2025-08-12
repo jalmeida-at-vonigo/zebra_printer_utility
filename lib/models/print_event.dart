@@ -1,3 +1,4 @@
+import '../internal/print_data_processor.dart';
 import 'print_enums.dart';
 
 /// Event types for smart print operations
@@ -12,7 +13,6 @@ enum PrintEventType {
   statusUpdate,
   completed,
   cancelled,
-
 }
 
 /// Print steps in the workflow
@@ -281,6 +281,7 @@ class PrintEvent {
     this.errorInfo,
     this.progressInfo,
     this.printState,
+    this.processedPrintData,
     this.metadata = const {},
   });
 
@@ -290,6 +291,8 @@ class PrintEvent {
   final PrintErrorInfo? errorInfo;
   final PrintProgressInfo? progressInfo;
   final dynamic printState; // Using dynamic to avoid circular dependency
+  final ProcessedPrintData?
+      processedPrintData; // Processed print data for this operation
   final Map<String, dynamic> metadata;
   
   @override
