@@ -34,35 +34,36 @@ void main() {
     });
 
     group('discovery operations', () {
-      test('discoverBTClassic returns device stream', () async {
-        when(printer.discoverBTClassic(timeout: anyNamed('timeout')))
+      test('discoverBTClassicStream returns device stream', () async {
+        when(printer.discoverBTClassicStream(timeout: anyNamed('timeout')))
             .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final stream = printer.discoverBTClassic();
+        final stream = printer.discoverBTClassicStream();
         expect(stream, isA<Stream<ZebraDevice>>());
-        verify(printer.discoverBTClassic(timeout: anyNamed('timeout')))
+        verify(printer.discoverBTClassicStream(timeout: anyNamed('timeout')))
             .called(1);
       });
 
-      test('discoverLocalBroadcast returns device stream', () async {
-        when(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+      test('discoverLocalBroadcastStream returns device stream', () async {
+        when(printer.discoverLocalBroadcastStream(timeout: anyNamed('timeout')))
             .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final stream = printer.discoverLocalBroadcast();
+        final stream = printer.discoverLocalBroadcastStream();
         expect(stream, isA<Stream<ZebraDevice>>());
-        verify(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+        verify(printer.discoverLocalBroadcastStream(
+                timeout: anyNamed('timeout')))
             .called(1);
       });
 
-      test('discoverSubnet returns device stream', () async {
-        when(printer.discoverSubnet(
+      test('discoverSubnetStream returns device stream', () async {
+        when(printer.discoverSubnetStream(
           subnet: anyNamed('subnet'),
           timeout: anyNamed('timeout'),
         )).thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final stream = printer.discoverSubnet(subnet: '192.168.1');
+        final stream = printer.discoverSubnetStream(subnet: '192.168.1');
         expect(stream, isA<Stream<ZebraDevice>>());
-        verify(printer.discoverSubnet(
+        verify(printer.discoverSubnetStream(
           subnet: anyNamed('subnet'),
           timeout: anyNamed('timeout'),
         )).called(1);
@@ -208,13 +209,14 @@ void main() {
     });
 
     group('discovery operations', () {
-      test('discoverLocalBroadcast returns device stream', () async {
-        when(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+      test('discoverLocalBroadcastStream returns device stream', () async {
+        when(printer.discoverLocalBroadcastStream(timeout: anyNamed('timeout')))
             .thenAnswer((_) => const Stream<ZebraDevice>.empty());
 
-        final stream = printer.discoverLocalBroadcast();
+        final stream = printer.discoverLocalBroadcastStream();
         expect(stream, isA<Stream<ZebraDevice>>());
-        verify(printer.discoverLocalBroadcast(timeout: anyNamed('timeout')))
+        verify(printer.discoverLocalBroadcastStream(
+                timeout: anyNamed('timeout')))
             .called(1);
       });
     });

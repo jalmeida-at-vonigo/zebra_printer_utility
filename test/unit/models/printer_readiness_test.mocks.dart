@@ -5,11 +5,12 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
 
-import 'package:flutter/services.dart' as _i10;
+import 'package:flutter/services.dart' as _i11;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
-import 'package:zebrautil/internal/communication_policy.dart' as _i11;
-import 'package:zebrautil/models/communication_policy_options.dart' as _i12;
+import 'package:zebrautil/internal/communication_policy.dart' as _i12;
+import 'package:zebrautil/internal/print_data_processor.dart' as _i10;
+import 'package:zebrautil/models/communication_policy_options.dart' as _i13;
 import 'package:zebrautil/models/connection_event.dart' as _i6;
 import 'package:zebrautil/models/print_enums.dart' as _i9;
 import 'package:zebrautil/models/print_operation_tracker.dart' as _i8;
@@ -221,97 +222,6 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Stream<_i7.ZebraDevice>);
 
   @override
-  _i5.Stream<_i7.ZebraDevice> discoverBTClassic({
-    int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverBTClassic,
-          [],
-          {
-            #timeout: timeout,
-            #onWarning: onWarning,
-          },
-        ),
-        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i7.ZebraDevice>);
-
-  @override
-  _i5.Stream<_i7.ZebraDevice> discoverLocalBroadcast({
-    int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverLocalBroadcast,
-          [],
-          {
-            #timeout: timeout,
-            #onWarning: onWarning,
-          },
-        ),
-        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i7.ZebraDevice>);
-
-  @override
-  _i5.Stream<_i7.ZebraDevice> discoverSubnet({
-    String? subnet = '192.168.1',
-    int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverSubnet,
-          [],
-          {
-            #subnet: subnet,
-            #timeout: timeout,
-            #onWarning: onWarning,
-          },
-        ),
-        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i7.ZebraDevice>);
-
-  @override
-  _i5.Stream<_i7.ZebraDevice> discoverDirectedBroadcast({
-    String? ipAddress = '192.168.1.255',
-    int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverDirectedBroadcast,
-          [],
-          {
-            #ipAddress: ipAddress,
-            #timeout: timeout,
-            #onWarning: onWarning,
-          },
-        ),
-        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i7.ZebraDevice>);
-
-  @override
-  _i5.Stream<_i7.ZebraDevice> discoverMulticast({
-    int? hops = 5,
-    int? timeout = 5000,
-    _i2.DiscoveryWarningCallback? onWarning,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #discoverMulticast,
-          [],
-          {
-            #hops: hops,
-            #timeout: timeout,
-            #onWarning: onWarning,
-          },
-        ),
-        returnValue: _i5.Stream<_i7.ZebraDevice>.empty(),
-      ) as _i5.Stream<_i7.ZebraDevice>);
-
-  @override
   _i5.Future<_i3.Result<void>> stopDiscovery() => (super.noSuchMethod(
         Invocation.method(
           #stopDiscovery,
@@ -381,6 +291,24 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
               #data: data,
               #format: format,
             },
+          ),
+        )),
+      ) as _i5.Future<_i3.Result<_i8.PrintOperationTracker>>);
+
+  @override
+  _i5.Future<_i3.Result<_i8.PrintOperationTracker>> printWithProcessedData(
+          _i10.ProcessedPrintData? processedData) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #printWithProcessedData,
+          [processedData],
+        ),
+        returnValue: _i5.Future<_i3.Result<_i8.PrintOperationTracker>>.value(
+            _FakeResult_1<_i8.PrintOperationTracker>(
+          this,
+          Invocation.method(
+            #printWithProcessedData,
+            [processedData],
           ),
         )),
       ) as _i5.Future<_i3.Result<_i8.PrintOperationTracker>>);
@@ -495,7 +423,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
       ) as _i5.Future<_i3.Result<String>>);
 
   @override
-  _i5.Future<void> nativeMethodCallHandler(_i10.MethodCall? methodCall) =>
+  _i5.Future<void> nativeMethodCallHandler(_i11.MethodCall? methodCall) =>
       (super.noSuchMethod(
         Invocation.method(
           #nativeMethodCallHandler,
@@ -519,7 +447,7 @@ class MockZebraPrinter extends _i1.Mock implements _i2.ZebraPrinter {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockCommunicationPolicy extends _i1.Mock
-    implements _i11.CommunicationPolicy {
+    implements _i12.CommunicationPolicy {
   MockCommunicationPolicy() {
     _i1.throwOnMissingStub(this);
   }
@@ -528,7 +456,7 @@ class MockCommunicationPolicy extends _i1.Mock
   _i5.Future<_i3.Result<T>> execute<T>(
     _i5.Future<_i3.Result<T>> Function()? operation,
     String? operationName, {
-    _i12.CommunicationPolicyOptions? options,
+    _i13.CommunicationPolicyOptions? options,
   }) =>
       (super.noSuchMethod(
         Invocation.method(

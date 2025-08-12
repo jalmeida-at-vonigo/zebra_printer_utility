@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.68] - 2025-01-27
+
+### Fixed
+- **Discovery Stream Event Routing**: Fixed issue where discovery events were not being properly routed from native layer to Dart streams
+  - Added missing discovery event cases to callback handler
+  - Fixed premature stream closure that was discarding discovery events
+  - Added comprehensive logging to track discovery flow and diagnose issues
+- **iOS Bluetooth Permission**: Fixed issue where discovery was blocked on iOS when Bluetooth permission was denied
+  - iOS allows discovery without explicit Bluetooth permission (only connection requires it)
+  - Updated permission check logic to continue with discovery on iOS even when permission is denied
+- **Operation Manager Event Streams**: Fixed issue where event streams were closed immediately for discovery operations
+  - Discovery operations now keep event streams open until all events are processed
+
 ## [2.0.67] - 2025-01-27
 
 ### Added

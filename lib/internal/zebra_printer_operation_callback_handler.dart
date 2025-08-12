@@ -1,30 +1,39 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-
+import 'logger.dart';
 import 'native_models/enriched_native_error.dart';
 import 'native_models/method_channel_constants.dart';
 import 'zebra_printer_operation_manager.dart';
 
-/// Handles method calls from native side and routes them to appropriate operations
+/// Callback handler for Zebra printer operations
 class ZebraPrinterOperationCallbackHandler {
-  /// Constructor
   ZebraPrinterOperationCallbackHandler({required this.manager});
 
   final ZebraPrinterOperationManager manager;
-
-  /// Callbacks for events that don't belong to specific operations
   final Map<String, Function(MethodCall)> eventHandlers = {};
+  final Logger _logger = Logger.withPrefix('CallbackHandler');
   
 
 
-  /// Handle a method call from native side
+  /// Handle method calls from native layer
   Future<void> handleMethodCall(MethodCall call) async {
+    _logger.info(
+        '🔍 CALLBACK_HANDLER: Processing method call - Method: ${call.method}');
+    _logger.info('🔍 CALLBACK_HANDLER: Arguments: ${call.arguments}');
+    
     try {
+      // Extract operationId from arguments if present
       final operationId = call.arguments?['operationId'] as String?;
-
-      // Handle operation-specific callbacks
       if (operationId != null) {
+        _logger.info(
+            '🔍 CALLBACK_HANDLER: Operation callback detected for $operationId: ${call.method}');
+      }
+
+      // Handle operation-specific callbacks (completion/error)
+      if (operationId != null) {
+        _logger.info(
+            '🔍 CALLBACK_HANDLER: Processing switch for method: "${call.method}"');
         switch (call.method) {
           // Connection callbacks
           case MethodChannelConstants.connectToPrinterCallbackOnComplete:
@@ -156,24 +165,50 @@ class ZebraPrinterOperationCallbackHandler {
             _handleEnrichedError(
                 operationId, call.arguments, 'Method not implemented');
             break;
+
+          // Handle discovery streaming events (printer found events)
+          case MethodChannelConstants.discoverBTClassicEventPrinterFound:
+          case MethodChannelConstants.discoverLocalBroadcastEventPrinterFound:
+          case MethodChannelConstants.discoverSubnetEventPrinterFound:
+          case MethodChannelConstants
+                .discoverDirectedBroadcastEventPrinterFound:
+          case MethodChannelConstants.discoverMulticastEventPrinterFound:
+          case MethodChannelConstants.discoveryEventLogWarning:
+            // These are streaming events, emit them to the operation event stream
+            if (call.arguments is Map) {
+              // Convert Map<Object?, Object?> to Map<String, dynamic> for type safety
+              final Map<String, dynamic> eventData =
+                  Map<String, dynamic>.from(call.arguments as Map);
+              _logger.info(
+                  '🎯 CALLBACK_HANDLER: Routing discovery event ${call.method} to operation $operationId');
+              manager.emitEvent(operationId, {
+                'method': call.method,
+                'data': eventData,
+              });
+            }
+            break;
+
+          default:
+            // For any other method with operationId, treat as streaming event
+            _logger.info(
+                '🔍 CALLBACK_HANDLER: Default case for method: ${call.method}');
+            if (call.arguments is Map) {
+              // Convert Map<Object?, Object?> to Map<String, dynamic> for type safety
+              final Map<String, dynamic> eventData =
+                  Map<String, dynamic>.from(call.arguments as Map);
+              _logger.info(
+                  '🎯 CALLBACK_HANDLER: Emitting default event for operation $operationId');
+              manager.emitEvent(operationId, {
+                'method': call.method,
+                'data': eventData,
+              });
+            }
+            break;
         }
+        return; // Exit early for operationId events
       }
 
-      // Handle streaming events with operationId (like printer discovery)
-      if (operationId != null) {
-        // Emit via manager's per-operation event stream
-        if (call.arguments is Map<String, dynamic>) {
-          // Wrap with method tag so callers can filter by event kind
-          manager.emitEvent(operationId, {
-            'method': call.method,
-            'data': call.arguments as Map<String, dynamic>,
-          });
-        }
-
-        return;
-      }
-
-      // Handle non-operation events (like printer discovery events)
+      // Handle non-operation events (like connection status events)
       final handler = eventHandlers[call.method];
       if (handler != null) {
         try {

@@ -92,10 +92,9 @@ class ZebraPrinterDiscovery {
 
     // Kick off discovery concurrently so the stream can yield while discovery runs
     final Set<String> uniqueAddresses = {};
-    final List<ZebraDevice> allPrinters = [];
     (() async {
       try {
-        await _startStreamingDiscovery(timeout, uniqueAddresses, allPrinters,
+        await _startStreamingDiscovery(timeout, uniqueAddresses,
             onWarning: onWarning);
       } catch (e) {
         _logger.warning('Failed to start streaming discovery: $e');
@@ -204,9 +203,12 @@ class ZebraPrinterDiscovery {
     StreamSubscription<ZebraDevice>? subscription;
 
     try {
+      _logger.info('$phaseName: Starting streaming discovery');
       // Subscribe to the discovery stream
       subscription = discoveryStreamFunction().listen(
         (device) {
+          _logger.info(
+              '$phaseName: Received device from stream: ${device.name} (${device.address})');
           // Process device as soon as it's discovered
           if (discoveredAddresses.add(device.address)) {
             onDeviceFound(device);
@@ -237,6 +239,14 @@ class ZebraPrinterDiscovery {
     }
   }
 
+  /// Helper method to calculate remaining timeout value
+  int _calculateRemainingTimeout(DateTime endTime) {
+    final remainingTime = endTime.difference(DateTime.now()).inMilliseconds;
+    _logger.debug(
+        'Calculating remaining timeout: ${remainingTime}ms (endTime: $endTime, now: ${DateTime.now()})');
+    return remainingTime > 0 ? remainingTime : 1000; // Minimum 1 second
+  }
+
   /// Discover Bluetooth printers with streaming callback
   Future<void> _discoverBluetoothPrintersStream(
       DateTime endTime,
@@ -248,10 +258,12 @@ class ZebraPrinterDiscovery {
       _isScanning = true;
       
       // Use streaming discovery for BT Classic
+      _logger.info(
+          'btClassic: About to call discoverBTClassicStream with timeout ${_calculateRemainingTimeout(endTime)}ms');
       await _performStreamingDiscovery(
         endTime: endTime,
         discoveryStreamFunction: () => _printer.discoverBTClassicStream(
-          timeout: endTime.difference(DateTime.now()).inMilliseconds,
+          timeout: _calculateRemainingTimeout(endTime),
           onWarning: onWarning,
         ),
         onDeviceFound: onPrinterFound,
@@ -278,13 +290,14 @@ class ZebraPrinterDiscovery {
     try {
       // Run all network discovery methods concurrently with streaming
       final futures = <Future<void>>[];
-      final remainingTime = endTime.difference(DateTime.now()).inMilliseconds;
 
       // Local broadcast streaming
+      _logger.info(
+          'localBroadcast: About to call discoverLocalBroadcastStream with timeout ${_calculateRemainingTimeout(endTime)}ms');
       futures.add(_performStreamingDiscovery(
         endTime: endTime,
         discoveryStreamFunction: () => _printer.discoverLocalBroadcastStream(
-          timeout: remainingTime,
+          timeout: _calculateRemainingTimeout(endTime),
           onWarning: onWarning,
         ),
         onDeviceFound: onPrinterFound,
@@ -297,7 +310,7 @@ class ZebraPrinterDiscovery {
         endTime: endTime,
         discoveryStreamFunction: () => _printer.discoverSubnetStream(
           subnet: '192.168.1',
-          timeout: remainingTime,
+          timeout: _calculateRemainingTimeout(endTime),
           onWarning: onWarning,
         ),
         onDeviceFound: onPrinterFound,
@@ -310,7 +323,7 @@ class ZebraPrinterDiscovery {
         endTime: endTime,
         discoveryStreamFunction: () => _printer.discoverDirectedBroadcastStream(
           ipAddress: '192.168.1.255',
-          timeout: remainingTime,
+          timeout: _calculateRemainingTimeout(endTime),
           onWarning: onWarning,
         ),
         onDeviceFound: onPrinterFound,
@@ -323,7 +336,7 @@ class ZebraPrinterDiscovery {
         endTime: endTime,
         discoveryStreamFunction: () => _printer.discoverMulticastStream(
           hops: 5,
-          timeout: remainingTime,
+          timeout: _calculateRemainingTimeout(endTime),
           onWarning: onWarning,
         ),
         onDeviceFound: onPrinterFound,
@@ -343,7 +356,6 @@ class ZebraPrinterDiscovery {
   Future<void> _startStreamingDiscovery(
     Duration timeout,
     Set<String> uniqueAddresses,
-    List<ZebraDevice> allPrinters,
       {void Function({String? phase, String? target, String? message})?
           onWarning}
   ) async {
@@ -362,8 +374,7 @@ class ZebraPrinterDiscovery {
 
     void addPrinter(ZebraDevice printer) {
       if (uniqueAddresses.add(printer.address)) {
-        allPrinters.add(printer);
-        _controller!.printers.add(printer);
+        _controller!.addPrinter(printer);
         // Immediately notify UI of new printer
         _devicesStreamController?.add(_controller!.printers);
         _logger.info('Found printer: ${printer.name} (${printer.address})');

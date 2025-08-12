@@ -52,7 +52,7 @@ void main() {
     });
 
     group('Discovery Component Integration', () {
-      test('should handle discovery operations through ZebraPrinterDiscovery', () async {
+      test('should handle discovery operations', () async {
         final testDevices = [
           ZebraDevice(
             address: '192.168.1.100',
@@ -68,14 +68,23 @@ void main() {
           ),
         ];
 
-        when(mockDiscovery.discoverPrinters(timeout: anyNamed('timeout')))
-            .thenAnswer((_) async => Result.success(testDevices));
+        when(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).thenAnswer((_) => Stream.value(testDevices));
 
-        final result = await mockDiscovery.discoverPrinters();
+        final stream = mockDiscovery.discoverPrintersStream();
+        final result = await stream.first;
         
-        expect(result.success, isTrue);
-        expect(result.data, equals(testDevices));
-        verify(mockDiscovery.discoverPrinters(timeout: anyNamed('timeout'))).called(1);
+        expect(result, equals(testDevices));
+        verify(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).called(1);
       });
 
       test('should handle discovery stream operations', () {
@@ -90,10 +99,9 @@ void main() {
 
         when(mockDiscovery.discoverPrintersStream(
           timeout: anyNamed('timeout'),
-          stopAfterCount: anyNamed('stopAfterCount'),
-          stopOnFirstPrinter: anyNamed('stopOnFirstPrinter'),
           includeWifi: anyNamed('includeWifi'),
           includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
         )).thenAnswer((_) => Stream.value(testDevices));
 
         final stream = mockDiscovery.discoverPrintersStream();
@@ -101,10 +109,9 @@ void main() {
         expect(stream, isA<Stream<List<ZebraDevice>>>());
         verify(mockDiscovery.discoverPrintersStream(
           timeout: anyNamed('timeout'),
-          stopAfterCount: anyNamed('stopAfterCount'),
-          stopOnFirstPrinter: anyNamed('stopOnFirstPrinter'),
           includeWifi: anyNamed('includeWifi'),
           includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
         )).called(1);
       });
     });
@@ -374,14 +381,22 @@ void main() {
 
     group('Error Handling Component Integration', () {
       test('should handle discovery errors', () async {
-        when(mockDiscovery.discoverPrinters(timeout: anyNamed('timeout')))
-            .thenAnswer((_) async => Result.error('Discovery failed'));
+        when(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).thenAnswer((_) => Stream.error('Discovery failed'));
 
-        final result = await mockDiscovery.discoverPrinters();
+        final stream = mockDiscovery.discoverPrintersStream();
         
-        expect(result.success, isFalse);
-        expect(result.error?.message, contains('Discovery failed'));
-        verify(mockDiscovery.discoverPrinters(timeout: anyNamed('timeout'))).called(1);
+        expect(() => stream.first, throwsA(contains('Discovery failed')));
+        verify(mockDiscovery.discoverPrintersStream(
+          timeout: anyNamed('timeout'),
+          includeWifi: anyNamed('includeWifi'),
+          includeBluetooth: anyNamed('includeBluetooth'),
+          onWarning: anyNamed('onWarning'),
+        )).called(1);
       });
 
       test('should handle connection errors', () async {

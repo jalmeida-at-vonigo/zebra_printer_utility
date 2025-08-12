@@ -19,7 +19,10 @@ class PermissionManager {
         
         // On iOS, if status is not permanently denied, we can try to use Bluetooth
         // The actual permission request happens when we try to scan
-        return status != PermissionStatus.permanentlyDenied;
+        final result = status != PermissionStatus.permanentlyDenied;
+        _logger.info(
+            'iOS Bluetooth permission check returning: $result (status != permanentlyDenied)');
+        return result;
       } else if (Platform.isAndroid) {
         // On Android, check multiple Bluetooth permissions
         final bluetoothStatus = await Permission.bluetooth.status;

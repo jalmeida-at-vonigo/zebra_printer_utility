@@ -27,23 +27,61 @@ class DirectPrinterChannel {
   }
 
   void _setupMethodCallHandler() {
+    _logger.debug(
+        'Setting up method call handler for channel: ${_instanceChannel?.name}');
     _instanceChannel?.setMethodCallHandler(_methodCallHandler);
+    _logger.debug('Method call handler setup complete');
+  }
+
+  /// Generate a unique operation ID for native calls
+  String _generateOperationId() {
+    final operationId =
+        'direct_${DateTime.now().millisecondsSinceEpoch}_${instanceId ?? 'unknown'}';
+    _logger.debug('Generated operation ID: $operationId');
+    return operationId;
+  }
+
+  /// Add operationId to arguments if not present
+  Map<String, dynamic> _prepareArguments(Map<String, dynamic>? arguments) {
+    _logger.debug('Preparing arguments: $arguments');
+    final args = Map<String, dynamic>.from(arguments ?? {});
+    if (!args.containsKey('operationId')) {
+      final operationId = _generateOperationId();
+      args['operationId'] = operationId;
+      _logger.debug('Added operationId to arguments: $operationId');
+    } else {
+      _logger.debug(
+          'OperationId already present in arguments: ${args['operationId']}');
+    }
+    _logger.debug('Final arguments: $args');
+    return args;
   }
 
   static Future<DirectPrinterChannel?> createInstance(
     Future<dynamic> Function(MethodCall) methodCallHandler,
   ) async {
     final logger = Logger.withPrefix('DirectPrinterChannel');
+    logger.debug('Creating DirectPrinterChannel instance...');
+    
     try {
       const channel = MethodChannel('zebrautil');
+      logger.debug('Invoking getInstance on main channel...');
       final instanceId = await channel.invokeMethod<String>('getInstance');
+      logger.debug('getInstance returned: $instanceId');
+      
       if (instanceId != null) {
-        return DirectPrinterChannel(
+        logger.debug(
+            'Creating DirectPrinterChannel with instanceId: $instanceId');
+        final instance = DirectPrinterChannel(
           instanceId: instanceId,
           methodCallHandler: methodCallHandler,
         );
+        logger.debug('DirectPrinterChannel instance created successfully');
+        return instance;
+      } else {
+        logger.warning('getInstance returned null');
+        return null;
       }
-      return null;
     } catch (e) {
       logger.error('Failed to get instance: $e', e);
       return null;
@@ -53,18 +91,31 @@ class DirectPrinterChannel {
   // NOTE: This screen demonstrates direct low-level MethodChannel usage
   // For production code, use the high-level API (Zebra.global or ZebraPrinter)
   Future<bool> startDiscovery() async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Starting discovery...');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot start discovery: instance channel is null');
+      return false;
+    }
+    
     try {
+      _logger.debug('Starting all discovery methods concurrently...');
+      
       // Start all discovery methods concurrently via direct channel calls
-      await Future.wait([
-        _instanceChannel.invokeMethod('discoverBTClassic', {'timeout': 10000}),
-        _instanceChannel
-            .invokeMethod('discoverLocalBroadcast', {'timeout': 10000}),
+      final futures = [
         _instanceChannel.invokeMethod(
-            'discoverSubnet', {'subnet': '192.168.1', 'timeout': 10000}),
-        _instanceChannel
-            .invokeMethod('discoverMulticast', {'hops': 5, 'timeout': 10000}),
-      ]);
+            'discoverBTClassic', _prepareArguments({'timeout': 10000})),
+        _instanceChannel.invokeMethod(
+            'discoverLocalBroadcast', _prepareArguments({'timeout': 10000})),
+        _instanceChannel.invokeMethod('discoverSubnet',
+            _prepareArguments({'subnet': '192.168.1', 'timeout': 10000})),
+        _instanceChannel.invokeMethod('discoverMulticast',
+            _prepareArguments({'hops': 5, 'timeout': 10000})),
+      ];
+
+      _logger.debug('Waiting for all discovery methods to complete...');
+      await Future.wait(futures);
+      _logger.debug('All discovery methods completed successfully');
       return true;
     } catch (e) {
       _logger.error('Discovery error: $e', e);
@@ -73,9 +124,17 @@ class DirectPrinterChannel {
   }
 
   Future<bool> stopDiscovery() async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Stopping discovery...');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot stop discovery: instance channel is null');
+      return false;
+    }
+    
     try {
-      await _instanceChannel.invokeMethod('stopScan');
+      _logger.debug('Invoking stopScan...');
+      await _instanceChannel.invokeMethod('stopScan', _prepareArguments({}));
+      _logger.debug('stopScan completed successfully');
       return true;
     } catch (e) {
       _logger.error('Stop discovery error: $e', e);
@@ -84,12 +143,20 @@ class DirectPrinterChannel {
   }
 
   Future<bool> connectToPrinter(String address) async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Connecting to printer: $address');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot connect: instance channel is null');
+      return false;
+    }
+    
     try {
+      _logger.debug('Invoking connectToPrinter...');
       final result = await _instanceChannel.invokeMethod<bool>(
         'connectToPrinter',
-        {'Address': address},
+        _prepareArguments({'Address': address}),
       );
+      _logger.debug('connectToPrinter returned: $result');
       return result == true;
     } catch (e) {
       _logger.error('Connection error: $e', e);
@@ -98,9 +165,17 @@ class DirectPrinterChannel {
   }
 
   Future<bool> disconnect() async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Disconnecting from printer...');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot disconnect: instance channel is null');
+      return false;
+    }
+    
     try {
-      await _instanceChannel.invokeMethod('disconnect');
+      _logger.debug('Invoking disconnect...');
+      await _instanceChannel.invokeMethod('disconnect', _prepareArguments({}));
+      _logger.debug('disconnect completed successfully');
       return true;
     } catch (e) {
       _logger.error('Disconnect error: $e', e);
@@ -109,12 +184,20 @@ class DirectPrinterChannel {
   }
 
   Future<bool> print(String data) async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Printing data (${data.length} bytes)...');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot print: instance channel is null');
+      return false;
+    }
+    
     try {
+      _logger.debug('Invoking print...');
       final result = await _instanceChannel.invokeMethod<bool>(
         'print',
-        {'Data': data},
+        _prepareArguments({'Data': data}),
       );
+      _logger.debug('print returned: $result');
       return result == true;
     } catch (e) {
       _logger.error('Print error: $e', e);
@@ -123,12 +206,20 @@ class DirectPrinterChannel {
   }
 
   Future<bool> sendFlushCommand(String data) async {
-    if (_instanceChannel == null) return false;
+    _logger.debug('Sending flush command: $data');
+
+    if (_instanceChannel == null) {
+      _logger.error('Cannot send flush command: instance channel is null');
+      return false;
+    }
+    
     try {
+      _logger.debug('Invoking setSettings for flush command...');
       final result = await _instanceChannel.invokeMethod<bool>(
         'setSettings',
-        {'SettingCommand': data},
+        _prepareArguments({'SettingCommand': data}),
       );
+      _logger.debug('setSettings returned: $result');
       return result == true;
     } catch (e) {
       _logger.error('Flush command error: $e', e);
@@ -174,6 +265,7 @@ class _DirectPrintScreenState extends State<DirectPrintScreen> {
   final TextEditingController _ipController = TextEditingController();
   final List<LogEntry> _logs = [];
   final List<DirectDevice> _devices = [];
+  final Logger _logger = Logger.withPrefix('DirectPrintScreen');
   
   DirectPrinterChannel? _printerChannel;
   DirectDevice? _selectedDevice;
@@ -206,11 +298,13 @@ PRINT''';
     _addLog('Initializing direct printer channel...', 'info');
     
     try {
+      _addLog('Creating DirectPrinterChannel instance...', 'debug');
       _printerChannel = await DirectPrinterChannel.createInstance(_handleMethodCall);
       
       if (_printerChannel != null) {
         _addLog('Channel initialized', 'success', 
           details: 'Instance ID: ${_printerChannel!.getInstanceId}');
+        _addLog('Channel ready: ${_printerChannel!.isReady}', 'debug');
       } else {
         _addLog('Failed to initialize channel', 'error');
       }
@@ -220,42 +314,305 @@ PRINT''';
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {
+    // Console logging to ensure we see events in debug console
+    _logger.info(
+        '🔍 DIRECT_SCREEN: Native event received - Method: ${call.method}');
+    _logger.info('🔍 DIRECT_SCREEN: Arguments: ${call.arguments}');
+    _logger.info(
+        '🔍 DIRECT_SCREEN: Arguments type: ${call.arguments.runtimeType}');
+
+    // Comprehensive logging to investigate native layer events
+    _addLog('=== NATIVE EVENT RECEIVED ===', 'debug');
+    _addLog('Method: ${call.method}', 'debug');
+    _addLog('Arguments: ${call.arguments}', 'debug');
+    _addLog('Arguments type: ${call.arguments.runtimeType}', 'debug');
+    if (call.arguments is Map) {
+      _addLog(
+          'Arguments keys: ${(call.arguments as Map).keys.toList()}', 'debug');
+      if ((call.arguments as Map).containsKey('operationId')) {
+        _addLog(
+            'OperationId: ${(call.arguments as Map)['operationId']}', 'debug');
+      }
+    }
+    _addLog('=== END NATIVE EVENT ===', 'debug');
+    
     switch (call.method) {
+      // Discovery events
       case 'printerFound':
+      case 'discoverBTClassic_printerFound':
+      case 'discoverLocalBroadcast_printerFound':
+      case 'discoverSubnet_printerFound':
+      case 'discoverDirectedBroadcast_printerFound':
+      case 'discoverMulticast_printerFound':
+        _logger
+            .info('🎯 DIRECT_SCREEN: DISCOVERY EVENT MATCHED: ${call.method}');
+        _addLog('DISCOVERY EVENT MATCHED: ${call.method}', 'debug');
         _handlePrinterFound(call.arguments);
         break;
-      case 'onDiscoveryDone':
-        _handleDiscoveryDone();
+        
+      // Discovery completion
+      case 'discoverBTClassic_onComplete':
+      case 'discoverLocalBroadcast_onComplete':
+      case 'discoverSubnet_onComplete':
+      case 'discoverDirectedBroadcast_onComplete':
+      case 'discoverMulticast_onComplete':
+        _logger.info(
+            '✅ DIRECT_SCREEN: DISCOVERY COMPLETION MATCHED: ${call.method}');
+        _addLog('DISCOVERY COMPLETION MATCHED: ${call.method}', 'debug');
+        _handleDiscoveryComplete(call.method, call.arguments);
         break;
-      case 'onDiscoveryError':
-        _addLog('Discovery error', 'error', details: '${call.arguments}');
+
+      // Discovery errors
+      case 'discoverBTClassic_onError':
+      case 'discoverLocalBroadcast_onError':
+      case 'discoverSubnet_onError':
+      case 'discoverDirectedBroadcast_onError':
+      case 'discoverMulticast_onError':
+        _addLog('DISCOVERY ERROR MATCHED: ${call.method}', 'debug');
+        _handleDiscoveryError(call.method, call.arguments);
+        break;
+
+      // Stop scan completion
+      case 'stopScan_onComplete':
+        _handleStopScanComplete(call.arguments);
+        break;
+
+      // Connection events
+      case 'connectToPrinter_onComplete':
+        _handleConnectionComplete(call.arguments);
+        break;
+      case 'connectToPrinter_onError':
+        _handleConnectionError(call.arguments);
+        break;
+      case 'disconnect_onComplete':
+        _handleDisconnectComplete(call.arguments);
+        break;
+      case 'disconnect_onError':
+        _handleDisconnectError(call.arguments);
+        break;
+
+      // Print events
+      case 'print_onComplete':
+        _handlePrintComplete(call.arguments);
+        break;
+      case 'print_onError':
+        _handlePrintError(call.arguments);
+        break;
+      case 'print_statusUpdate':
+        _handlePrintStatusUpdate(call.arguments);
+        break;
+      case 'print_progressUpdate':
+        _handlePrintProgressUpdate(call.arguments);
+        break;
+
+      // Settings events
+      case 'setSettings_onComplete':
+        _handleSettingsComplete(call.arguments);
+        break;
+      case 'setSettings_onError':
+        _handleSettingsError(call.arguments);
+        break;
+
+      // Connection status events
+      case 'connection_statusChanged':
+        _handleConnectionStatusChanged(call.arguments);
+        break;
+      case 'connection_lost':
+        _handleConnectionLost(call.arguments);
+        break;
+
+      // Discovery warnings
+      case 'discovery_logWarning':
+        _handleDiscoveryWarning(call.arguments);
+        break;
+
+      // Unknown method
+      case 'onMethodNotImplemented':
+        _addLog('Method not implemented', 'warning',
+            details: '${call.arguments}');
+        break;
+
+      default:
+        _addLog('UNMATCHED EVENT - Method: ${call.method}', 'warning');
+        _addLog('UNMATCHED EVENT - Arguments: ${call.arguments}', 'warning');
         break;
     }
   }
 
   void _handlePrinterFound(dynamic arguments) {
+    _addLog('=== PRINTER FOUND DATA ===', 'debug');
+    _addLog('Arguments: $arguments', 'debug');
+    _addLog('Arguments type: ${arguments.runtimeType}', 'debug');
+    
     if (arguments is Map<dynamic, dynamic>) {
+      _addLog('Arguments keys: ${arguments.keys.toList()}', 'debug');
+      _addLog(
+          'Address: ${arguments['address'] ?? arguments['Address']}', 'debug');
+      _addLog('Name: ${arguments['name'] ?? arguments['Name']}', 'debug');
+      _addLog('IsWifi: ${arguments['isWifi'] ?? arguments['IsWifi']}', 'debug');
+      
       final device = DirectDevice.fromMap(arguments);
+      _addLog('Created device: ${device.name} (${device.address})', 'debug');
+      
       if (!_devices.any((d) => d.address == device.address)) {
         setState(() {
           _devices.add(device);
         });
         _addLog('Printer found', 'info', 
           details: '${device.name} (${device.address})');
+      } else {
+        _addLog('Device already in list, skipping', 'debug');
       }
+    } else {
+      _addLog('Arguments is not a Map, cannot process', 'warning');
+    }
+    _addLog('=== END PRINTER FOUND DATA ===', 'debug');
+  }
+
+
+
+  void _handleDiscoveryComplete(String method, dynamic arguments) {
+    final discoveryType = method.replaceAll('_onComplete', '');
+    _addLog('Discovery completed', 'success',
+        details: '$discoveryType completed');
+
+    // Check if all discovery methods are done
+    if (_isDiscovering) {
+      setState(() {
+        _isDiscovering = false;
+      });
+      _addLog('All discovery methods completed', 'success',
+          details: 'Found ${_devices.length} printer(s)');
     }
   }
 
-  void _handleDiscoveryDone() {
+  void _handleDiscoveryError(String method, dynamic arguments) {
+    final discoveryType = method.replaceAll('_onError', '');
+    _addLog('Discovery error', 'error',
+        details: '$discoveryType failed: $arguments');
+  }
+
+  void _handleStopScanComplete(dynamic arguments) {
+    _addLog('Stop scan completed', 'success');
     setState(() {
       _isDiscovering = false;
     });
-    _addLog('Discovery completed', 'success', 
-      details: 'Found ${_devices.length} printer(s)');
+  }
+
+  void _handleConnectionComplete(dynamic arguments) {
+    _addLog('Connection completed', 'success',
+        details: 'Successfully connected to printer');
+    setState(() {
+      _isPrinterConnected = true;
+    });
+  }
+
+  void _handleConnectionError(dynamic arguments) {
+    _addLog('Connection failed', 'error',
+        details: 'Failed to connect: $arguments');
+    setState(() {
+      _isPrinterConnected = false;
+    });
+  }
+
+  void _handleDisconnectComplete(dynamic arguments) {
+    _addLog('Disconnect completed', 'success');
+    setState(() {
+      _isPrinterConnected = false;
+      _selectedDevice = null;
+    });
+  }
+
+  void _handleDisconnectError(dynamic arguments) {
+    _addLog('Disconnect error', 'error',
+        details: 'Failed to disconnect: $arguments');
+  }
+
+  void _handlePrintComplete(dynamic arguments) {
+    _addLog('Print completed', 'success',
+        details: 'Print job completed successfully');
+    setState(() {
+      _isPrinting = false;
+    });
+  }
+
+  void _handlePrintError(dynamic arguments) {
+    _addLog('Print failed', 'error', details: 'Print job failed: $arguments');
+    setState(() {
+      _isPrinting = false;
+    });
+  }
+
+  void _handlePrintStatusUpdate(dynamic arguments) {
+    final status = arguments is Map ? arguments['status'] : arguments;
+    _addLog('Print status update', 'info', details: 'Status: $status');
+  }
+
+  void _handlePrintProgressUpdate(dynamic arguments) {
+    final progress = arguments is Map ? arguments['progress'] : arguments;
+    _addLog('Print progress update', 'info', details: 'Progress: $progress');
+  }
+
+  void _handleSettingsComplete(dynamic arguments) {
+    _addLog('Settings command completed', 'success',
+        details: 'Settings updated successfully');
+  }
+
+  void _handleSettingsError(dynamic arguments) {
+    _addLog('Settings command failed', 'error',
+        details: 'Failed to update settings: $arguments');
+  }
+
+  void _handleConnectionStatusChanged(dynamic arguments) {
+    final status = arguments is Map ? arguments['status'] : arguments;
+    final color = arguments is Map ? arguments['color'] : 'unknown';
+    _addLog('Connection status changed', 'info',
+        details: 'Status: $status, Color: $color');
+  }
+
+  void _handleConnectionLost(dynamic arguments) {
+    final reason = arguments is Map ? arguments['reason'] : 'Unknown reason';
+    _addLog('Connection lost', 'warning', details: 'Connection lost: $reason');
+    setState(() {
+      _isPrinterConnected = false;
+      _selectedDevice = null;
+    });
+  }
+
+  void _handleDiscoveryWarning(dynamic arguments) {
+    final phase = arguments is Map ? arguments['phase'] : 'unknown';
+    final target = arguments is Map ? arguments['target'] : 'unknown';
+    final message = arguments is Map ? arguments['message'] : 'Unknown warning';
+    _addLog('Discovery warning', 'warning',
+        details: 'Phase: $phase, Target: $target, Message: $message');
   }
 
   void _addLog(String message, String level, {String? details}) {
     if (!mounted) return;
+    
+    // Also log to console for debugging
+    final fullMessage = details != null ? '$message - $details' : message;
+    switch (level.toLowerCase()) {
+      case 'error':
+        _logger.error(fullMessage);
+        break;
+      case 'warning':
+        _logger.warning(fullMessage);
+        break;
+      case 'info':
+        _logger.info(fullMessage);
+        break;
+      case 'success':
+        _logger.info('✅ $fullMessage');
+        break;
+      case 'debug':
+        _logger.debug(fullMessage);
+        break;
+      default:
+        _logger.info(fullMessage);
+        break;
+    }
+    
     setState(() {
       _logs.add(LogEntry(
         timestamp: DateTime.now(),
@@ -274,8 +631,19 @@ PRINT''';
   }
 
   Future<void> _startDiscovery() async {
-    if (_printerChannel == null || _isDiscovering) return;
+    _addLog('_startDiscovery called', 'debug');
 
+    if (_printerChannel == null) {
+      _addLog('Cannot start discovery: printer channel is null', 'error');
+      return;
+    }
+
+    if (_isDiscovering) {
+      _addLog('Discovery already in progress', 'warning');
+      return;
+    }
+
+    _addLog('Setting discovery state to true', 'debug');
     setState(() {
       _isDiscovering = true;
       _devices.clear();
@@ -284,7 +652,9 @@ PRINT''';
     _addLog('Starting discovery...', 'info');
       
     try {
-      await _printerChannel!.startDiscovery();
+      _addLog('Calling printerChannel.startDiscovery()', 'debug');
+      final result = await _printerChannel!.startDiscovery();
+      _addLog('startDiscovery returned: $result', 'debug');
     } catch (e) {
       _addLog('Discovery error', 'error', details: '$e');
       setState(() {
@@ -294,14 +664,23 @@ PRINT''';
   }
 
   Future<void> _connectToDevice(DirectDevice device) async {
-    if (_printerChannel == null) return;
+    _addLog('_connectToDevice called', 'debug');
+    _addLog('Device: ${device.name} (${device.address})', 'debug');
+
+    if (_printerChannel == null) {
+      _addLog('Cannot connect: printer channel is null', 'error');
+      return;
+    }
 
     _addLog('Connecting to ${device.name}...', 'info');
 
     try {
+      _addLog('Calling printerChannel.connectToPrinter()', 'debug');
       final result = await _printerChannel!.connectToPrinter(device.address);
+      _addLog('connectToPrinter returned: $result', 'debug');
       
       if (result) {
+        _addLog('Connection successful, updating state', 'debug');
         setState(() {
           _selectedDevice = device;
           _isPrinterConnected = true;
@@ -349,11 +728,14 @@ PRINT''';
   }
 
   Future<void> _print() async {
+    _addLog('_print called', 'debug');
+    
     if (!_isPrinterConnected || _printerChannel == null) {
       _addLog('Not connected to printer', 'warning');
       return;
     }
 
+    _addLog('Setting printing state to true', 'debug');
     setState(() {
       _isPrinting = true;
     });
@@ -363,28 +745,38 @@ PRINT''';
 
     try {
       String preparedData = _dataController.text;
+      _addLog('Original data length: ${preparedData.length}', 'debug');
       
       // CPCL data preparation (same as library implementation)
       if (_format == PrintFormat.cpcl) {
+        _addLog('Preparing CPCL data...', 'debug');
         preparedData = preparedData.replaceAll(RegExp(r'(?<!\r)\n'), '\r\n');
+        _addLog(
+            'After line ending replacement: ${preparedData.length}', 'debug');
 
         if (preparedData.trim().endsWith('FORM') &&
             !preparedData.contains('PRINT')) {
           preparedData = '${preparedData.trim()}\r\nPRINT\r\n';
+          _addLog('Added PRINT command', 'debug');
         }
 
         if (!preparedData.endsWith('\r\n')) {
           preparedData += '\r\n';
+          _addLog('Added final line ending', 'debug');
         }
 
         preparedData += '\r\n\r\n';
+        _addLog('Added final double line endings', 'debug');
       }
 
+      _addLog('Final prepared data length: ${preparedData.length}', 'debug');
       _addLog('Sending data to printer...', 'info', 
         details: 'Format: ${_format.name}, Size: ${preparedData.length} bytes');
 
       // Send print data
+      _addLog('Calling printerChannel.print()', 'debug');
       final result = await _printerChannel!.print(preparedData);
+      _addLog('print returned: $result', 'debug');
 
       if (result) {
         _addLog('Print data sent', 'success');
@@ -392,7 +784,10 @@ PRINT''';
         // CPCL buffer flush
         if (_format == PrintFormat.cpcl) {
           _addLog('Flushing CPCL buffer...', 'info');
-          await _printerChannel!.sendFlushCommand('\x0C');
+          _addLog('Calling sendFlushCommand with \\x0C', 'debug');
+          final flushResult = await _printerChannel!.sendFlushCommand('\x0C');
+          _addLog('sendFlushCommand returned: $flushResult', 'debug');
+          _addLog('Waiting 100ms after flush', 'debug');
           await Future.delayed(const Duration(milliseconds: 100));
         }
 
@@ -400,6 +795,7 @@ PRINT''';
         final delay = Duration(
           milliseconds: 2500 + (preparedData.length ~/ 1000) * 1000
         );
+        _addLog('Calculated delay: ${delay.inMilliseconds}ms', 'debug');
         _addLog('Waiting ${delay.inMilliseconds}ms for completion...', 'info');
         await Future.delayed(delay);
 
@@ -411,6 +807,7 @@ PRINT''';
       _addLog('Print error', 'error', details: '$e');
     } finally {
       if (mounted) {
+        _addLog('Setting printing state to false', 'debug');
         setState(() {
           _isPrinting = false;
         });

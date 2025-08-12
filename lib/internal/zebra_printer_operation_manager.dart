@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/operation_log_entry.dart';
 import '../../models/result.dart';
 import '../../zebra_printer_manager.dart';
+import 'logger.dart';
 import 'native_models/enriched_native_error.dart';
 import 'native_operation.dart';
 import 'policies/policies.dart' as policies;
@@ -44,6 +45,9 @@ class ZebraPrinterOperationManager {
 
   /// Operation log entries
   final List<OperationLogEntry> _operationLog = [];
+
+  /// Logger instance
+  final Logger _logger = Logger.withPrefix('OperationManager');
 
   /// Get all operation log entries
   List<OperationLogEntry> get operationLog => List.unmodifiable(_operationLog);
@@ -95,6 +99,8 @@ class ZebraPrinterOperationManager {
     _addLogEntry(startEntry);
     
     onLog?.call('Starting operation $operationId: $method');
+    _logger.info(
+        'OperationManager: Starting operation $operationId: $method with timeout ${timeout.inSeconds}s');
 
     try {
       // Check for cancellation before starting
@@ -138,8 +144,10 @@ class ZebraPrinterOperationManager {
       _addLogEntry(successEntry);
       
       onLog?.call('Operation $operationId completed successfully');
-      // Close any associated event stream
-      _closeEventStream(operationId);
+      // Close any associated event stream (except for discovery operations)
+      if (!method.startsWith('discover')) {
+        _closeEventStream(operationId);
+      }
       return Result<T>.success(result);
     } on TimeoutException catch (e) {
       final duration = DateTime.now().difference(startTime);
@@ -156,7 +164,12 @@ class ZebraPrinterOperationManager {
       );
       _addLogEntry(timeoutEntry);
       onLog?.call('Operation $operationId timed out: ${e.message}');
-      _closeEventStream(operationId);
+      _logger.warning(
+          'OperationManager: Operation $operationId ($method) timed out after ${timeout.inSeconds}s');
+      // Close any associated event stream (except for discovery operations)
+      if (!method.startsWith('discover')) {
+        _closeEventStream(operationId);
+      }
       return Result.errorCode(
         ErrorCodes.operationTimeout,
         formatArgs: [timeout.inSeconds],
@@ -178,7 +191,10 @@ class ZebraPrinterOperationManager {
       _addLogEntry(errorEntry);
       
       onLog?.call('Operation $operationId failed: $e');
-      _closeEventStream(operationId);
+      // Close any associated event stream (except for discovery operations)
+      if (!method.startsWith('discover')) {
+        _closeEventStream(operationId);
+      }
       return ZebraErrorBridge.fromDartError<T>(
         e,
         stackTrace: stack,
@@ -309,7 +325,12 @@ class ZebraPrinterOperationManager {
   void emitEvent(String operationId, Map<String, dynamic> data) {
     final controller = _operationEventStreams[operationId];
     if (controller != null && !controller.isClosed) {
+      _logger.info(
+          'OperationManager: Emitting event to operation $operationId: ${data['method']}');
       controller.add(data);
+    } else {
+      _logger.warning(
+          'OperationManager: No active stream for operation $operationId or stream closed');
     }
   }
 
