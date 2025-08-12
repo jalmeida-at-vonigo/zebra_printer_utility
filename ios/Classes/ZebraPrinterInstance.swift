@@ -257,7 +257,7 @@ class ZebraPrinterInstance: NSObject {
                     callbackMethod: MethodChannelConstants.discoverLocalBroadcastCallbackOnError,
                     code: "DISCOVERY_ERROR",
                     message: "Local broadcast discovery failed",
-                    nativeError: error as NSError,
+                    nativeError: error,
                     context: ["method": "discoverLocalBroadcast"]
                 )
             }
@@ -486,7 +486,7 @@ class ZebraPrinterInstance: NSObject {
                     callbackMethod: MethodChannelConstants.discoverMulticastCallbackOnError,
                     code: "DISCOVERY_ERROR",
                     message: "Multicast discovery failed",
-                    nativeError: error as NSError,
+                    nativeError: error,
                     context: ["method": "discoverMulticast"]
                 )
                 return
@@ -1007,12 +1007,13 @@ class ZebraPrinterInstance: NSObject {
         arguments: [String: Any]? = nil) {
         
         // Create enriched error object
+        let nsError = nativeError as? NSError
         let enrichedError = EnrichedNativeError(
             message: message,
             code: code,
             nativeError: nativeError?.localizedDescription,
-            nativeErrorCode: nativeError != nil ? (nativeError as NSError).code : nil,
-            nativeErrorDomain: nativeError != nil ? (nativeError as NSError).domain : nil,
+            nativeErrorCode: nsError?.code,
+            nativeErrorDomain: nsError?.domain,
             context: context,
             timestamp: ISO8601DateFormatter().string(from: Date()),
             nativeStackTrace: Thread.callStackSymbols.joined(separator: "\n"),

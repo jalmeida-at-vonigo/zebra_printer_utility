@@ -2,20 +2,20 @@ import Foundation
 
 /// Enriched error information from native operations
 /// Preserves structured error data for proper error handling in Dart
-@objc public class EnrichedNativeError: NSObject {
-    @objc public let message: String
-    @objc public let code: String
-    @objc public let nativeError: String?
-    @objc public let nativeErrorCode: Int?
-    @objc public let nativeErrorDomain: String?
-    @objc public let context: [String: Any]?
-    @objc public let timestamp: String
-    @objc public let nativeStackTrace: String?
-    @objc public let operationId: String
-    @objc public let instanceId: String
-    @objc public let queue: String
+public class EnrichedNativeError {
+    public let message: String
+    public let code: String
+    public let nativeError: String?
+    public let nativeErrorCode: Int?
+    public let nativeErrorDomain: String?
+    public let context: [String: Any]?
+    public let timestamp: String
+    public let nativeStackTrace: String?
+    public let operationId: String
+    public let instanceId: String
+    public let queue: String
     
-    @objc public init(
+    public init(
         message: String,
         code: String,
         nativeError: String? = nil,
@@ -39,11 +39,10 @@ import Foundation
         self.operationId = operationId
         self.instanceId = instanceId
         self.queue = queue
-        super.init()
     }
     
     /// Convert to dictionary for channel communication
-    @objc public func toDictionary() -> [String: Any] {
+    public func toDictionary() -> [String: Any] {
         var dict: [String: Any] = [
             "message": message,
             "code": code,
@@ -77,7 +76,7 @@ import Foundation
     }
     
     /// Create from dictionary received from channel
-    @objc public static func fromDictionary(_ dict: [String: Any]) -> EnrichedNativeError? {
+    public static func fromDictionary(_ dict: [String: Any]) -> EnrichedNativeError? {
         guard let message = dict["message"] as? String,
               let code = dict["code"] as? String,
               let timestamp = dict["timestamp"] as? String,
