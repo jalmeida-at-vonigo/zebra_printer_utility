@@ -1,0 +1,115 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build: dependencies (install)",
+            "group": "build",
+            "dependsOn": [
+                "flutter: clean",
+                "flutter: pub get",
+                "pod: install"
+            ],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "build: dependencies (upgrade)",
+            "group": "build",
+            "dependsOn": [
+                "flutter: clean",
+                "flutter: pub upgrade",
+                "pod: update"
+            ],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "flutter: pub get",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "type": "flutter",
+            "command": "flutter",
+            "args": [
+                "pub",
+                "get"
+            ],
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "flutter: pub upgrade",
+            "group": "build",
+            "type": "flutter",
+            "command": "flutter",
+            "args": [
+                "pub",
+                "upgrade"
+            ],
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "flutter: clean",
+            "group": "build",
+            "type": "flutter",
+            "command": "flutter",
+            "args": [
+                "clean"
+            ],
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "pod: install",
+            "group": {
+                "kind": "build"
+            },
+            "type": "shell",
+            "command": "pod",
+            "args": [
+                "install"
+            ],
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/ios"
+            }
+        },
+        {
+            "label": "pod: update",
+            "group": "build",
+            "type": "shell",
+            "command": "pod",
+            "args": [
+                "update"
+            ],
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/ios"
+            },
+            "osx": {
+                "command": "pod",
+                "args": [
+                    "update"
+                ]
+            },
+            "windows": {
+                "command": "echo",
+                "args": [
+                    "Skipping pod update on Windows"
+                ]
+            },
+            "linux": {
+                "command": "echo",
+                "args": [
+                    "Skipping pod update on Linux"
+                ]
+            }
+        }
+    ]
+}
