@@ -19,10 +19,19 @@ A new Flutter plugin project.
   s.platform = :ios, '12.0'
   s.static_framework = true
   
-  # Static library configuration
-  s.vendored_libraries = 'libZSDK_API.a'
-  s.preserve_paths = 'libZSDK_API.a'
-  
+  # Zebra Link-OS SDK, as the XCFramework Zebra ships.
+  #
+  # Do NOT go back to vendoring a flat libZSDK_API.a. That file is a non-fat,
+  # device-only arm64 archive, so linking it into an iOS-Simulator build fails
+  # with "building for 'iOS-simulator', but linking in object file built for
+  # 'iOS'" — the whole app then cannot be built for any simulator, which blocks
+  # every simulator-based test and demo, not just printing.
+  #
+  # The XCFramework carries both slices: ios-arm64 for devices and
+  # ios-arm64_x86_64-simulator for simulators on both Apple Silicon and Intel.
+  s.vendored_frameworks = 'ZSDK_API.xcframework'
+  s.preserve_paths = 'ZSDK_API.xcframework'
+
   # Required frameworks
   s.frameworks = 'CoreBluetooth', 'QuartzCore'
   s.libraries = 'z'
